@@ -12,13 +12,12 @@ def is_tracing_enabled() -> bool:
 @traceable(
     name="elvira_process_message",
     run_type="chain",
-    project_name=os.getenv("LANGSMITH_PROJECT", "elvira-respirarte-local"),
 )
 def _traced_process_message(fn, *args, **kwargs):
     """
     Thin wrapper to trace the deterministic Elvira core.
 
-    This keeps tracing separate from business logic.
+    LangSmith project is resolved from LANGSMITH_PROJECT.
     """
     return fn(*args, **kwargs)
 
