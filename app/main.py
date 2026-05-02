@@ -1,8 +1,9 @@
-from fastapi import FastAPI, Request, Query, HTTPException
+from fastapi import FastAPI, Query, HTTPException
 from app.models.message import IncomingMessage
 from app.models.whatsapp import WhatsAppPayload
 from app.graph.graph import process_message
 from app.services.tracing import traced_process_message
+from app.services.whatsapp import send_whatsapp_message
 from app.config import settings
 
 app = FastAPI(
@@ -47,7 +48,17 @@ async def receive_webhook(payload: WhatsAppPayload):
     )
 
     result = traced_process_message(process_message, message)
-    return {"status": "received", "intent": result.intent, "respuesta": result.respuesta}
+
+    await send_whatsapp_message(
+        telefono=extracted["telefono"],
+        mensaje=result.respuesta,
+    )
+
+    return {
+        "status": "sent",
+        "intent": result.intent,
+        "respuesta": result.respuesta,
+    }
 
 
 @app.post("/test/message")

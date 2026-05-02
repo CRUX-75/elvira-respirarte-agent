@@ -8,4 +8,4 @@ langchain
 langchain-openai
 pytest
 httpx
-langsmith
+langsmithhttpx==0.28.1
