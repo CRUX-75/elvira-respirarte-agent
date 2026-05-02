@@ -6,6 +6,6 @@ python-dotenv
 langgraph
 langchain
 langchain-openai
+langsmith
 pytest
-httpx
-langsmithhttpx==0.28.1
+httpx==0.28.1
