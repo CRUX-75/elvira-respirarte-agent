@@ -313,7 +313,7 @@ Decision: n8n validated the concept. Python owns production logic.
 | P2-A | LangSmith tracing | ✅ Done |
 | P2-B | LangGraph structural flow | ✅ Done |
 | P2-C | LLM response generation | ✅ Done |
-| P2-D | Documentation and repo baseline | 🔄 In progress |
+| P2-D | Documentation and repo baseline | ✅ Done |
 | P3 | WhatsApp Cloud API integration | ⏳ Next |
 | P4 | Persistence layer — patient and log repos | ⏳ Planned |
 | P5 | KB router — migrate Sheets to DB | ⏳ Planned |
