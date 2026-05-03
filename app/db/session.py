@@ -15,7 +15,17 @@ def get_database_url() -> str:
     if not settings.database_url:
         raise RuntimeError("DATABASE_URL is not configured")
 
-    return settings.database_url
+    database_url = settings.database_url
+
+    # Easypanel or other platforms may provide postgres:// URLs.
+    # SQLAlchemy expects postgresql:// or postgresql+psycopg://.
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
+
+    if database_url.startswith("postgresql://"):
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+
+    return database_url
 
 
 def create_db_engine() -> Engine:
