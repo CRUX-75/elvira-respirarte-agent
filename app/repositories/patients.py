@@ -80,7 +80,7 @@ def get_or_create_patient_by_phone(
                 INSERT INTO patients (
                     telefono,
                     nombre,
-                    estado,
+                    estado_actual,
                     created_at,
                     updated_at,
                     last_message_at
@@ -88,7 +88,7 @@ def get_or_create_patient_by_phone(
                 VALUES (
                     :telefono,
                     :nombre,
-                    :estado,
+                    :estado_actual,
                     NOW(),
                     NOW(),
                     NOW()
@@ -99,7 +99,7 @@ def get_or_create_patient_by_phone(
             {
                 "telefono": telefono,
                 "nombre": nombre,
-                "estado": DEFAULT_PATIENT_STATE,
+                "estado_actual": DEFAULT_PATIENT_STATE,
             },
         ).fetchone()
 
@@ -121,14 +121,14 @@ def update_patient_state(
             text(
                 """
                 UPDATE patients
-                SET estado = :nuevo_estado,
+                SET estado_actual = :nuevo_estado_actual,
                     updated_at = NOW()
                 WHERE id = :patient_id
                 """
             ),
             {
                 "patient_id": patient_id,
-                "nuevo_estado": nuevo_estado,
+                "nuevo_estado": nuevo_estado_actual,
             },
         )
 
