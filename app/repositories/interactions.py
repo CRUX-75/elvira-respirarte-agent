@@ -40,8 +40,8 @@ def save_interaction(
                     telefono,
                     whatsapp_message_id,
                     whatsapp_timestamp,
-                    mensaje_usuario,
-                    respuesta_elvira,
+                    mensaje,
+                    respuesta,
                     intent,
                     estado_anterior,
                     nuevo_estado,
@@ -49,8 +49,6 @@ def save_interaction(
                     delivery_status,
                     router_version,
                     state_machine_version,
-                    raw_payload,
-                    error_message,
                     created_at
                 )
                 VALUES (
@@ -58,8 +56,8 @@ def save_interaction(
                     :telefono,
                     :whatsapp_message_id,
                     :whatsapp_timestamp,
-                    :mensaje_usuario,
-                    :respuesta_elvira,
+                    :mensaje,
+                    :respuesta,
                     :intent,
                     :estado_anterior,
                     :nuevo_estado,
@@ -67,8 +65,6 @@ def save_interaction(
                     :delivery_status,
                     :router_version,
                     :state_machine_version,
-                    CAST(:raw_payload AS JSONB),
-                    :error_message,
                     NOW()
                 )
                 """
@@ -78,8 +74,8 @@ def save_interaction(
                 "telefono": telefono,
                 "whatsapp_message_id": whatsapp_message_id,
                 "whatsapp_timestamp": whatsapp_timestamp,
-                "mensaje_usuario": mensaje_usuario,
-                "respuesta_elvira": respuesta_elvira,
+                "mensaje_usuario": mensaje,
+                "respuesta_elvira": respuesta,
                 "intent": intent,
                 "estado_anterior": estado_anterior,
                 "nuevo_estado": nuevo_estado,
@@ -87,7 +83,5 @@ def save_interaction(
                 "delivery_status": delivery_status,
                 "router_version": router_version,
                 "state_machine_version": state_machine_version,
-                "raw_payload": json.dumps(raw_payload or {}, ensure_ascii=False),
-                "error_message": error_message,
             },
         )
