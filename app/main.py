@@ -63,10 +63,17 @@ async def receive_webhook(payload: WhatsAppPayload):
     try:
         result = traced_process_message(process_message, message)
 
-        await send_whatsapp_message(
-            telefono=extracted["telefono"],
-            mensaje=result.respuesta,
-        )
+        if settings.whatsapp_sending_enabled:
+            await send_whatsapp_message(
+                telefono=extracted["telefono"],
+                mensaje=result.respuesta,
+            )
+
+            delivery_status = "sent"
+            logged_response = result.respuesta
+        else:
+            delivery_status = "sending_skipped"
+            logged_response = f"[WHATSAPP_SENDING_DISABLED] {result.respuesta}"
 
         log_interaction(
             telefono=extracted["telefono"],
@@ -74,13 +81,32 @@ async def receive_webhook(payload: WhatsAppPayload):
             intent=result.intent,
             estado_anterior=message.estado_actual,
             nuevo_estado=result.nuevo_estado,
-            respuesta=result.respuesta,
+            respuesta=logged_response,
+        )
+
+        print(
+            {
+                "event": "whatsapp_webhook_processed",
+                "telefono": extracted["telefono"],
+                "nombre": extracted.get("nombre"),
+                "mensaje": extracted["mensaje"],
+                "whatsapp_message_id": extracted.get("whatsapp_message_id"),
+                "whatsapp_timestamp": extracted.get("whatsapp_timestamp"),
+                "intent": result.intent,
+                "estado_anterior": message.estado_actual,
+                "nuevo_estado": result.nuevo_estado,
+                "delivery_status": delivery_status,
+                "whatsapp_sending_enabled": settings.whatsapp_sending_enabled,
+            }
         )
 
         return {
-            "status": "sent",
+            "status": delivery_status,
             "intent": result.intent,
             "respuesta": result.respuesta,
+            "whatsapp_sending_enabled": settings.whatsapp_sending_enabled,
+            "whatsapp_message_id": extracted.get("whatsapp_message_id"),
+            "whatsapp_timestamp": extracted.get("whatsapp_timestamp"),
         }
 
     except Exception as e:

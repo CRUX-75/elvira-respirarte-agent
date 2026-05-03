@@ -44,6 +44,8 @@ class WhatsAppPayload(BaseModel):
                 "mensaje": texto,
                 "nombre": nombre,
                 "msg_type": msg_type,
+                "whatsapp_message_id": msg.get("id"),
+                "whatsapp_timestamp": msg.get("timestamp"),
             }
 
         except (IndexError, KeyError, TypeError):
