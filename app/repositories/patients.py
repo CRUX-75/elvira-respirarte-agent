@@ -121,14 +121,14 @@ def update_patient_state(
             text(
                 """
                 UPDATE patients
-                SET estado_actual = :nuevo_estado_actual,
+                SET estado_actual = :nuevo_estado,
                     updated_at = NOW()
                 WHERE id = :patient_id
                 """
             ),
             {
                 "patient_id": patient_id,
-                "nuevo_estado": nuevo_estado_actual,
+                "nuevo_estado": nuevo_estado,
             },
         )
 
