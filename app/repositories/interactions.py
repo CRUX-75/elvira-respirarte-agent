@@ -1,17 +1,14 @@
 from __future__ import annotations
 
-from typing import Any
-import json
-
-from sqlalchemy import text
-
 from app.db.session import engine
+from sqlalchemy import text
 
 
 def save_interaction(
     *,
     patient_id: str | None,
     telefono: str,
+    nombre: str | None = None,
     whatsapp_message_id: str | None = None,
     whatsapp_timestamp: str | None = None,
     mensaje_usuario: str | None = None,
@@ -20,10 +17,13 @@ def save_interaction(
     estado_anterior: str | None = None,
     nuevo_estado: str | None = None,
     next_action: str | None = None,
-    delivery_status: str | None = None,
+    state_reason: str | None = None,
     router_version: str | None = None,
     state_machine_version: str | None = None,
-    raw_payload: dict[str, Any] | None = None,
+    kb_used: bool = False,
+    escalation_required: bool = False,
+    delivery_status: str | None = None,
+    raw_payload: dict | None = None,
     error_message: str | None = None,
 ) -> None:
     telefono = (telefono or "").strip()
@@ -38,33 +38,41 @@ def save_interaction(
                 INSERT INTO interactions (
                     patient_id,
                     telefono,
-                    whatsapp_message_id,
-                    whatsapp_timestamp,
+                    nombre,
                     mensaje,
                     respuesta,
                     intent,
                     estado_anterior,
                     nuevo_estado,
                     next_action,
-                    delivery_status,
+                    state_reason,
                     router_version,
                     state_machine_version,
+                    kb_used,
+                    escalation_required,
+                    whatsapp_message_id,
+                    whatsapp_timestamp,
+                    delivery_status,
                     created_at
                 )
                 VALUES (
                     :patient_id,
                     :telefono,
-                    :whatsapp_message_id,
-                    :whatsapp_timestamp,
+                    :nombre,
                     :mensaje,
                     :respuesta,
                     :intent,
                     :estado_anterior,
                     :nuevo_estado,
                     :next_action,
-                    :delivery_status,
+                    :state_reason,
                     :router_version,
                     :state_machine_version,
+                    :kb_used,
+                    :escalation_required,
+                    :whatsapp_message_id,
+                    :whatsapp_timestamp,
+                    :delivery_status,
                     NOW()
                 )
                 """
@@ -72,16 +80,20 @@ def save_interaction(
             {
                 "patient_id": patient_id,
                 "telefono": telefono,
-                "whatsapp_message_id": whatsapp_message_id,
-                "whatsapp_timestamp": whatsapp_timestamp,
-                "mensaje_usuario": mensaje,
-                "respuesta_elvira": respuesta,
+                "nombre": nombre,
+                "mensaje": mensaje_usuario,
+                "respuesta": respuesta_elvira,
                 "intent": intent,
                 "estado_anterior": estado_anterior,
                 "nuevo_estado": nuevo_estado,
                 "next_action": next_action,
-                "delivery_status": delivery_status,
+                "state_reason": state_reason,
                 "router_version": router_version,
                 "state_machine_version": state_machine_version,
+                "kb_used": kb_used,
+                "escalation_required": escalation_required,
+                "whatsapp_message_id": whatsapp_message_id,
+                "whatsapp_timestamp": whatsapp_timestamp,
+                "delivery_status": delivery_status,
             },
         )
