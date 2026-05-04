@@ -1,5 +1,7 @@
 from typing import Optional, Literal
-from pydantic import BaseModel
+
+from pydantic import BaseModel, Field
+
 
 Intent = Literal[
     "general",
@@ -14,6 +16,7 @@ Intent = Literal[
     "urgencia",
 ]
 
+
 class ElviraState(BaseModel):
     telefono: str
     mensaje_original: str
@@ -27,7 +30,13 @@ class ElviraState(BaseModel):
     respuesta: Optional[str] = None
     opt_out: bool = False
     escalation_required: bool = False
+
+    # Knowledge Base context.
+    # Informational only. Never used to decide state transitions.
     kb_used: bool = False
+    kb_sources: list[str] = Field(default_factory=list)
+    kb_context: Optional[str] = None
+
     state_reason: Optional[str] = None
     router_version: str = "intent-v1"
     state_machine_version: str = "sm-v1"
