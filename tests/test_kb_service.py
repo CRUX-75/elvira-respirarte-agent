@@ -165,3 +165,65 @@ def test_kb_context_does_not_force_usage_for_irrelevant_message():
         "kb_sources": [],
         "kb_context": "",
     }
+
+
+def test_kb_context_explicit_schedule_question_uses_schedules_from_general_state():
+    engine = Mock()
+
+    with (
+        patch("app.services.kb.search_services", return_value=[]),
+        patch("app.services.kb.get_active_services", return_value=[]),
+        patch(
+            "app.services.kb.search_schedules",
+            return_value=[
+                {
+                    "day_name": "Lunes a viernes",
+                    "modality": "Domiciliaria",
+                    "start_time": "15:00",
+                    "end_time": "21:00",
+                    "is_available": "true",
+                    "notes": "Atención domiciliaria en la tarde.",
+                }
+            ],
+        ),
+        patch("app.services.kb.get_all_schedules", return_value=[]),
+        patch("app.services.kb.search_rules", return_value=[]),
+        patch("app.services.kb.get_active_rules", return_value=[]),
+    ):
+        result = get_kb_context(
+            engine,
+            intent="horarios",
+            message="¿Qué horarios manejan?",
+            estado_actual="ST_GENERAL",
+        )
+
+    assert result["kb_used"] is True
+    assert result["kb_sources"] == ["kb_schedules"]
+    assert "Lunes a viernes" in result["kb_context"]
+    assert "15:00" in result["kb_context"]
+    assert "21:00" in result["kb_context"]
+
+
+def test_kb_context_unknown_service_does_not_invent_kb_context():
+    engine = Mock()
+
+    with (
+        patch("app.services.kb.search_services", return_value=[]),
+        patch("app.services.kb.get_active_services", return_value=[]),
+        patch("app.services.kb.search_schedules", return_value=[]),
+        patch("app.services.kb.get_all_schedules", return_value=[]),
+        patch("app.services.kb.search_rules", return_value=[]),
+        patch("app.services.kb.get_active_rules", return_value=[]),
+    ):
+        result = get_kb_context(
+            engine,
+            intent="servicios",
+            message="¿Ofrecen radiografías a domicilio?",
+            estado_actual="ST_GENERAL",
+        )
+
+    assert result == {
+        "kb_used": False,
+        "kb_sources": [],
+        "kb_context": "",
+    }
