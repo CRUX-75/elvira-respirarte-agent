@@ -7,6 +7,16 @@ from app.graph.graph import process_message
 from app.services.tracing import traced_process_message
 from app.services.whatsapp import send_whatsapp_message
 from app.repositories.logs import log_interaction, log_ignored, log_error
+from app.repositories.patients import (
+    get_or_create_patient_by_phone,
+    update_patient_state,
+    update_patient_last_message,
+)
+from app.repositories.processed_messages import (
+    is_message_processed,
+    mark_message_processed,
+)
+from app.repositories.interactions import save_interaction
 from app.config import settings
 
 
@@ -50,22 +60,64 @@ async def receive_webhook(payload: WhatsAppPayload):
 
     if not extracted:
         log_ignored(reason="no_message", payload_summary=str(payload.object))
-        return {"status": "ignored"}
+        return {"status": "ignored", "reason": "no_message"}
 
-    message = IncomingMessage(
-        telefono=extracted["telefono"],
-        mensaje=extracted["mensaje"],
-        nombre=extracted.get("nombre"),
-        estado_actual="ST_INIT",
-        opt_out=False,
-    )
+    telefono = extracted["telefono"]
+    mensaje = extracted["mensaje"]
+    nombre = extracted.get("nombre")
+    whatsapp_message_id = extracted.get("whatsapp_message_id")
+    whatsapp_timestamp = extracted.get("whatsapp_timestamp")
+
+    # P4-D critical rule:
+    # Deduplicate BEFORE calling LangGraph/LLM.
+    if is_message_processed(whatsapp_message_id):
+        log_ignored(
+            reason="duplicate_message",
+            payload_summary=str(
+                {
+                    "telefono": telefono,
+                    "whatsapp_message_id": whatsapp_message_id,
+                }
+            ),
+        )
+
+        print(
+            {
+                "event": "whatsapp_webhook_duplicate_ignored",
+                "telefono": telefono,
+                "whatsapp_message_id": whatsapp_message_id,
+                "whatsapp_timestamp": whatsapp_timestamp,
+            }
+        )
+
+        return {
+            "status": "ignored",
+            "reason": "duplicate_message",
+            "whatsapp_message_id": whatsapp_message_id,
+            "whatsapp_timestamp": whatsapp_timestamp,
+        }
 
     try:
+        patient = get_or_create_patient_by_phone(
+            telefono=telefono,
+            nombre=nombre,
+        )
+
+        estado_actual = patient.get("estado_actual") or "ST_INIT"
+
+        message = IncomingMessage(
+            telefono=telefono,
+            mensaje=mensaje,
+            nombre=nombre,
+            estado_actual=estado_actual,
+            opt_out=bool(patient.get("opt_out", False)),
+        )
+
         result = traced_process_message(process_message, message)
 
         if settings.whatsapp_sending_enabled:
             await send_whatsapp_message(
-                telefono=extracted["telefono"],
+                telefono=telefono,
                 mensaje=result.respuesta,
             )
 
@@ -75,11 +127,44 @@ async def receive_webhook(payload: WhatsAppPayload):
             delivery_status = "sending_skipped"
             logged_response = f"[WHATSAPP_SENDING_DISABLED] {result.respuesta}"
 
-        log_interaction(
-            telefono=extracted["telefono"],
-            mensaje=extracted["mensaje"],
+        save_interaction(
+            patient_id=str(patient["id"]),
+            telefono=telefono,
+            nombre=nombre,
+            whatsapp_message_id=whatsapp_message_id,
+            whatsapp_timestamp=whatsapp_timestamp,
+            mensaje_usuario=mensaje,
+            respuesta_elvira=logged_response,
             intent=result.intent,
-            estado_anterior=message.estado_actual,
+            estado_anterior=estado_actual,
+            nuevo_estado=result.nuevo_estado,
+            next_action=getattr(result, "next_action", None),
+            state_reason=getattr(result, "state_reason", None),
+            router_version=getattr(result, "router_version", None),
+            state_machine_version=getattr(result, "state_machine_version", None),
+            kb_used=bool(getattr(result, "kb_used", False)),
+            escalation_required=bool(getattr(result, "escalation_required", False)),
+            delivery_status=delivery_status,
+        )
+
+        update_patient_state(
+            patient_id=str(patient["id"]),
+            nuevo_estado=result.nuevo_estado,
+        )
+
+        update_patient_last_message(patient_id=str(patient["id"]))
+
+        mark_message_processed(
+            whatsapp_message_id=whatsapp_message_id,
+            telefono=telefono,
+        )
+
+        # Keep old console/file logging during P4 for compatibility.
+        log_interaction(
+            telefono=telefono,
+            mensaje=mensaje,
+            intent=result.intent,
+            estado_anterior=estado_actual,
             nuevo_estado=result.nuevo_estado,
             respuesta=logged_response,
         )
@@ -87,13 +172,14 @@ async def receive_webhook(payload: WhatsAppPayload):
         print(
             {
                 "event": "whatsapp_webhook_processed",
-                "telefono": extracted["telefono"],
-                "nombre": extracted.get("nombre"),
-                "mensaje": extracted["mensaje"],
-                "whatsapp_message_id": extracted.get("whatsapp_message_id"),
-                "whatsapp_timestamp": extracted.get("whatsapp_timestamp"),
+                "telefono": telefono,
+                "nombre": nombre,
+                "mensaje": mensaje,
+                "patient_id": str(patient["id"]),
+                "whatsapp_message_id": whatsapp_message_id,
+                "whatsapp_timestamp": whatsapp_timestamp,
                 "intent": result.intent,
-                "estado_anterior": message.estado_actual,
+                "estado_anterior": estado_actual,
                 "nuevo_estado": result.nuevo_estado,
                 "delivery_status": delivery_status,
                 "whatsapp_sending_enabled": settings.whatsapp_sending_enabled,
@@ -104,13 +190,16 @@ async def receive_webhook(payload: WhatsAppPayload):
             "status": delivery_status,
             "intent": result.intent,
             "respuesta": result.respuesta,
+            "estado_anterior": estado_actual,
+            "nuevo_estado": result.nuevo_estado,
             "whatsapp_sending_enabled": settings.whatsapp_sending_enabled,
-            "whatsapp_message_id": extracted.get("whatsapp_message_id"),
-            "whatsapp_timestamp": extracted.get("whatsapp_timestamp"),
+            "whatsapp_message_id": whatsapp_message_id,
+            "whatsapp_timestamp": whatsapp_timestamp,
+            "patient_id": str(patient["id"]),
         }
 
     except Exception as e:
-        log_error(telefono=extracted["telefono"], error=str(e))
+        log_error(telefono=telefono, error=str(e))
         raise
 
 
