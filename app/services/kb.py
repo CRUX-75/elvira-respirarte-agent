@@ -201,20 +201,31 @@ def get_kb_context(
     contexts: list[str] = []
     sources: list[str] = []
 
-    should_use_services = (
-        normalized_intent in {"servicio", "services", "general"}
-        or _contains_any(normalized_message, SERVICE_KEYWORDS)
-    )
-
-    should_use_schedules = (
-        normalized_intent in {"cita", "schedule", "horario"}
-        or normalized_state.startswith("st_cita")
-        or _contains_any(normalized_message, SCHEDULE_KEYWORDS)
-    )
+    explicit_service_intent = normalized_intent in {
+        "servicio",
+        "servicios",
+        "service",
+        "services",
+    }
 
     should_use_rules = (
         normalized_intent in {"precio", "price", "pago", "urgencia", "cancelacion"}
         or _contains_any(normalized_message, RULE_KEYWORDS)
+    )
+
+    should_use_services = (
+        explicit_service_intent
+        or normalized_intent == "general"
+        or _contains_any(normalized_message, SERVICE_KEYWORDS)
+    )
+
+    should_use_schedules = (
+        not explicit_service_intent
+        and (
+            normalized_intent in {"cita", "schedule", "horario"}
+            or normalized_state.startswith("st_cita")
+            or _contains_any(normalized_message, SCHEDULE_KEYWORDS)
+        )
     )
 
     if should_use_services:

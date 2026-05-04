@@ -38,6 +38,41 @@ def test_kb_context_uses_services_for_service_question():
     assert "Terapia Respiratoria" in result["kb_context"]
 
 
+
+def test_kb_context_service_intent_overrides_appointment_state():
+    engine = Mock()
+
+    with (
+        patch(
+            "app.services.kb.search_services",
+            return_value=[
+                {
+                    "service_name": "Terapia Respiratoria",
+                    "modality": "Domiciliaria",
+                    "public_answer_short": "Sí, ofrecemos terapia respiratoria domiciliaria.",
+                    "escalation_required": False,
+                }
+            ],
+        ),
+        patch("app.services.kb.get_active_services", return_value=[]),
+        patch("app.services.kb.search_schedules", return_value=[]),
+        patch("app.services.kb.get_all_schedules", return_value=[]),
+        patch("app.services.kb.search_rules", return_value=[]),
+        patch("app.services.kb.get_active_rules", return_value=[]),
+    ):
+        result = get_kb_context(
+            engine,
+            intent="servicios",
+            message="Me podría decir que servicios ofrecen en Respirarte?",
+            estado_actual="ST_CITA_FRANJA",
+        )
+
+    assert result["kb_used"] is True
+    assert result["kb_sources"] == ["kb_services"]
+    assert "kb_schedules" not in result["kb_sources"]
+    assert "Terapia Respiratoria" in result["kb_context"]
+
+
 def test_kb_context_uses_schedules_for_appointment_state():
     engine = Mock()
 
@@ -69,7 +104,7 @@ def test_kb_context_uses_schedules_for_appointment_state():
         )
 
     assert result["kb_used"] is True
-    assert "kb_schedules" in result["kb_sources"]
+    assert result["kb_sources"] == ["kb_schedules"]
     assert "Lunes a viernes" in result["kb_context"]
 
 
