@@ -967,3 +967,36 @@ Current full test baseline: 41 passed
 This is the current stable foundation for Elvira as a production-oriented conversational agent.
 
 Next step: Sprint P6-E — Pre-Go-Live Final Gate.
+
+---
+
+## P6-E Manual Rollback Checklist
+
+If any issue appears during pre-go-live or controlled activation preparation:
+
+1. Keep real WhatsApp sending disabled:
+   - `WHATSAPP_SENDING_ENABLED=false`
+
+2. If unsafe traffic reaches production:
+   - Disable or unsubscribe the Meta webhook temporarily.
+
+3. If the deployed version behaves unexpectedly:
+   - Redeploy the previous stable commit from Easypanel or Git.
+
+4. If the app must be stopped immediately:
+   - Stop the Easypanel service temporarily.
+
+5. For incident review:
+   - Search `interactions` by `whatsapp_message_id`.
+   - Search `processed_messages` by `whatsapp_message_id`.
+   - Check the patient record in `patients` by `telefono`.
+   - Review the corresponding LangSmith run in `elvira-respirarte-prod`.
+
+6. Safety rule:
+   - Do not enable `WHATSAPP_SENDING_ENABLED=true` until the controlled activation plan is explicitly approved.
+
+Rollback priority:
+- Stop real sending first.
+- Preserve auditability.
+- Investigate by `whatsapp_message_id`.
+- Only redeploy after identifying the failing commit or behavior.
