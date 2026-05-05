@@ -18,6 +18,7 @@ from app.repositories.processed_messages import (
 )
 from app.repositories.interactions import save_interaction
 from app.config import settings
+from app.services.readiness import build_ready_report
 
 
 app = FastAPI(
@@ -34,6 +35,11 @@ def health_check():
         "service": "elvira-respirarte-agent",
         "version": "0.2.1",
     }
+
+
+@app.get("/ready")
+def readiness_check():
+    return build_ready_report()
 
 
 @app.get("/webhook", response_class=PlainTextResponse)
