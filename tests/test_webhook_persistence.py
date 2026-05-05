@@ -134,6 +134,7 @@ def test_webhook_processes_new_message_and_persists(monkeypatch):
     assert calls["update_patient_state"] == {
         "patient_id": "patient-001",
         "nuevo_estado": "ST_GENERAL",
+        "opt_out": None,
     }
 
     assert calls["update_patient_last_message"] == {

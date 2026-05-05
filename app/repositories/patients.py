@@ -109,6 +109,7 @@ def get_or_create_patient_by_phone(
 def update_patient_state(
     patient_id: str,
     nuevo_estado: str,
+    opt_out: bool | None = None,
 ) -> None:
     if not patient_id:
         raise ValueError("patient_id is required")
@@ -116,20 +117,27 @@ def update_patient_state(
     if not nuevo_estado:
         raise ValueError("nuevo_estado is required")
 
+    opt_out_sql = ""
+    params = {
+        "patient_id": patient_id,
+        "nuevo_estado": nuevo_estado,
+    }
+
+    if opt_out is not None:
+        opt_out_sql = ",\n                    opt_out = :opt_out"
+        params["opt_out"] = opt_out
+
     with engine.begin() as conn:
         conn.execute(
             text(
-                """
+                f"""
                 UPDATE patients
-                SET estado_actual = :nuevo_estado,
+                SET estado_actual = :nuevo_estado{opt_out_sql},
                     updated_at = NOW()
                 WHERE id = :patient_id
                 """
             ),
-            {
-                "patient_id": patient_id,
-                "nuevo_estado": nuevo_estado,
-            },
+            params,
         )
 
 

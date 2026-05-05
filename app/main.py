@@ -305,6 +305,7 @@ async def receive_webhook(payload: WhatsAppPayload):
         update_patient_state(
             patient_id=str(patient["id"]),
             nuevo_estado=result.nuevo_estado,
+            opt_out=getattr(result, "opt_out", None),
         )
 
         update_patient_last_message(patient_id=str(patient["id"]))
