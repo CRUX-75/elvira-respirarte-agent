@@ -19,8 +19,8 @@ Current repository:
 - Stable domain: `https://elvira.genflowautomation.com`
 - Meta webhook: `https://elvira.genflowautomation.com/webhook`
 - Webhook subscribed field: `messages`
-- Current phase: Sprint P5-G completed — KB Answer Quality & Minimal Guardrails
-- Next phase: Sprint P6 — Safety, hardening and operational polish
+- Current phase: Sprint P6-D completed — Production Dry-Run Validation
+- Next phase: Sprint P6-E — Pre-Go-Live Final Gate
 
 Current production safety state:
 
@@ -31,6 +31,9 @@ Current production safety state:
 - Current safety mode: `WHATSAPP_SENDING_ENABLED=false`
 - KB runtime enabled: `KB_RUNTIME_ENABLED=true`
 - LangSmith active in project: `elvira-respirarte-prod`
+- Production status endpoint: `/ready`
+- Production status: `ready`
+- Hard failures: none
 
 Completed:
 
@@ -49,10 +52,14 @@ Completed:
 - Sprint P5-E — KB context integrated into runtime flow
 - Sprint P5-F — KB routing optimization completed
 - Sprint P5-G — KB answer quality and minimal guardrails completed
+- Sprint P6-A — Production Safety Checklist completed
+- Sprint P6-B — Failure Handling v1 completed
+- Sprint P6-C — Medical & Response Safety Boundaries completed
+- Sprint P6-D — Production Dry-Run Validation completed
 - GitHub private repo created
 - `.gitignore` configured
 - `.env` confirmed as not versioned
-- Current P5-G test baseline: 12/12 KB tests passing
+- Current full test baseline: 41/41 tests passing
 
 ---
 
@@ -115,6 +122,7 @@ WHATSAPP_SENDING_ENABLED=false
 → Interaction is logged
 → Patient state is persisted
 → WhatsApp reply is NOT sent
+→ API response status is sending_skipped
 Tech Stack
 
 Current stack:
@@ -179,7 +187,9 @@ elvira-respirarte-agent/
 │   ├── test_intent.py
 │   ├── test_state_machine.py
 │   ├── test_kb_service.py
-│   └── test_kb_runtime_integration.py
+│   ├── test_kb_runtime_integration.py
+│   ├── test_p6c_prompt_safety.py
+│   └── test_webhook_persistence.py
 ├── scripts/
 │   └── import_kb_from_csv.py
 ├── .env.example
@@ -268,6 +278,39 @@ Expected response:
   "status": "ok",
   "service": "elvira-respirarte-agent"
 }
+Production Health Checks
+
+Production health endpoint:
+
+curl https://elvira.genflowautomation.com/health
+
+Expected:
+
+{
+  "status": "ok",
+  "service": "elvira-respirarte-agent",
+  "version": "0.2.1"
+}
+
+Production readiness endpoint:
+
+curl https://elvira.genflowautomation.com/ready
+
+Current validated production readiness:
+
+status = ready
+environment = production
+whatsapp_sending_enabled = false
+kb_runtime_enabled = true
+database = configured
+patients repository = configured
+interactions repository = configured
+processed_messages repository = configured
+kb repository = configured
+LangSmith project = elvira-respirarte-prod
+OpenAI configured = true
+WhatsApp configured = true
+hard_failures = []
 WhatsApp Webhook Verification
 
 Meta verifies the webhook through:
@@ -354,16 +397,28 @@ Run all tests:
 
 pytest
 
+Current full test baseline:
+
+41 passed
+
 Run KB tests:
 
 pytest tests/test_kb_service.py tests/test_kb_runtime_integration.py -v
 
-Current P5-G KB baseline:
+P5-G KB baseline:
 
 12/12 KB tests passing
 
-P5-G test coverage validates:
+Current test coverage validates:
 
+deterministic intent classification
+state machine transitions
+opt-out handling
+respiratory urgency detection
+webhook persistence
+message deduplication
+patient state persistence
+interaction logging
 KB service routing for service questions
 explicit service intent overrides appointment state
 service questions inside ST_CITA_FRANJA use only kb_services
@@ -373,6 +428,7 @@ irrelevant messages do not force KB usage
 runtime KB node preserves deterministic state decisions
 runtime KB fails safely when unavailable
 runtime KB skips correctly when disabled
+prompt safety constraints for medical/response boundaries
 
 Important rule:
 
@@ -429,6 +485,7 @@ PostgreSQL responsibilities:
 create or retrieve patient by phone
 store patient name
 store current state
+store opt-out flag
 load estado_actual before processing
 save nuevo_estado after processing
 save every interaction
@@ -439,6 +496,43 @@ Core persistence rule:
 
 Deduplicate before responding.
 Persist state before trusting conversation continuity.
+Persist opt_out=true when the user opts out.
+
+Current relevant patient columns:
+
+telefono
+nombre
+estado_actual
+opt_out
+created_at
+updated_at
+last_message_at
+
+Current relevant interaction columns:
+
+telefono
+nombre
+mensaje
+respuesta
+intent
+estado_anterior
+nuevo_estado
+next_action
+state_reason
+router_version
+state_machine_version
+kb_used
+escalation_required
+whatsapp_message_id
+whatsapp_timestamp
+delivery_status
+created_at
+
+Current relevant processed message columns:
+
+whatsapp_message_id
+telefono
+processed_at
 Knowledge Base
 
 Current KB source of truth for runtime:
@@ -519,7 +613,6 @@ nuevo_estado = ST_CITA_FRANJA
 Result:
 
 Elvira answered with active services from KB only.
-
 Schedule question
 
 Input:
@@ -534,7 +627,6 @@ response = Monday to Friday 3:00 PM to 8:00 PM, Saturday 8:00 AM to 12:00 PM, no
 Result:
 
 Elvira answered using the corrected kb_schedules record.
-
 Price question
 
 Input:
@@ -551,7 +643,236 @@ response = no invented price
 Result:
 
 Elvira did not invent a price and redirected politely to valuation/confirmation by Dra. D'Aleman.
+P6-A Production Safety Checklist
 
+Sprint P6-A added a production readiness endpoint and safety checklist.
+
+Implemented:
+
+/ready endpoint
+environment visibility
+repository readiness checks
+LangSmith status check
+OpenAI configuration check
+WhatsApp configuration check
+hard failure list
+explicit production safety status
+confirmation that real WhatsApp sending remains disabled
+
+Validated production state:
+
+status = ready
+environment = production
+WHATSAPP_SENDING_ENABLED=false
+KB_RUNTIME_ENABLED=true
+hard_failures=[]
+P6-B Failure Handling v1
+
+Sprint P6-B hardened webhook behavior for failure scenarios.
+
+Implemented:
+
+safer webhook failure handling
+controlled error responses
+better distinction between ignored, failed and processed messages
+protection against unsafe processing states
+tests for failure paths
+
+Validated:
+
+Webhook failures do not trigger uncontrolled behavior.
+Messages are not marked processed when extraction or processing fails unexpectedly.
+P6-C Medical & Response Safety Boundaries
+
+Sprint P6-C reinforced medical safety boundaries.
+
+Implemented:
+
+prompt medical safety rules strengthened in app/prompts/elvira_system.txt
+deterministic respiratory urgency patterns added in app/services/intent.py
+static prompt safety tests added
+controlled LLM prompt test added with monkeypatch
+permanent urgency classification test added
+
+Critical issue resolved:
+
+Input:
+Tengo dolor fuerte en el pecho y me cuesta respirar
+
+Previous behavior:
+intent = general
+safe wording came only from prompt
+
+Fixed behavior:
+intent = urgencia
+next_action = escalate_urgent_case
+nuevo_estado = ST_URGENCIA
+escalation_required = true
+
+Validated response:
+
+Por lo que me comenta, es importante que busque atención médica urgente o se comunique con un profesional de salud. Respirarte no gestiona urgencias por este medio. Cuídese mucho.
+
+Commit:
+
+bdf7e2f fix: enforce respiratory urgency safety boundaries
+P6-D Production Dry-Run Validation
+
+Sprint P6-D validated production end-to-end with real WhatsApp sending disabled.
+
+Production dry-run safety mode:
+
+WHATSAPP_SENDING_ENABLED=false
+
+Validated production endpoints:
+
+/health = ok
+/ready = ready
+environment = production
+kb_runtime_enabled = true
+hard_failures = []
+LangSmith project = elvira-respirarte-prod
+
+Validated dry-run paths:
+
+General greeting
+
+Input:
+
+Hola buen día
+
+Validated:
+
+HTTP = 200
+status = sending_skipped
+intent = general
+whatsapp_sending_enabled = false
+Deduplication
+
+Repeated same whatsapp_message_id.
+
+Validated:
+
+HTTP = 200
+status = ignored
+reason = duplicate_message
+Appointment request
+
+Input:
+
+Quiero pedir una cita
+
+Validated:
+
+intent = cita
+estado_anterior = ST_GENERAL
+nuevo_estado = ST_CITA_FECHA
+delivery_status = sending_skipped
+Appointment context continuation
+
+Input:
+
+Mañana en la tarde
+
+Validated:
+
+intent = fecha_cita
+estado_anterior = ST_CITA_FECHA
+nuevo_estado = ST_CITA_FRANJA
+delivery_status = sending_skipped
+Respiratory urgency
+
+Input:
+
+Tengo dolor fuerte en el pecho y me cuesta respirar
+
+Validated:
+
+intent = urgencia
+next_action = escalate_urgent_case
+estado_anterior = ST_CITA_FRANJA
+nuevo_estado = ST_URGENCIA
+escalation_required = true
+delivery_status = sending_skipped
+
+Validated in LangSmith production:
+
+project = elvira-respirarte-prod
+input = Tengo dolor fuerte en el pecho y me cuesta respirar
+intent = urgencia
+next_action = escalate_urgent_case
+nuevo_estado = ST_URGENCIA
+escalation_required = true
+timezone_contexto = America/Bogota
+
+Validated in PostgreSQL interactions:
+
+intent = urgencia
+estado_anterior = ST_CITA_FRANJA
+nuevo_estado = ST_URGENCIA
+next_action = escalate_urgent_case
+escalation_required = true
+delivery_status = sending_skipped
+
+Validated in PostgreSQL processed_messages:
+
+whatsapp_message_id registered
+telefono registered
+processed_at registered
+unique constraint active
+
+Validated in PostgreSQL patients:
+
+estado_actual = ST_URGENCIA
+last_message_at updated
+OPTOUT from urgency
+
+Input:
+
+No quiero recibir más mensajes
+
+Validated:
+
+intent = optout
+estado_anterior = ST_URGENCIA
+nuevo_estado = ST_OPTOUT
+next_action = confirm_optout
+delivery_status = sending_skipped
+
+Issue found during P6-D:
+
+patients.estado_actual changed to ST_OPTOUT,
+but patients.opt_out remained false.
+
+Fix implemented:
+
+update_patient_state now accepts optional opt_out.
+main.py passes result.opt_out into patient persistence.
+
+Validated after redeploy:
+
+patients.estado_actual = ST_OPTOUT
+patients.opt_out = true
+interactions.intent = optout
+interactions.next_action = confirm_optout
+processed_messages registered
+
+Commit:
+
+73b05f6 fix: persist opt-out flag on patient state updates
+
+P6-D final production validation:
+
+Webhook production OK
+Payload final OK
+sending_skipped OK
+LangSmith tracing OK
+PostgreSQL interactions OK
+processed_messages dedupe OK
+patients state persistence OK
+urgencia respiratoria OK
+OPTOUT from urgency OK
+opt_out=true corrected and validated OK
 Why n8n Was Replaced
 
 n8n validated the concept but became too fragile for production due to:
@@ -586,7 +907,11 @@ P5-D	Deterministic KB service	✅ Done
 P5-E	Runtime KB context integration	✅ Done
 P5-F	KB routing optimization	✅ Done
 P5-G	KB answer quality and minimal guardrails	✅ Done
-P6	Safety, hardening and operational polish	⏳ Next
+P6-A	Production Safety Checklist	✅ Done
+P6-B	Failure Handling v1	✅ Done
+P6-C	Medical & Response Safety Boundaries	✅ Done
+P6-D	Production Dry-Run Validation	✅ Done
+P6-E	Pre-Go-Live Final Gate	⏳ Next
 Development Rules
 Keep the state machine deterministic.
 Keep the LLM out of control decisions.
@@ -603,6 +928,9 @@ Google Sheets edits KB data.
 PostgreSQL serves runtime KB data.
 KB informs, but the state machine decides.
 The LLM writes, but does not control the flow.
+Medical urgency must be detected deterministically before relying on wording.
+OPTOUT must win from any state.
+If nuevo_estado = ST_OPTOUT, patient opt_out must persist as true.
 Current Baseline
 Core local: working
 FastAPI: working
@@ -611,8 +939,10 @@ WhatsApp payload parser: working
 WhatsApp Send API integration: working
 Webhook safety flag: working
 Message metadata tracing: working
+Production readiness endpoint: working
 PostgreSQL persistence: working
 Patient state persistence: working
+Patient opt_out persistence: working
 Message deduplication: working
 Interactions logging: working
 Processed messages audit: working
@@ -621,6 +951,9 @@ KB services routing: working
 KB schedules routing: working
 KB rules routing: working
 KB answer guardrails: working
+Medical urgency classification: working
+Urgency escalation state: working
+OPTOUT from any state: working
 LangSmith local: working
 LangSmith production: working
 LangGraph: working
@@ -629,7 +962,8 @@ GitHub repo: private and initialized
 Deployment domain: configured
 Current safety mode: WHATSAPP_SENDING_ENABLED=false
 Current KB mode: KB_RUNTIME_ENABLED=true
+Current full test baseline: 41 passed
 
 This is the current stable foundation for Elvira as a production-oriented conversational agent.
 
-Next step: Sprint P6 — Safety, hardening and operational polish.
+Next step: Sprint P6-E — Pre-Go-Live Final Gate.
