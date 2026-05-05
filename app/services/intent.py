@@ -33,6 +33,13 @@ def classify_intent(message: str, current_state: str = "ST_INIT") -> Intent:
         r"\burgente\b", r"\bemergencia\b", r"\bno puede respirar\b",
         r"\bno puedo respirar\b", r"\bdificultad para respirar\b",
         r"\bse esta ahogando\b", r"\bdolor en el pecho\b",
+        r"\bdolor fuerte en el pecho\b", r"\bme cuesta respirar\b",
+        r"\bme falta el aire\b", r"\bse me dificulta respirar\b",
+        r"\blabios morados\b", r"\bdedos morados\b",
+        r"\bsaturacion baja\b", r"\bsaturacion muy baja\b",
+        r"\bsaturacion esta baja\b", r"\bsaturacion esta muy baja\b",
+        r"\bsaturacion.*muy baja\b", r"\bsaturacion.*baja\b",
+        r"\bme estoy ahogando\b",
     ]
     if any(re.search(p, msg) for p in urgency_patterns):
         return "urgencia"

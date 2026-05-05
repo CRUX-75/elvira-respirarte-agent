@@ -24,3 +24,19 @@ def test_optout_wins():
 
 def test_urgencia():
     assert classify_intent("Es urgente, no puedo respirar") == "urgencia"
+
+
+def test_p6c_urgency_intent_detects_critical_respiratory_phrases():
+    from app.services.intent import classify_intent
+
+    cases = [
+        "Tengo dolor fuerte en el pecho y me cuesta respirar",
+        "Me falta el aire",
+        "Tengo los labios morados",
+        "Mi saturación está muy baja",
+        "Tengo saturacion de oxigeno muy baja",
+        "Me estoy ahogando",
+    ]
+
+    for message in cases:
+        assert classify_intent(message) == "urgencia"
