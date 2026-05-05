@@ -1000,3 +1000,46 @@ Rollback priority:
 - Preserve auditability.
 - Investigate by `whatsapp_message_id`.
 - Only redeploy after identifying the failing commit or behavior.
+
+---
+
+## P6-F — Controlled Sending Activation Plan
+
+### Activation Scope
+
+P6-F is the final technical phase before controlled real go-live for Elvira on WhatsApp.
+
+The goal of this phase is to prepare and validate controlled message sending using the official Colombian Respirarte WhatsApp number, without changing the conversational architecture that has already been validated.
+
+Current rule:
+
+- `WHATSAPP_SENDING_ENABLED=false` remains mandatory until all P6-F gates are completed.
+- No real WhatsApp sending is activated during the initial readiness steps.
+- The current German WhatsApp test number remains available until the Colombian number is fully verified and operational.
+- Easypanel production variables must not be changed until the new Colombian `WHATSAPP_PHONE_NUMBER_ID` is available.
+
+Scope included in P6-F:
+
+- Add or verify the Colombian Respirarte number in WhatsApp Manager.
+- Obtain the new Colombian Phone Number ID.
+- Confirm display name, number status, messaging limits, quality rating and two-step verification.
+- Keep Icebreakers disabled for now.
+- Keep Commands disabled for now.
+- Define a minimal future template strategy, without blocking the first controlled real test if the patient/user writes first.
+- Align production environment variables only after WhatsApp Manager readiness is complete.
+- Validate dry-run behavior with sending still disabled.
+- Activate real sending only for an authorized internal controlled test.
+- Audit DB, LangSmith and Meta after the controlled test.
+- Execute rollback drill by disabling sending again.
+
+Operational boundaries:
+
+- Do not change the state machine unless a critical bug is found.
+- Do not change KB routing unless a critical bug is found.
+- Do not change database schema unless strictly necessary.
+- Keep all changes small, testable and auditable.
+
+Production principle:
+
+> WhatsApp transports. The workflow controls. The KB informs. The model writes. The state machine protects. The log enables audit.
+
