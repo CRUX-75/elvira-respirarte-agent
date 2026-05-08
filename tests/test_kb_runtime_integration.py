@@ -272,3 +272,37 @@ def test_kb_context_explicit_services_in_appointment_state_excludes_disclaimer_r
     all_schedules_mock.assert_not_called()
     rules_by_type_mock.assert_not_called()
     search_rules_mock.assert_not_called()
+
+
+def test_kb_context_general_greeting_inside_appointment_state_does_not_load_kb():
+    from app.services.kb import get_kb_context
+
+    engine = object()
+
+    with (
+        patch("app.services.kb.search_services") as services_mock,
+        patch("app.services.kb.get_active_services") as active_services_mock,
+        patch("app.services.kb.search_schedules") as schedules_mock,
+        patch("app.services.kb.get_all_schedules") as all_schedules_mock,
+        patch("app.services.kb.get_rules_by_type") as rules_by_type_mock,
+        patch("app.services.kb.search_rules") as search_rules_mock,
+        patch("app.services.kb.get_active_rules") as active_rules_mock,
+    ):
+        result = get_kb_context(
+            engine,
+            intent="general",
+            message="Hola buen día,",
+            estado_actual="ST_CITA_FRANJA",
+        )
+
+    assert result["kb_used"] is False
+    assert result["kb_sources"] == []
+    assert result["kb_context"] == ""
+
+    services_mock.assert_not_called()
+    active_services_mock.assert_not_called()
+    schedules_mock.assert_not_called()
+    all_schedules_mock.assert_not_called()
+    rules_by_type_mock.assert_not_called()
+    search_rules_mock.assert_not_called()
+    active_rules_mock.assert_not_called()

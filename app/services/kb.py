@@ -85,12 +85,37 @@ APPOINTMENT_RULE_STATES = {
 }
 
 
+SIMPLE_GREETING_MESSAGES = {
+    "hola",
+    "buen dia",
+    "buen día",
+    "buenos dias",
+    "buenos días",
+    "buenas",
+    "buenas tardes",
+    "buenas noches",
+    "hola buen dia",
+    "hola buen día",
+    "hola buenos dias",
+    "hola buenos días",
+    "hola buenas",
+    "hola buenas tardes",
+    "hola buenas noches",
+}
+
+
 def _normalize(text: str | None) -> str:
     return (text or "").strip().lower()
 
 
 def _contains_any(text: str, keywords: set[str]) -> bool:
     return any(keyword in text for keyword in keywords)
+
+
+def _is_simple_greeting(text: str) -> bool:
+    cleaned = text.strip().lower()
+    cleaned = cleaned.strip(" .,;:!¡¿?")
+    return cleaned in SIMPLE_GREETING_MESSAGES
 
 
 def _compact_rows(rows: list[dict[str, Any]], max_rows: int = 5) -> list[dict[str, Any]]:
@@ -213,6 +238,19 @@ def get_kb_context(
         "service",
         "services",
     }
+
+    simple_general_greeting_in_appointment_state = (
+        normalized_intent == "general"
+        and normalized_state in APPOINTMENT_RULE_STATES
+        and _is_simple_greeting(normalized_message)
+    )
+
+    if simple_general_greeting_in_appointment_state:
+        return {
+            "kb_used": False,
+            "kb_sources": [],
+            "kb_context": "",
+        }
 
     appointment_state_requires_rules = (
         not explicit_service_intent
