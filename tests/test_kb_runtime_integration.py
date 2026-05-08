@@ -175,3 +175,100 @@ def test_node_load_kb_context_schedule_question_uses_schedules():
     assert kwargs["intent"] == "horarios"
     assert kwargs["message"] == "Qué horarios manejan?"
     assert kwargs["estado_actual"] == "ST_GENERAL"
+
+
+def test_kb_context_appointment_state_includes_time_slot_disclaimer_rule():
+    from app.services.kb import get_kb_context
+
+    engine = object()
+    disclaimer = (
+        "La franja horaria puede variar por factores externos como el tráfico en Bogotá. "
+        "Le pedimos paciencia — la Dra. D'Aleman llegará dentro de la franja confirmada."
+    )
+
+    with (
+        patch("app.services.kb.search_schedules", return_value=[]),
+        patch(
+            "app.services.kb.get_all_schedules",
+            return_value=[
+                {
+                    "day_name": "Lunes a viernes",
+                    "modality": "Domiciliaria",
+                    "start_time": "15:00",
+                    "end_time": "19:00",
+                    "is_available": True,
+                    "notes": "Franja visible al paciente: 2 horas.",
+                }
+            ],
+        ),
+        patch(
+            "app.services.kb.get_rules_by_type",
+            return_value=[
+                {
+                    "rule_type": "agendamiento",
+                    "condition": "appointment_confirmation",
+                    "response_rule": disclaimer,
+                    "allowed_action": "Incluir disclaimer de franja en toda confirmación de cita",
+                    "escalation": False,
+                }
+            ],
+        ) as rules_mock,
+    ):
+        result = get_kb_context(
+            engine,
+            intent="fecha_cita",
+            message="Mañana en la tarde",
+            estado_actual="ST_CITA_FRANJA",
+        )
+
+    assert result["kb_used"] is True
+    assert "kb_schedules" in result["kb_sources"]
+    assert "kb_rules" in result["kb_sources"]
+    assert disclaimer in result["kb_context"]
+    assert "Nunca confirme" not in result["kb_context"]
+
+    rules_mock.assert_called_once_with(engine, "agendamiento")
+
+
+def test_kb_context_explicit_services_in_appointment_state_excludes_disclaimer_rules():
+    from app.services.kb import get_kb_context
+
+    engine = object()
+    disclaimer = "La franja horaria puede variar por factores externos como el tráfico en Bogotá."
+
+    with (
+        patch(
+            "app.services.kb.search_services",
+            return_value=[
+                {
+                    "service_name": "Terapia Respiratoria Domiciliaria",
+                    "public_answer_short": "Atención respiratoria en casa.",
+                    "modality": "Domiciliaria",
+                    "escalation_required": False,
+                }
+            ],
+        ),
+        patch("app.services.kb.get_active_services", return_value=[]),
+        patch("app.services.kb.search_schedules") as schedules_mock,
+        patch("app.services.kb.get_all_schedules") as all_schedules_mock,
+        patch("app.services.kb.get_rules_by_type") as rules_by_type_mock,
+        patch("app.services.kb.search_rules") as search_rules_mock,
+    ):
+        result = get_kb_context(
+            engine,
+            intent="servicios",
+            message="Me podría decir qué servicios ofrecen?",
+            estado_actual="ST_CITA_FRANJA",
+        )
+
+    assert result["kb_used"] is True
+    assert result["kb_sources"] == ["kb_services"]
+    assert "Terapia Respiratoria Domiciliaria" in result["kb_context"]
+    assert disclaimer not in result["kb_context"]
+    assert "kb_rules" not in result["kb_sources"]
+    assert "kb_schedules" not in result["kb_sources"]
+
+    schedules_mock.assert_not_called()
+    all_schedules_mock.assert_not_called()
+    rules_by_type_mock.assert_not_called()
+    search_rules_mock.assert_not_called()
