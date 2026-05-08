@@ -4,7 +4,38 @@ Elvira is the conversational assistant for **Respirarte**, a respiratory therapy
 
 This project is a Python-based agentic system designed to replace the previous n8n prototype with a deterministic, testable, auditable and production-ready architecture.
 
-The current version focuses on a controlled conversational core for WhatsApp patient interactions, with FastAPI receiving Meta webhooks, PostgreSQL providing operational persistence, LangGraph orchestrating the flow, deterministic logic controlling intent/state transitions, a runtime Knowledge Base informing answers, and the LLM limited to response wording.
+The current version focuses on a controlled conversational core for WhatsApp patient interactions, with FastAPI receiving Meta webhooks, PostgreSQL providing operational persistence, LangGraph orchestrating the flow, deterministic logic controlling intent/state transitions, a runtime Production DB Inspection
+
+pgweb has been activated for the Elvira production PostgreSQL database.
+
+Purpose:
+
+- inspect production tables safely
+- validate KB records after imports
+- review interactions during dry-runs
+- verify processed_messages deduplication
+- check patient state and opt_out persistence
+- support incident review without modifying application logic
+
+Current pgweb database:
+
+elvira_respirarte_prod
+
+Validated through pgweb:
+
+- kb_rules visible and active
+- RULE-001 to RULE-008 present
+- RULE-007 appointment_confirmation active
+- RULE-008 appointment_slot_policy active
+- kb_services, kb_schedules, patients, interactions and processed_messages accessible
+
+Operational rule:
+
+pgweb is for inspection and controlled SQL validation.
+Do not use pgweb for casual production edits.
+KB edits remain managed through the agreed KB import/update process.
+
+Knowledge Base informing answers, and the LLM limited to response wording.
 
 ---
 
@@ -19,14 +50,15 @@ Current repository:
 - Stable domain: `https://elvira.genflowautomation.com`
 - Meta webhook: `https://elvira.genflowautomation.com/webhook`
 - Webhook subscribed field: `messages`
-- Current phase: Sprint P6-D completed — Production Dry-Run Validation
-- Next phase: Sprint P6-E — Pre-Go-Live Final Gate
+- Current phase: Sprint P6-E completed — Pre-Go-Live Final Gate
+- Next phase: Sprint P6-F — Controlled Sending Activation Plan
 
 Current production safety state:
 
 - Previous n8n workflow: OFF
 - FastAPI app deployed on Easypanel
 - PostgreSQL operational on Easypanel
+- pgweb activated for production PostgreSQL inspection
 - WhatsApp sending controlled by `WHATSAPP_SENDING_ENABLED`
 - Current safety mode: `WHATSAPP_SENDING_ENABLED=false`
 - KB runtime enabled: `KB_RUNTIME_ENABLED=true`
@@ -56,10 +88,11 @@ Completed:
 - Sprint P6-B — Failure Handling v1 completed
 - Sprint P6-C — Medical & Response Safety Boundaries completed
 - Sprint P6-D — Production Dry-Run Validation completed
+- Sprint P6-E — Pre-Go-Live Final Gate completed
 - GitHub private repo created
 - `.gitignore` configured
 - `.env` confirmed as not versioned
-- Current full test baseline: 41/41 tests passing
+- Current full test baseline: 48/48 tests passing
 
 ---
 
@@ -168,6 +201,7 @@ elvira-respirarte-agent/
 │   │   ├── response.py
 │   │   ├── llm.py
 │   │   ├── kb.py
+│   │   ├── calendar_service.py
 │   │   ├── tracing.py
 │   │   ├── safety.py
 │   │   └── whatsapp.py
@@ -188,6 +222,7 @@ elvira-respirarte-agent/
 │   ├── test_state_machine.py
 │   ├── test_kb_service.py
 │   ├── test_kb_runtime_integration.py
+│   ├── test_calendar_service.py
 │   ├── test_p6c_prompt_safety.py
 │   └── test_webhook_persistence.py
 ├── scripts/
@@ -399,7 +434,7 @@ pytest
 
 Current full test baseline:
 
-41 passed
+48 passed
 
 Run KB tests:
 
@@ -533,6 +568,37 @@ Current relevant processed message columns:
 whatsapp_message_id
 telefono
 processed_at
+Production DB Inspection
+
+pgweb has been activated for the Elvira production PostgreSQL database.
+
+Purpose:
+
+- inspect production tables safely
+- validate KB records after imports
+- review interactions during dry-runs
+- verify processed_messages deduplication
+- check patient state and opt_out persistence
+- support incident review without modifying application logic
+
+Current pgweb database:
+
+elvira_respirarte_prod
+
+Validated through pgweb:
+
+- kb_rules visible and active
+- RULE-001 to RULE-008 present
+- RULE-007 appointment_confirmation active
+- RULE-008 appointment_slot_policy active
+- kb_services, kb_schedules, patients, interactions and processed_messages accessible
+
+Operational rule:
+
+pgweb is for inspection and controlled SQL validation.
+Do not use pgweb for casual production edits.
+KB edits remain managed through the agreed KB import/update process.
+
 Knowledge Base
 
 Current KB source of truth for runtime:
@@ -873,6 +939,89 @@ patients state persistence OK
 urgencia respiratoria OK
 OPTOUT from urgency OK
 opt_out=true corrected and validated OK
+P6-E Pre-Go-Live Final Gate
+
+Sprint P6-E prepared Elvira for the final controlled sending phase without enabling real WhatsApp sending.
+
+Implemented:
+
+KB production records updated and validated:
+- kb_schedules HOR-01 to HOR-05 corrected
+- kb_rules RULE-001 to RULE-008 corrected
+- RULE-007 added as appointment time-slot disclaimer for Bogotá traffic variability
+- RULE-008 added as appointment slots/capacity policy
+
+ADR-001 sealed:
+
+Option C — internal Python CalendarService inside the repository.
+
+Architecture decision:
+
+Elvira keeps deterministic architecture.
+The LLM does not decide availability.
+The LLM does not confirm exact appointment times.
+Calendar availability will be owned by internal Python service logic.
+
+Implemented in P6-E:
+
+- appointment-state KB routing loads kb_rules for:
+  - ST_CITA_CONFIRMADA
+  - ST_CITA_PENDIENTE
+  - ST_CITA_FRANJA
+- explicit service intent still overrides appointment state and uses only kb_services
+- Elvira prompt now includes appointment time-slot guardrail
+- Elvira must use the system-provided time slot when registering or confirming appointment requests
+- Elvira must never confirm an exact hour by itself
+- if KB context includes the time-slot disclaimer, Elvira must include it textually
+- tests added for appointment disclaimer KB runtime behavior
+- internal CalendarService scaffold created
+- CalendarService builds deterministic candidate slots only
+- CalendarService does not confirm real availability yet
+- Google Calendar OAuth2 is not connected yet
+
+Calendar scaffold:
+
+app/services/calendar_service.py
+
+Current internal slot policy scaffold:
+
+- Monday, Tuesday, Thursday, Friday:
+  - 15:00–17:00
+  - 17:00–19:00
+- Wednesday:
+  - 15:00–17:00
+- Sunday:
+  - no slots
+
+Current CalendarService rule:
+
+It only builds appointment slot candidates.
+It does not confirm availability.
+It does not send messages.
+It does not modify Elvira state.
+It prepares the boundary for future Google Calendar OAuth2 integration.
+
+Tests added:
+
+- appointment-state KB context includes time-slot disclaimer rule
+- service questions inside appointment state exclude appointment rules
+- CalendarService not configured without provider
+- CalendarService builds two slots for Monday
+- CalendarService builds one slot for Wednesday
+- CalendarService builds no slots for Sunday
+- CalendarService check_availability returns scaffold result
+
+Validated baseline:
+
+48/48 tests passing
+
+Commits:
+
+23ca6b1 feat: load appointment rules for appointment states
+86ed5a5 chore: add appointment time-slot guardrail to Elvira prompt
+9ab14a9 test: cover appointment disclaimer KB runtime behavior
+886b67e feat: scaffold internal calendar service
+
 Why n8n Was Replaced
 
 n8n validated the concept but became too fragile for production due to:
@@ -911,7 +1060,8 @@ P6-A	Production Safety Checklist	✅ Done
 P6-B	Failure Handling v1	✅ Done
 P6-C	Medical & Response Safety Boundaries	✅ Done
 P6-D	Production Dry-Run Validation	✅ Done
-P6-E	Pre-Go-Live Final Gate	⏳ Next
+P6-E	Pre-Go-Live Final Gate	✅ Done
+P6-F	Controlled Sending Activation Plan	⏳ Next
 Development Rules
 Keep the state machine deterministic.
 Keep the LLM out of control decisions.
@@ -962,11 +1112,11 @@ GitHub repo: private and initialized
 Deployment domain: configured
 Current safety mode: WHATSAPP_SENDING_ENABLED=false
 Current KB mode: KB_RUNTIME_ENABLED=true
-Current full test baseline: 41 passed
+Current full test baseline: 48 passed
 
 This is the current stable foundation for Elvira as a production-oriented conversational agent.
 
-Next step: Sprint P6-E — Pre-Go-Live Final Gate.
+Next step: Sprint P6-F — Controlled Sending Activation Plan.
 
 ---
 
