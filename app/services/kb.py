@@ -4,7 +4,7 @@ from typing import Any
 
 from sqlalchemy.engine import Engine
 
-from app.repositories.kb_rules import get_active_rules, search_rules
+from app.repositories.kb_rules import get_active_rules, get_rules_by_type, search_rules
 from app.repositories.kb_schedules import get_all_schedules, search_schedules
 from app.repositories.kb_services import get_active_services, search_services
 
@@ -76,6 +76,12 @@ RULE_KEYWORDS = {
     "reagendar",
     "fuera de horario",
     "teleconsulta",
+}
+
+APPOINTMENT_RULE_STATES = {
+    "st_cita_confirmada",
+    "st_cita_pendiente",
+    "st_cita_franja",
 }
 
 
@@ -208,8 +214,14 @@ def get_kb_context(
         "services",
     }
 
+    appointment_state_requires_rules = (
+        not explicit_service_intent
+        and normalized_state in APPOINTMENT_RULE_STATES
+    )
+
     should_use_rules = (
         normalized_intent in {"precio", "price", "pago", "urgencia", "cancelacion"}
+        or appointment_state_requires_rules
         or _contains_any(normalized_message, RULE_KEYWORDS)
     )
 
@@ -253,7 +265,11 @@ def get_kb_context(
             sources.append("kb_schedules")
 
     if should_use_rules:
-        rule_rows = search_rules(engine, normalized_message)
+        if appointment_state_requires_rules:
+            rule_rows = get_rules_by_type(engine, "agendamiento")
+        else:
+            rule_rows = search_rules(engine, normalized_message)
+
         if not rule_rows:
             rule_rows = get_active_rules(engine)
 
