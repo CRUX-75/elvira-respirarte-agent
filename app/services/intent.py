@@ -55,6 +55,34 @@ def classify_intent(message: str, current_state: str = "ST_INIT") -> Intent:
     # FECHA/HORA por contexto de cita
     date_context_states = {"ST_CITA_FECHA", "ST_CITA_FRANJA", "ST_CITA_PENDIENTE"}
     if current_state in date_context_states:
+        time_patterns = [
+            r"\b\d{1,2}\s*(am|pm)\b",
+            r"\b\d{1,2}:\d{2}\b",
+            r"\ba las \d{1,2}\b",
+        ]
+
+        # In ST_CITA_FRANJA, the patient is expected to select or accept a time slot.
+        # Therefore short phrases like "de 3 a 5", "la primera" or "me sirve"
+        # must be interpreted as appointment time selection, not as general intent.
+        if current_state == "ST_CITA_FRANJA":
+            slot_selection_patterns = [
+                r"\bde\s+\d{1,2}\s+a\s+\d{1,2}\b",
+                r"\b\d{1,2}\s+a\s+\d{1,2}\b",
+                r"\bde\s+\d{1,2}:\d{2}\s+a\s+\d{1,2}:\d{2}\b",
+                r"\b\d{1,2}:\d{2}\s+a\s+\d{1,2}:\d{2}\b",
+                r"\bprimera\b",
+                r"\bla primera\b",
+                r"\bsegunda\b",
+                r"\bla segunda\b",
+                r"\bese horario\b",
+                r"\besa franja\b",
+                r"\besta bien\b",
+                r"\bme sirve\b",
+                r"\bme queda bien\b",
+            ]
+            if any(re.search(p, msg) for p in time_patterns + slot_selection_patterns):
+                return "hora_cita"
+
         date_patterns = [
             r"\bmanana\b", r"\bhoy\b", r"\bpasado manana\b",
             r"\bel lunes\b", r"\bel martes\b", r"\bel miercoles\b",
@@ -63,9 +91,7 @@ def classify_intent(message: str, current_state: str = "ST_INIT") -> Intent:
         ]
         if any(re.search(p, msg) for p in date_patterns):
             return "fecha_cita"
-        time_patterns = [
-            r"\b\d{1,2}\s*(am|pm)\b", r"\b\d{1,2}:\d{2}\b", r"\ba las \d{1,2}\b",
-        ]
+
         if any(re.search(p, msg) for p in time_patterns):
             return "hora_cita"
 
