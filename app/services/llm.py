@@ -83,6 +83,19 @@ def generate_llm_response(state: ElviraState) -> ElviraState:
         )
         return state
 
+    if state.next_action == "ask_preferred_time":
+        if state.slots_candidatos:
+            slots = " o ".join(state.slots_candidatos)
+            state.respuesta = (
+                f"Perfecto. Podemos revisar estas franjas: {slots}. "
+                "¿Cuál le gustaría que registre como preferencia?"
+            )
+        else:
+            state.respuesta = (
+                "Perfecto. ¿En qué horario le quedaría mejor para registrar su preferencia?"
+            )
+        return state
+
     if state.next_action == "confirm_appointment_request":
         state.respuesta = (
             "Gracias. Dejo registrada su preferencia para esa franja. "
