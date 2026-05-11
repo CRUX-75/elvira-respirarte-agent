@@ -144,7 +144,7 @@ Rules:
 
 ---
 
-## P6-F.4 — EasyPanel Environment Variables Checklist
+## P6-F.5 — EasyPanel Environment Variables and /ready Validation
 
 Before any controlled activation, validate these variables in EasyPanel:
 
@@ -173,7 +173,7 @@ Expected `/ready` before activation:
 
 ---
 
-## P6-F.5 — Final Dry-run With Sending Disabled
+## P6-F.6 — Final Dry-run With Sending Disabled
 
 Before activating real sending, run one final dry-run in production with sending disabled.
 
@@ -203,9 +203,36 @@ Expected production state:
 
 ---
 
-## P6-F.6 — Temporary Controlled Sending Activation
+## P6-F.7 — Documentation and Git Closure
 
-This step is not executed until explicitly authorized.
+Purpose:
+
+Close the validated dry-run documentation state before preparing controlled real sending.
+
+Status:
+
+- P6-F.5 EasyPanel environment variables and `/ready` validation completed.
+- P6-F.6 final production dry-run with `WHATSAPP_SENDING_ENABLED=false` completed.
+- Production `/test/message-stateful` validated.
+- Appointment flow validated:
+  - `ST_INIT → ST_CITA_FECHA → ST_CITA_FRANJA → ST_CITA_PENDIENTE`
+- Opt-out flow validated:
+  - `ST_CITA_PENDIENTE → ST_OPTOUT`
+- `delivery_status=sending_skipped` confirmed.
+- Real WhatsApp sending remains disabled.
+- No Colombian number migration has been executed.
+- No Google Calendar integration has been activated.
+
+Closure rule:
+
+P6-F.7 is documentation and repository closure only.
+It does not activate real WhatsApp sending.
+
+---
+
+## P6-F.8 — Controlled Real WhatsApp Sending Activation Checklist
+
+This checklist is prepared but not executed yet. Real WhatsApp sending must not be activated until explicitly authorized during the controlled live test.
 
 Activation window:
 
@@ -254,7 +281,7 @@ Expected:
 
 ---
 
-## P6-F.7 — Post-test Audit
+### P6-F.8.1 — Post-test Audit
 
 After the single live test, audit:
 
@@ -291,7 +318,7 @@ Validate:
 
 ---
 
-## P6-F.8 — Rollback Rule
+### P6-F.8.2 — Rollback Rule
 
 Rollback must happen immediately after the single authorized live test.
 
@@ -351,7 +378,7 @@ Decision:
 
 ---
 
-## P6-F.4 — Minimum WhatsApp Templates Review
+## Appendix A — Minimum WhatsApp Templates Review
 
 Current WhatsApp Manager state:
 
@@ -381,41 +408,3 @@ Template roadmap after P6-F:
 - Create or refine administrative follow-up template if needed.
 - Create appointment reminder template only after the appointment workflow exists.
 - Keep marketing templates separate from Elvira's medical/service conversation flow.
-
-
----
-
-## P6-F.5 — EasyPanel Environment Variables Checklist
-
-Purpose:
-
-Validate production environment variables before the final dry-run and before any controlled sending activation.
-
-Rules:
-
-- Do not change `WHATSAPP_SENDING_ENABLED` yet.
-- `WHATSAPP_SENDING_ENABLED` must remain `false`.
-- No production sending activation happens in this step.
-- No Colombian number migration happens in this step.
-
-Variables to verify in EasyPanel:
-
-- `ENVIRONMENT=production`
-- `WHATSAPP_SENDING_ENABLED=false`
-- `KB_RUNTIME_ENABLED=true`
-- `WHATSAPP_ACCESS_TOKEN` configured
-- `WHATSAPP_PHONE_NUMBER_ID` configured
-- `WHATSAPP_VERIFY_TOKEN` configured
-- `OPENAI_API_KEY` configured
-- `LANGSMITH_TRACING` configured
-- `LANGSMITH_PROJECT=elvira-respirarte-prod`
-- `DATABASE_URL` configured
-
-Expected `/ready` state:
-
-- `status=ready`
-- `environment=production`
-- `WHATSAPP_SENDING_ENABLED=false`
-- `KB_RUNTIME_ENABLED=true`
-- `real_whatsapp_sending_allowed=false`
-
