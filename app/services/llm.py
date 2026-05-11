@@ -83,6 +83,13 @@ def generate_llm_response(state: ElviraState) -> ElviraState:
         )
         return state
 
+    if state.next_action == "confirm_appointment_request":
+        state.respuesta = (
+            "Gracias. Dejo registrada su preferencia para esa franja. "
+            "La disponibilidad debe ser validada por la Dra. D'Aleman o el equipo de Respirarte antes de confirmar la cita."
+        )
+        return state
+
     kb_section = _build_kb_section(state)
     date_context_section = _build_date_context_section(state)
 
