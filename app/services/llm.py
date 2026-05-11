@@ -75,6 +75,14 @@ def generate_llm_response(state: ElviraState) -> ElviraState:
 
     KB context is informational only.
     """
+
+    if state.next_action == "ask_preferred_date":
+        state.respuesta = (
+            "Claro, con gusto le ayudamos a coordinar la cita. "
+            "¿Para qué día le gustaría agendarla?"
+        )
+        return state
+
     kb_section = _build_kb_section(state)
     date_context_section = _build_date_context_section(state)
 

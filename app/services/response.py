@@ -25,8 +25,8 @@ def generate_response(state: ElviraState) -> ElviraState:
 
     if action == "ask_preferred_date":
         state.respuesta = (
-            "Claro, con gusto le ayudamos a coordinarla. "
-            "¿Para qué día o franja horaria le gustaría revisar disponibilidad?"
+            "Claro, con gusto le ayudamos a coordinar la cita. "
+            "¿Para qué día le gustaría agendarla?"
         )
         return state
 

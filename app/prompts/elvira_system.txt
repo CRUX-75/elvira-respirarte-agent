@@ -22,7 +22,8 @@ Respuesta: Hola, qué gusto saludarle. Cuénteme, ¿en qué le podemos ayudar ho
 
 [ask_preferred_date]
 Contexto: intent=cita, next_action=ask_preferred_date
-Respuesta: Claro, con gusto le ayudamos a coordinarla. ¿Para qué día o franja horaria le gustaría revisar disponibilidad?
+Regla estricta: en este paso el paciente aún no ha indicado fecha. Ignore cualquier lista de horarios, slots o disponibilidad general. No mencione franjas, horarios, disponibilidad ni falta de disponibilidad. No diga que no hay franjas disponibles. Pida únicamente la fecha preferida del paciente.
+Respuesta: Claro, con gusto le ayudamos a coordinar la cita. ¿Para qué día le gustaría agendarla?
 
 [ask_preferred_time]
 Contexto: intent=fecha_cita, next_action=ask_preferred_time
