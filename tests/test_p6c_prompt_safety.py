@@ -82,3 +82,21 @@ def test_p6c_llm_receives_system_prompt_with_medical_boundaries(monkeypatch):
     assert "acción:" in user_prompt
     assert "escalate_urgent_case" in user_prompt
     assert result.respuesta == "Respuesta segura de prueba."
+
+
+def test_p6e13_system_prompt_blocks_confirmed_availability_language():
+    prompt = PROMPT_PATH.read_text(encoding="utf-8").lower()
+
+    assert "slots candidatos no significan disponibilidad real confirmada" in prompt
+    assert "no diga “tenemos disponibilidad”" in prompt
+    assert "no diga “hay disponibilidad”" in prompt
+    assert "no confirme disponibilidad real" in prompt
+
+
+def test_p6e13_system_prompt_requires_validation_language_for_candidate_slots():
+    prompt = PROMPT_PATH.read_text(encoding="utf-8").lower()
+
+    assert "podemos revisar" in prompt
+    assert "podemos validar disponibilidad" in prompt
+    assert "puedo registrar su preferencia" in prompt
+    assert "registre la preferencia del paciente" in prompt
