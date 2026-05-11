@@ -319,3 +319,103 @@ P6-F can be considered complete when:
 
 P6-F does not require leaving real sending enabled.
 
+
+---
+
+## P6-F.3 — WhatsApp Manager Readiness Verification
+
+Manual verification completed in WhatsApp Manager.
+
+Verified:
+
+- WhatsApp Manager access confirmed.
+- Message templates section accessible.
+- Existing templates visible.
+- Two templates currently active.
+- German test phone number connected.
+- German test phone number quality rating: high.
+- Colombian Respirarte phone number is already listed in WhatsApp Manager.
+- Colombian phone number status: not verified.
+
+Pending:
+
+- Colombian Respirarte number verification must be completed together with Dra. D'Aleman during a live call.
+- Do not complete the Colombian number verification without direct coordination with Dra. D'Aleman.
+- Do not replace the current connected test number before controlled sending validation is completed.
+
+Decision:
+
+- Continue P6-F using the currently connected German test number.
+- Keep the Colombian number pending verification until the dedicated number activation step.
+
+
+---
+
+## P6-F.4 — Minimum WhatsApp Templates Review
+
+Current WhatsApp Manager state:
+
+- Two message templates are active.
+- Existing templates include:
+  - `flyer_servicios_respira`
+  - `appointment_confirm...`
+
+Decision for P6-F controlled sending:
+
+- The first controlled live sending test must be user-initiated.
+- No outbound template should be used during the first controlled activation.
+- The authorized tester must send the first WhatsApp message to Elvira.
+- Elvira should reply within the active 24-hour customer service window.
+- Marketing templates must not be used for the first activation test.
+- Appointment confirmation templates must not be used until the appointment confirmation workflow is explicitly implemented and validated.
+
+Reason:
+
+- P6-F validates real WhatsApp response sending, not outbound campaign/template behavior.
+- Avoid mixing template approval, campaign delivery, and conversational safety in the same activation step.
+- Keep the first live test reversible, minimal and auditable.
+
+Template roadmap after P6-F:
+
+- Review and adjust appointment confirmation template.
+- Create or refine administrative follow-up template if needed.
+- Create appointment reminder template only after the appointment workflow exists.
+- Keep marketing templates separate from Elvira's medical/service conversation flow.
+
+
+---
+
+## P6-F.5 — EasyPanel Environment Variables Checklist
+
+Purpose:
+
+Validate production environment variables before the final dry-run and before any controlled sending activation.
+
+Rules:
+
+- Do not change `WHATSAPP_SENDING_ENABLED` yet.
+- `WHATSAPP_SENDING_ENABLED` must remain `false`.
+- No production sending activation happens in this step.
+- No Colombian number migration happens in this step.
+
+Variables to verify in EasyPanel:
+
+- `ENVIRONMENT=production`
+- `WHATSAPP_SENDING_ENABLED=false`
+- `KB_RUNTIME_ENABLED=true`
+- `WHATSAPP_ACCESS_TOKEN` configured
+- `WHATSAPP_PHONE_NUMBER_ID` configured
+- `WHATSAPP_VERIFY_TOKEN` configured
+- `OPENAI_API_KEY` configured
+- `LANGSMITH_TRACING` configured
+- `LANGSMITH_PROJECT=elvira-respirarte-prod`
+- `DATABASE_URL` configured
+
+Expected `/ready` state:
+
+- `status=ready`
+- `environment=production`
+- `WHATSAPP_SENDING_ENABLED=false`
+- `KB_RUNTIME_ENABLED=true`
+- `real_whatsapp_sending_allowed=false`
+
