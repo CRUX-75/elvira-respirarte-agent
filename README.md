@@ -92,7 +92,7 @@ Completed:
 - GitHub private repo created
 - `.gitignore` configured
 - `.env` confirmed as not versioned
-- Current full test baseline: 48/48 tests passing
+- Current full test baseline: 60/60 tests passing
 
 ---
 
@@ -434,7 +434,7 @@ pytest
 
 Current full test baseline:
 
-48 passed
+60 passed
 
 Run KB tests:
 
@@ -1013,7 +1013,7 @@ Tests added:
 
 Validated baseline:
 
-48/48 tests passing
+60/60 tests passing
 
 Commits:
 
@@ -1021,6 +1021,69 @@ Commits:
 86ed5a5 chore: add appointment time-slot guardrail to Elvira prompt
 9ab14a9 test: cover appointment disclaimer KB runtime behavior
 886b67e feat: scaffold internal calendar service
+
+P6-E.11 KB runtime optimization:
+
+- simple greetings inside appointment states no longer force unnecessary KB loading
+- appointment-state service questions still correctly prioritize kb_services
+- runtime KB remains informational only
+
+P6-E.12 deterministic relative date resolver:
+
+- app/services/date_resolver.py implemented
+- relative phrases such as “mañana”, “pasado mañana”, “hoy” and weekday references are resolved using Colombia timezone
+- date context is connected to the real LangGraph flow
+- ElviraState now includes:
+  - fecha_actual_colombia
+  - fecha_solicitada
+  - dia_semana_solicitado
+  - es_dia_disponible
+  - slots_candidatos
+  - date_resolution_source
+- app/services/llm.py receives deterministic date context before wording generation
+- CalendarService still only generates candidate slots
+- no real calendar availability is confirmed yet
+
+P6-E.13 appointment availability wording guardrail:
+
+- Elvira must not say:
+  - “tenemos disponibilidad”
+  - “hay disponibilidad”
+  - “disponemos de”
+  - “franjas disponibles”
+- candidate slots must be presented only as options to review or validate
+- approved wording includes:
+  - “podemos revisar”
+  - “podemos validar disponibilidad”
+  - “las franjas que podemos validar son”
+  - “puedo registrar su preferencia”
+- production Swagger validation confirmed the improved wording:
+  - “Las franjas que podemos validar son de 3:00 PM a 5:00 PM y de 5:00 PM a 7:00 PM.”
+
+Production validation after P6-E final:
+
+- /ready status = ready
+- environment = production
+- WHATSAPP_SENDING_ENABLED=false
+- KB_RUNTIME_ENABLED=true
+- real_whatsapp_sending_allowed=false
+- /test/message validated with:
+  - mensaje = “Mañana en la tarde”
+  - estado_actual = ST_CITA_FRANJA
+  - intent = fecha_cita
+  - nuevo_estado = ST_CITA_FRANJA
+  - fecha_actual_colombia = 2026-05-11
+  - fecha_solicitada = 2026-05-12
+  - dia_semana_solicitado = martes
+  - es_dia_disponible = true
+  - slots_candidatos = ["15:00–17:00", "17:00–19:00"]
+
+Additional commits:
+
+- feat: add deterministic relative date resolver
+- feat: connect deterministic date context to Elvira flow
+- test: enforce appointment availability guardrail
+- fix: tighten appointment availability wording guardrail
 
 Why n8n Was Replaced
 
@@ -1112,7 +1175,7 @@ GitHub repo: private and initialized
 Deployment domain: configured
 Current safety mode: WHATSAPP_SENDING_ENABLED=false
 Current KB mode: KB_RUNTIME_ENABLED=true
-Current full test baseline: 48 passed
+Current full test baseline: 60 passed
 
 This is the current stable foundation for Elvira as a production-oriented conversational agent.
 
