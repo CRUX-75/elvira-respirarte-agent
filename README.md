@@ -50,8 +50,8 @@ Current repository:
 - Stable domain: `https://elvira.genflowautomation.com`
 - Meta webhook: `https://elvira.genflowautomation.com/webhook`
 - Webhook subscribed field: `messages`
-- Current phase: Sprint P6-E completed — Pre-Go-Live Final Gate
-- Next phase: Sprint P6-F — Controlled Sending Activation Plan
+- Current phase: Sprint P6-F in progress — Controlled Sending Activation Plan
+- Next phase: TBD — Post-controlled activation scheduling / operational layer
 
 Current production safety state:
 
@@ -92,6 +92,9 @@ Completed:
 - GitHub private repo created
 - `.gitignore` configured
 - `.env` confirmed as not versioned
+- P6-F operational runbook created: `docs/P6-F_CONTROLLED_SENDING_ACTIVATION_PLAN.md`
+- P6-F current scope: WhatsApp Manager readiness, Colombian number checklist, templates, EasyPanel variables, final dry-run, one-message activation, audit and rollback
+- P6-F production default rule: `WHATSAPP_SENDING_ENABLED=false` and `real_whatsapp_sending_allowed=false`
 - Current full test baseline: 60/60 tests passing
 
 ---
