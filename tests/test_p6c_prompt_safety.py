@@ -90,6 +90,8 @@ def test_p6e13_system_prompt_blocks_confirmed_availability_language():
     assert "slots candidatos no significan disponibilidad real confirmada" in prompt
     assert "no diga “tenemos disponibilidad”" in prompt
     assert "no diga “hay disponibilidad”" in prompt
+    assert "no diga “disponemos de”" in prompt
+    assert "no diga “franjas disponibles”" in prompt
     assert "no confirme disponibilidad real" in prompt
 
 
