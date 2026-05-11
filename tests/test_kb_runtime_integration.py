@@ -306,3 +306,53 @@ def test_kb_context_general_greeting_inside_appointment_state_does_not_load_kb()
     rules_by_type_mock.assert_not_called()
     search_rules_mock.assert_not_called()
     active_rules_mock.assert_not_called()
+
+
+def test_node_resolve_date_context_adds_deterministic_fields_for_appointment_date():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from app.graph.nodes import node_resolve_date_context
+    from app.graph.state import ElviraState
+
+    state = ElviraState(
+        telefono="573001112233",
+        mensaje_original="Mañana en la tarde",
+        sanitized_input="mañana en la tarde",
+        estado_actual="ST_CITA_FRANJA",
+        nuevo_estado="ST_CITA_FRANJA",
+        intent="fecha_cita",
+        next_action="ask_appointment_time",
+    )
+
+    result = node_resolve_date_context(
+        state,
+        now=datetime(2026, 5, 8, 12, 0, tzinfo=ZoneInfo("America/Bogota")),
+    )
+
+    assert result.fecha_actual_colombia == "2026-05-08"
+    assert result.fecha_solicitada == "2026-05-09"
+    assert result.dia_semana_solicitado == "sábado"
+    assert result.es_dia_disponible is False
+    assert result.slots_candidatos == []
+
+
+def test_node_resolve_date_context_skips_non_appointment_date_intent():
+    from app.graph.nodes import node_resolve_date_context
+    from app.graph.state import ElviraState
+
+    state = ElviraState(
+        telefono="573001112233",
+        mensaje_original="Hola buen día",
+        sanitized_input="hola buen dia",
+        estado_actual="ST_CITA_FRANJA",
+        nuevo_estado="ST_CITA_FRANJA",
+        intent="general",
+        next_action="answer_general",
+    )
+
+    result = node_resolve_date_context(state)
+
+    assert result.fecha_solicitada is None
+    assert result.dia_semana_solicitado is None
+    assert result.slots_candidatos == []

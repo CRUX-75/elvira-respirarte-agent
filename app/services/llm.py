@@ -33,6 +33,35 @@ Fuentes: {sources}
 {state.kb_context}"""
 
 
+def _build_date_context_section(state: ElviraState) -> str:
+    if not state.fecha_actual_colombia and not state.fecha_solicitada:
+        return (
+            "Contexto determinístico de fecha:\n"
+            "No hay fecha solicitada detectada para este mensaje."
+        )
+
+    slots = (
+        ", ".join(state.slots_candidatos)
+        if state.slots_candidatos
+        else "sin slots candidatos"
+    )
+
+    return f"""Contexto determinístico de fecha:
+Fecha actual en Colombia: {state.fecha_actual_colombia or "no detectada"}
+Fecha solicitada por el paciente: {state.fecha_solicitada or "no detectada"}
+Día de semana solicitado: {state.dia_semana_solicitado or "no detectado"}
+Día operativo según reglas internas: {state.es_dia_disponible}
+Slots candidatos generados: {slots}
+Fuente: {state.date_resolution_source or "sin fuente"}
+
+Reglas para usar este contexto:
+- Este contexto es determinístico e informativo.
+- No confirma disponibilidad real de agenda.
+- Si Día operativo según reglas internas es False, no ofrezca horas ni slots.
+- Si hay slots candidatos, preséntelos solo como opciones a revisar o validar, nunca como disponibilidad confirmada.
+- Use expresiones como “podemos revisar”, “podemos validar disponibilidad” o “puedo registrar su preferencia”."""
+
+
 def generate_llm_response(state: ElviraState) -> ElviraState:
     """
     Elvira redacta — el LLM no decide flujo.
@@ -47,6 +76,7 @@ def generate_llm_response(state: ElviraState) -> ElviraState:
     KB context is informational only.
     """
     kb_section = _build_kb_section(state)
+    date_context_section = _build_date_context_section(state)
 
     user_message = f"""Mensaje del paciente:
 {state.sanitized_input}
@@ -64,6 +94,8 @@ Acción:
 {state.next_action}
 
 {kb_section}
+
+{date_context_section}
 
 Instrucciones de uso de KB:
 - Use la KB como única fuente confirmada cuando la pregunta sea sobre servicios, horarios, cobertura, precios, costos, disponibilidad o reglas de atención.
