@@ -387,3 +387,83 @@ async def receive_webhook(payload: WhatsAppPayload):
 def test_message(message: IncomingMessage):
     result = traced_process_message(process_message, message)
     return result.model_dump()
+
+
+@app.post("/test/message-stateful")
+def test_message_stateful(message: IncomingMessage):
+    """
+    Production dry-run endpoint for multi-turn validation.
+
+    This endpoint:
+    - reads the current patient state from PostgreSQL
+    - processes the message with that state
+    - stores the interaction
+    - updates the patient state
+    - never sends a WhatsApp message
+    """
+
+    from uuid import uuid4
+
+    telefono = message.telefono
+    nombre = message.nombre
+    mensaje = message.mensaje
+
+    patient = get_or_create_patient_by_phone(
+        telefono=telefono,
+        nombre=nombre,
+    )
+
+    estado_actual = patient.get("estado_actual") or "ST_INIT"
+    opt_out = bool(patient.get("opt_out", False))
+
+    stateful_message = IncomingMessage(
+        telefono=telefono,
+        nombre=nombre,
+        mensaje=mensaje,
+        estado_actual=estado_actual,
+        opt_out=opt_out,
+    )
+
+    result = traced_process_message(process_message, stateful_message)
+
+    whatsapp_message_id = f"test-stateful-{uuid4()}"
+    whatsapp_timestamp = None
+    delivery_status = "sending_skipped"
+    logged_response = f"[TEST_STATEFUL_WHATSAPP_SENDING_DISABLED] {result.respuesta}"
+
+    save_interaction(
+        patient_id=str(patient["id"]),
+        telefono=telefono,
+        nombre=nombre,
+        whatsapp_message_id=whatsapp_message_id,
+        whatsapp_timestamp=whatsapp_timestamp,
+        mensaje_usuario=mensaje,
+        respuesta_elvira=logged_response,
+        intent=result.intent,
+        estado_anterior=estado_actual,
+        nuevo_estado=result.nuevo_estado,
+        next_action=getattr(result, "next_action", None),
+        state_reason=getattr(result, "state_reason", None),
+        router_version=getattr(result, "router_version", None),
+        state_machine_version=getattr(result, "state_machine_version", None),
+        kb_used=bool(getattr(result, "kb_used", False)),
+        escalation_required=bool(getattr(result, "escalation_required", False)),
+        delivery_status=delivery_status,
+    )
+
+    update_patient_state(
+        patient_id=str(patient["id"]),
+        nuevo_estado=result.nuevo_estado,
+        opt_out=getattr(result, "opt_out", None),
+    )
+
+    update_patient_last_message(patient_id=str(patient["id"]))
+
+    response = result.model_dump()
+    response["test_endpoint"] = "message-stateful"
+    response["delivery_status"] = delivery_status
+    response["whatsapp_message_id"] = whatsapp_message_id
+    response["persisted_state"] = result.nuevo_estado
+    response["patient_id"] = str(patient["id"])
+
+    return response
