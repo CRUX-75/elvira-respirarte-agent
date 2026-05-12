@@ -38,7 +38,7 @@ def test_wednesday_returns_only_one_candidate_slot():
     assert result.fecha_solicitada.isoformat() == "2026-05-13"
     assert result.dia_semana_solicitado == "miércoles"
     assert result.es_dia_disponible is True
-    assert result.slots_candidatos == ["15:00–17:00"]
+    assert result.slots_candidatos == ["3:00 p. m.–5:00 p. m."]
 
 
 def test_monday_returns_two_candidate_slots():
@@ -50,7 +50,7 @@ def test_monday_returns_two_candidate_slots():
     assert result.fecha_solicitada.isoformat() == "2026-05-11"
     assert result.dia_semana_solicitado == "lunes"
     assert result.es_dia_disponible is True
-    assert result.slots_candidatos == ["15:00–17:00", "17:00–19:00"]
+    assert result.slots_candidatos == ["3:00 p. m.–5:00 p. m.", "5:00 p. m.–7:00 p. m."]
 
 
 def test_sunday_returns_no_candidate_slots():

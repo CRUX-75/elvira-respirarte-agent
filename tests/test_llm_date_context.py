@@ -15,7 +15,7 @@ def test_preferred_time_response_is_deterministic_with_slots():
         fecha_solicitada="2026-05-12",
         dia_semana_solicitado="martes",
         es_dia_disponible=True,
-        slots_candidatos=["15:00–17:00", "17:00–19:00"],
+        slots_candidatos=["3:00 p. m.–5:00 p. m.", "5:00 p. m.–7:00 p. m."],
         date_resolution_source="deterministic_relative_date_resolver",
     )
 
@@ -23,7 +23,7 @@ def test_preferred_time_response_is_deterministic_with_slots():
 
     assert result.respuesta == (
         "Perfecto. Podemos revisar estas franjas: "
-        "15:00–17:00 o 17:00–19:00. "
+        "3:00 p. m.–5:00 p. m. o 5:00 p. m.–7:00 p. m.. "
         "¿Cuál le gustaría que registre como preferencia?"
     )
 

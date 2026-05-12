@@ -47,6 +47,19 @@ class CalendarProvider(Protocol):
         ...
 
 
+def _format_patient_time(value: time) -> str:
+    """
+    Format slot times in natural Colombian patient-facing style.
+
+    Examples:
+    - 15:00 -> 3:00 p. m.
+    - 17:00 -> 5:00 p. m.
+    """
+    hour_12 = value.hour % 12 or 12
+    period = "a. m." if value.hour < 12 else "p. m."
+    return f"{hour_12}:{value.minute:02d} {period}"
+
+
 class CalendarService:
     """
     Internal deterministic calendar service.
@@ -69,8 +82,8 @@ class CalendarService:
 
         Current policy:
         - Two-hour visible patient slots.
-        - L/M/J/V: 15:00-17:00 and 17:00-19:00.
-        - Wednesday: 15:00-17:00 only.
+        - L/M/J/V: 3:00 p. m.–5:00 p. m. and 5:00 p. m.–7:00 p. m.
+        - Wednesday: 3:00 p. m.–5:00 p. m. only.
         - Weekends are not handled here yet.
 
         This method only builds candidates. It does not confirm availability.
@@ -90,7 +103,7 @@ class CalendarService:
             CalendarSlot(
                 start_at=datetime.combine(requested_date, start),
                 end_at=datetime.combine(requested_date, end),
-                label=f"{start.strftime('%H:%M')}–{end.strftime('%H:%M')}",
+                label=f"{_format_patient_time(start)}–{_format_patient_time(end)}",
                 available=False,
             )
             for start, end in ranges

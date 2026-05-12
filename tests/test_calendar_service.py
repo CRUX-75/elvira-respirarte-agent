@@ -15,8 +15,8 @@ def test_calendar_service_builds_two_slots_for_monday():
     slots = service.build_default_slots(date(2026, 5, 11))  # Monday
 
     assert len(slots) == 2
-    assert slots[0].label == "15:00–17:00"
-    assert slots[1].label == "17:00–19:00"
+    assert slots[0].label == "3:00 p. m.–5:00 p. m."
+    assert slots[1].label == "5:00 p. m.–7:00 p. m."
     assert all(slot.available is False for slot in slots)
 
 
@@ -26,7 +26,7 @@ def test_calendar_service_builds_one_slot_for_wednesday():
     slots = service.build_default_slots(date(2026, 5, 13))  # Wednesday
 
     assert len(slots) == 1
-    assert slots[0].label == "15:00–17:00"
+    assert slots[0].label == "3:00 p. m.–5:00 p. m."
     assert slots[0].available is False
 
 
