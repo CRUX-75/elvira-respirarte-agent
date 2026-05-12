@@ -672,3 +672,119 @@ validated locally,
 validated in production dry-run,
 deployed with real WhatsApp sending still disabled.
 
+
+---
+
+## P6-F.7.2 — Colombian AM/PM Slot Label Normalization
+
+### Objective
+
+Normalize appointment slot labels from 24-hour internal display format to a patient-friendly Colombian `a. m. / p. m.` format.
+
+The goal was to avoid exposing slot candidates such as:
+
+```text
+15:00–17:00
+17:00–19:00
+and instead use:
+
+3:00 p. m.–5:00 p. m.
+5:00 p. m.–7:00 p. m.
+
+This keeps Elvira's appointment dialogue more natural for Colombian patients.
+
+Root Cause
+
+After P6-F.7.1, Elvira correctly interpreted natural Colombian appointment-time preferences such as:
+
+La de las 5 me queda bien.
+
+However, when offering candidate appointment windows, the deterministic calendar service still built slot labels using:
+
+strftime("%H:%M")
+
+which produced 24-hour labels such as:
+
+15:00–17:00
+
+These labels were then propagated through:
+
+slots_candidatos
+LLM date context
+patient-facing appointment responses
+Fix Applied
+
+The slot label generation in:
+
+app/services/calendar_service.py
+
+was updated to use a dedicated formatting helper:
+
+_format_patient_time(...)
+
+This converts internal deterministic time(...) objects into patient-facing Colombian-style labels:
+
+15:00 -> 3:00 p. m.
+17:00 -> 5:00 p. m.
+19:00 -> 7:00 p. m.
+
+The underlying deterministic slot boundaries remain unchanged:
+
+Monday / Tuesday / Thursday / Friday:
+15:00–17:00
+17:00–19:00
+Wednesday:
+15:00–17:00 only
+
+Only the slot label representation changed.
+
+Example Result
+
+Before:
+
+"slots_candidatos": [
+  "15:00–17:00"
+]
+
+After:
+
+"slots_candidatos": [
+  "3:00 p. m.–5:00 p. m."
+]
+Tests Updated
+
+Updated expectations in:
+
+tests/test_calendar_service.py
+tests/test_date_resolver.py
+tests/test_llm_date_context.py
+
+New expected slot labels:
+
+3:00 p. m.–5:00 p. m.
+5:00 p. m.–7:00 p. m.
+Local Validation
+
+Targeted validation:
+
+15 passed in 1.99s
+
+Full test suite:
+
+66 passed in 12.19s
+Git Commit
+
+Commit pushed to main:
+
+17ff5bd — fix: use Colombian am pm slot labels
+Operational Conclusion
+
+P6-F.7.2 is closed.
+
+Elvira now:
+
+interprets Colombian natural appointment-time preferences,
+offers appointment slot candidates in patient-friendly a. m. / p. m. format,
+keeps deterministic scheduling logic intact,
+preserves full test coverage,
+remains safe for production dry-runs with real WhatsApp sending still disabled.
