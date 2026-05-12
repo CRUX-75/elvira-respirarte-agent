@@ -40,3 +40,23 @@ def test_p6c_urgency_intent_detects_critical_respiratory_phrases():
 
     for message in cases:
         assert classify_intent(message) == "urgencia"
+
+
+def test_p6f71_colombian_time_preference_is_detected_inside_appointment_slot_state():
+    cases = [
+        "La de 5 de la tarde",
+        "A las 5 pm",
+        "17:00",
+        "La segunda",
+        "La primera",
+        "A las cinco",
+        "Tipo 5",
+        "Como a las 5",
+        "Por ahí a las 5",
+        "A eso de las 5",
+        "Cinco de la tarde",
+        "La de cinco",
+    ]
+
+    for message in cases:
+        assert classify_intent(message, "ST_CITA_FRANJA") == "hora_cita"

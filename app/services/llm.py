@@ -34,10 +34,14 @@ Fuentes: {sources}
 
 
 def _build_date_context_section(state: ElviraState) -> str:
-    if not state.fecha_actual_colombia and not state.fecha_solicitada:
+    if not state.fecha_solicitada:
         return (
             "Contexto determinístico de fecha:\n"
-            "No hay fecha solicitada detectada para este mensaje."
+            "No hay fecha solicitada detectada para este mensaje.\n\n"
+            "Reglas para usar este contexto:\n"
+            "- No interprete disponibilidad operativa sin una fecha solicitada explícita.\n"
+            "- No diga que hoy no se opera, que hoy no hay atención o que el día no está disponible.\n"
+            "- Si el flujo requiere coordinar una cita, limite la respuesta a registrar la preferencia o pedir la información faltante."
         )
 
     slots = (

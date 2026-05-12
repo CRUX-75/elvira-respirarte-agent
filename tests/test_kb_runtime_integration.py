@@ -356,3 +356,62 @@ def test_node_resolve_date_context_skips_non_appointment_date_intent():
     assert result.fecha_solicitada is None
     assert result.dia_semana_solicitado is None
     assert result.slots_candidatos == []
+
+
+def test_kb_context_appointment_time_preference_loads_schedules_and_rules_not_services():
+    from unittest.mock import patch
+
+    from app.services.kb import get_kb_context
+
+    engine = object()
+
+    schedule_rows = [
+        {
+            "day_name": "Lunes a viernes",
+            "modality": "Domiciliaria",
+            "start_time": "15:00",
+            "end_time": "19:00",
+            "is_available": True,
+            "notes": "Franja sujeta a validación.",
+        }
+    ]
+
+    rule_rows = [
+        {
+            "rule_type": "agendamiento",
+            "condition": "Preferencia horaria recibida",
+            "response_rule": "No confirmar disponibilidad real; registrar preferencia.",
+            "allowed_action": "confirm_appointment_request",
+            "escalation": False,
+        }
+    ]
+
+    with (
+        patch("app.services.kb.search_services") as services_mock,
+        patch("app.services.kb.get_active_services") as active_services_mock,
+        patch("app.services.kb.search_schedules", return_value=schedule_rows) as schedules_mock,
+        patch("app.services.kb.get_all_schedules") as all_schedules_mock,
+        patch("app.services.kb.get_rules_by_type", return_value=rule_rows) as rules_by_type_mock,
+        patch("app.services.kb.search_rules") as search_rules_mock,
+        patch("app.services.kb.get_active_rules") as active_rules_mock,
+    ):
+        result = get_kb_context(
+            engine,
+            intent="hora_cita",
+            message="La de 5 de la tarde",
+            estado_actual="ST_CITA_FRANJA",
+        )
+
+    assert result["kb_used"] is True
+    assert result["kb_sources"] == ["kb_schedules", "kb_rules"]
+    assert "Horarios y disponibilidad de Respirarte:" in result["kb_context"]
+    assert "Reglas operativas relevantes:" in result["kb_context"]
+    assert "kb_services" not in result["kb_sources"]
+
+    services_mock.assert_not_called()
+    active_services_mock.assert_not_called()
+    schedules_mock.assert_called_once()
+    all_schedules_mock.assert_not_called()
+    rules_by_type_mock.assert_called_once_with(engine, "agendamiento")
+    search_rules_mock.assert_not_called()
+    active_rules_mock.assert_not_called()

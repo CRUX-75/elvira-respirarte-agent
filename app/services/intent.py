@@ -79,6 +79,16 @@ def classify_intent(message: str, current_state: str = "ST_INIT") -> Intent:
                 r"\besta bien\b",
                 r"\bme sirve\b",
                 r"\bme queda bien\b",
+
+                # Selecciones horarias en lenguaje natural colombiano
+                r"\bla de \d{1,2}(?: de la (?:manana|tarde|noche))?\b",
+                r"\bla de (?:una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)(?: de la (?:manana|tarde|noche))?\b",
+                r"\ba las (?:una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)\b",
+                r"\b(?:una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce) de la (?:manana|tarde|noche)\b",
+                r"\btipo \d{1,2}\b",
+                r"\btipo (?:una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)\b",
+                r"\ba eso de las \d{1,2}\b",
+                r"\ba eso de las (?:una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)\b",
             ]
             if any(re.search(p, msg) for p in time_patterns + slot_selection_patterns):
                 return "hora_cita"

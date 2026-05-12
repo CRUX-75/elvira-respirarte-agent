@@ -49,3 +49,27 @@ def test_urgencia_flow():
     assert result.intent == "urgencia"
     assert result.nuevo_estado == "ST_URGENCIA"
     assert result.escalation_required is True
+
+
+def test_p6f71_colombian_time_preference_moves_to_pending_appointment_state():
+    cases = [
+        "La de 5 de la tarde",
+        "A las 5 pm",
+        "17:00",
+        "La segunda",
+        "La primera",
+        "A las cinco",
+    ]
+
+    for message in cases:
+        msg = IncomingMessage(
+            telefono="573001112233",
+            mensaje=message,
+            estado_actual="ST_CITA_FRANJA",
+        )
+
+        result = process_message(msg)
+
+        assert result.intent == "hora_cita"
+        assert result.nuevo_estado == "ST_CITA_PENDIENTE"
+        assert result.next_action == "confirm_appointment_request"

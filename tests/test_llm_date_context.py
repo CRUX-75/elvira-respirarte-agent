@@ -79,3 +79,29 @@ def test_date_context_section_includes_deterministic_date_context():
     assert "Slots candidatos generados: sin slots candidatos" in date_context
     assert "no ofrezca horas ni slots" in date_context
     assert "nunca como disponibilidad confirmada" in date_context
+
+
+def test_date_context_section_does_not_expose_operational_day_without_requested_date():
+    state = ElviraState(
+        telefono="573001112233",
+        mensaje_original="Hola buenas",
+        sanitized_input="hola buenas",
+        estado_actual="ST_CITA_FRANJA",
+        nuevo_estado="ST_CITA_FRANJA",
+        intent="general",
+        next_action="answer_general",
+        fecha_actual_colombia="2026-05-11",
+        fecha_solicitada=None,
+        dia_semana_solicitado=None,
+        es_dia_disponible=False,
+        slots_candidatos=[],
+        date_resolution_source="deterministic_relative_date_resolver",
+    )
+
+    date_context = llm._build_date_context_section(state)
+
+    assert "No hay fecha solicitada detectada para este mensaje." in date_context
+    assert "No interprete disponibilidad operativa sin una fecha solicitada explícita." in date_context
+    assert "No diga que hoy no se opera" in date_context
+    assert "Día operativo según reglas internas: False" not in date_context
+    assert "Slots candidatos generados" not in date_context
