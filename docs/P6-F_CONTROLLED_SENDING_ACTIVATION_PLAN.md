@@ -408,3 +408,267 @@ Template roadmap after P6-F:
 - Create or refine administrative follow-up template if needed.
 - Create appointment reminder template only after the appointment workflow exists.
 - Keep marketing templates separate from Elvira's medical/service conversation flow.
+
+
+---
+
+## P6-F.7.1 — Fix Colombian Appointment Time Preference Context
+
+### Status
+
+✅ Closed and validated in production with:
+
+- `WHATSAPP_SENDING_ENABLED=false`
+- Colombian Respirarte number untouched
+- Google Calendar untouched
+- Production dry-run only through `/test/message-stateful`
+
+---
+
+### Bug Detected
+
+During production validation in LangSmith, the following conversational case failed:
+
+**Previous state**
+
+```txt
+ST_CITA_FRANJA
+Patient message
+
+La de 5 de la tarde
+
+Incorrect result before the fix
+
+intent = general
+next_action = answer_general
+nuevo_estado = ST_CITA_FRANJA
+kb_sources = kb_services + kb_schedules + kb_rules
+
+The generated response incorrectly said something equivalent to:
+
+Lamentablemente, no estamos operando hoy...
+
+This was unsafe and conversationally incorrect because:
+
+The patient was clearly selecting a preferred appointment time.
+No fecha_solicitada existed for that message.
+es_dia_disponible=false without a requested date must not be interpreted as “today is unavailable”.
+The flow should have moved forward to appointment review, not answered as a general message.
+Root Cause
+
+The deterministic intent classifier already supported:
+
+hora_cita
+ST_CITA_FRANJA -> ST_CITA_PENDIENTE
+confirm_appointment_request
+
+However, app/services/intent.py did not yet recognize several natural Colombian appointment-time responses, including:
+
+La de 5 de la tarde
+A las cinco
+Tipo 5
+A eso de las 5
+Cinco de la tarde
+La de cinco
+
+As a result, these messages fell through as:
+
+intent = general
+
+A secondary issue existed in the LLM date context builder:
+
+When fecha_actual_colombia existed but fecha_solicitada was null,
+the LLM could still receive:
+es_dia_disponible=false
+day-operational context
+which could trigger unsafe wording such as:
+“hoy no operamos”
+“no hay atención hoy”
+Fix Applied
+1. Expanded Colombian natural-language time detection
+
+Updated:
+
+app/services/intent.py
+
+Added deterministic pattern coverage for Colombian appointment-time preference expressions inside ST_CITA_FRANJA, including:
+
+La de 5 de la tarde
+La de cinco
+A las cinco
+Cinco de la tarde
+Tipo 5
+A eso de las 5
+
+These messages are now classified as:
+
+intent = hora_cita
+2. Existing state machine path confirmed
+
+No architectural change was required in:
+
+app/graph/transitions.py
+
+The existing deterministic transition was already correct:
+
+intent = hora_cita
+ST_CITA_FRANJA -> ST_CITA_PENDIENTE
+next_action = confirm_appointment_request
+3. KB routing validated for appointment-time preference
+
+Added test coverage to confirm:
+
+intent = hora_cita
+estado_actual = ST_CITA_FRANJA
+
+loads only:
+
+kb_schedules
+kb_rules
+
+and explicitly excludes:
+
+kb_services
+
+Expected KB routing:
+
+kb_sources = ["kb_schedules", "kb_rules"]
+4. LLM guardrail added for missing requested date
+
+Updated:
+
+app/services/llm.py
+
+New rule:
+
+If:
+
+fecha_solicitada is null
+
+then the date context must not expose:
+
+Día operativo según reglas internas: False
+
+and must instead include an explicit safe instruction:
+
+Do not interpret operational availability without an explicitly requested date.
+Do not say that today is unavailable.
+Do not say that Respirarte is not operating today.
+If the flow is about appointment coordination, only register the preference or request the missing information.
+Tests Added
+Intent classification tests
+
+Added coverage for:
+
+La de 5 de la tarde
+A las 5 pm
+17:00
+La segunda
+La primera
+A las cinco
+Tipo 5
+Como a las 5
+Por ahí a las 5
+A eso de las 5
+Cinco de la tarde
+La de cinco
+
+Expected:
+
+classify_intent(..., "ST_CITA_FRANJA") == "hora_cita"
+State machine tests
+
+Validated that appointment-time preferences produce:
+
+intent = hora_cita
+nuevo_estado = ST_CITA_PENDIENTE
+next_action = confirm_appointment_request
+KB routing test
+
+Validated:
+
+kb_sources = ["kb_schedules", "kb_rules"]
+
+and:
+
+kb_services not loaded
+LLM date-context guardrail test
+
+Validated that when:
+
+fecha_solicitada = null
+es_dia_disponible = false
+
+the context does not expose operational-day false signals to the LLM and instead instructs it not to claim that “today is unavailable”.
+
+Local Validation
+
+Full local suite after the fix:
+
+66 passed in 11.02s
+Git Commit
+
+Commit pushed to main:
+
+9dc6424 — fix: detect Colombian appointment time preferences
+Production Validation
+/ready
+
+Production readiness remained healthy:
+
+{
+  "status": "ready",
+  "environment": "production",
+  "whatsapp_sending_enabled": false,
+  "kb_runtime_enabled": true,
+  "hard_failures": []
+}
+/test/message-stateful
+
+Production dry-run body:
+
+{
+  "telefono": "4917655660163",
+  "nombre": "Nabit Mikan",
+  "mensaje": "La de 5 de la tarde",
+  "estado_actual": "ST_CITA_FRANJA",
+  "opt_out": false
+}
+
+Validated production result:
+
+intent = hora_cita
+nuevo_estado = ST_CITA_PENDIENTE
+next_action = confirm_appointment_request
+kb_sources = ["kb_schedules", "kb_rules"]
+delivery_status = sending_skipped
+persisted_state = ST_CITA_PENDIENTE
+
+Validated response:
+
+Gracias. Dejo registrada su preferencia para esa franja.
+La disponibilidad debe ser validada por la Dra. D'Aleman o el equipo de Respirarte antes de confirmar la cita.
+
+The response was safe because it:
+
+did not confirm real availability,
+did not confirm a final appointment,
+did not say “today is unavailable”,
+did not load kb_services,
+preserved the deterministic appointment flow.
+Operational Conclusion
+
+P6-F.7.1 is closed.
+
+The Elvira production flow now correctly interprets natural Colombian appointment-time preferences during ST_CITA_FRANJA, including colloquial patient responses such as:
+
+La de 5 de la tarde
+
+The fix was:
+
+deterministic,
+covered by tests,
+validated locally,
+validated in production dry-run,
+deployed with real WhatsApp sending still disabled.
+

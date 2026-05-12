@@ -89,13 +89,17 @@ Completed:
 - Sprint P6-C — Medical & Response Safety Boundaries completed
 - Sprint P6-D — Production Dry-Run Validation completed
 - Sprint P6-E — Pre-Go-Live Final Gate completed
+- Sprint P6-F.7.1 — Colombian Appointment Time Preference Context fix completed and production dry-run validated
 - GitHub private repo created
 - `.gitignore` configured
 - `.env` confirmed as not versioned
 - P6-F operational runbook created: `docs/P6-F_CONTROLLED_SENDING_ACTIVATION_PLAN.md`
 - P6-F current scope: WhatsApp Manager readiness, Colombian number checklist, templates, EasyPanel variables, final dry-run, one-message activation, audit and rollback
+- P6-F.7.1 completed: Colombian appointment-time preference context fixed and validated in production dry-run
+- P6-F.7.1 result: natural patient replies such as `La de 5 de la tarde` are now classified deterministically as `hora_cita`
+- P6-F.7.1 safety: appointment-time preference moves to `ST_CITA_PENDIENTE`, loads `kb_schedules + kb_rules`, and does not confirm real availability
 - P6-F production default rule: `WHATSAPP_SENDING_ENABLED=false` and `real_whatsapp_sending_allowed=false`
-- Current full test baseline: 60/60 tests passing
+- Current full test baseline: 66/66 tests passing
 
 ---
 
