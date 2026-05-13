@@ -95,8 +95,9 @@ def classify_intent(message: str, current_state: str = "ST_INIT") -> Intent:
 
         date_patterns = [
             r"\bmanana\b", r"\bhoy\b", r"\bpasado manana\b",
-            r"\bel lunes\b", r"\bel martes\b", r"\bel miercoles\b",
-            r"\bel jueves\b", r"\bel viernes\b", r"\bel sabado\b",
+            r"\b(?:el )?lunes\b", r"\b(?:el )?martes\b", r"\b(?:el )?miercoles\b",
+            r"\b(?:el )?jueves\b", r"\b(?:el )?viernes\b", r"\b(?:el )?sabado\b",
+            r"\b(?:el )?domingo\b",
             r"\ben la manana\b", r"\ben la tarde\b", r"\ben la noche\b",
         ]
         if any(re.search(p, msg) for p in date_patterns):

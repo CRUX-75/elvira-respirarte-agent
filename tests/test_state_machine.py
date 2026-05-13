@@ -216,3 +216,37 @@ def test_p6f8_colombian_holiday_request_is_blocked_in_full_flow(monkeypatch):
         "Ese día no se atienden consultas porque corresponde al festivo de Ascensión de Jesús. "
         "¿Le gustaría indicarme otro día entre semana?"
     )
+
+
+def test_p6f8_sunday_word_inside_appointment_date_state_is_treated_as_date(monkeypatch):
+    from datetime import date
+    from app.services import date_resolver
+
+    monkeypatch.setattr(
+        date_resolver,
+        "get_today_colombia",
+        lambda now=None: date(2026, 5, 13),
+    )
+
+    msg = IncomingMessage(
+        telefono="573001112675",
+        mensaje="El domingo",
+        estado_actual="ST_CITA_FECHA",
+    )
+
+    result = process_message(msg)
+
+    assert result.intent == "fecha_cita"
+    assert result.nuevo_estado == "ST_CITA_FRANJA"
+    assert result.next_action == "ask_preferred_time"
+
+    assert result.fecha_solicitada == "2026-05-17"
+    assert result.fecha_solicitada_texto == "domingo 17 de mayo"
+    assert result.is_weekend is True
+    assert result.is_colombia_holiday is False
+
+    assert result.respuesta == (
+        "Se refiere a domingo 17 de mayo. "
+        "Ese día no se atienden consultas. "
+        "¿Le gustaría indicarme otro día entre semana?"
+    )
