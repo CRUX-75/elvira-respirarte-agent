@@ -177,13 +177,16 @@ def test_node_load_kb_context_schedule_question_uses_schedules():
     assert kwargs["estado_actual"] == "ST_GENERAL"
 
 
-def test_kb_context_appointment_state_includes_time_slot_disclaimer_rule():
+def test_kb_context_appointment_state_includes_slot_policy_rule():
     from app.services.kb import get_kb_context
 
     engine = object()
-    disclaimer = (
-        "La franja horaria puede variar por factores externos como el tráfico en Bogotá. "
-        "Le pedimos paciencia — la Dra. D'Aleman llegará dentro de la franja confirmada."
+    slot_policy = (
+        "Cada cita ocupa una franja de 2 horas. Máximo 2 citas por día "
+        "(1 los miércoles). Slots visibles L/M/J/V: 15:00–17:00 y 17:00–19:00. "
+        "Slot visible miércoles: 15:00–17:00 únicamente. "
+        "Elvira puede presentar estas franjas como opciones de preferencia, "
+        "pero no confirma la cita."
     )
 
     with (
@@ -206,9 +209,9 @@ def test_kb_context_appointment_state_includes_time_slot_disclaimer_rule():
             return_value=[
                 {
                     "rule_type": "agendamiento",
-                    "condition": "appointment_confirmation",
-                    "response_rule": disclaimer,
-                    "allowed_action": "Incluir disclaimer de franja en toda confirmación de cita",
+                    "condition": "appointment_slot_policy",
+                    "response_rule": slot_policy,
+                    "allowed_action": "Presentar franjas candidatas sin confirmar cita",
                     "escalation": False,
                 }
             ],
@@ -224,17 +227,16 @@ def test_kb_context_appointment_state_includes_time_slot_disclaimer_rule():
     assert result["kb_used"] is True
     assert "kb_schedules" in result["kb_sources"]
     assert "kb_rules" in result["kb_sources"]
-    assert disclaimer in result["kb_context"]
-    assert "Nunca confirme" not in result["kb_context"]
+    assert slot_policy in result["kb_context"]
+    assert "tráfico en Bogotá" not in result["kb_context"]
 
     rules_mock.assert_called_once_with(engine, "agendamiento")
 
 
-def test_kb_context_explicit_services_in_appointment_state_excludes_disclaimer_rules():
+def test_kb_context_explicit_services_in_appointment_state_excludes_appointment_rules():
     from app.services.kb import get_kb_context
 
     engine = object()
-    disclaimer = "La franja horaria puede variar por factores externos como el tráfico en Bogotá."
 
     with (
         patch(
@@ -264,7 +266,8 @@ def test_kb_context_explicit_services_in_appointment_state_excludes_disclaimer_r
     assert result["kb_used"] is True
     assert result["kb_sources"] == ["kb_services"]
     assert "Terapia Respiratoria Domiciliaria" in result["kb_context"]
-    assert disclaimer not in result["kb_context"]
+    assert "Slots visibles" not in result["kb_context"]
+    assert "no confirma la cita" not in result["kb_context"]
     assert "kb_rules" not in result["kb_sources"]
     assert "kb_schedules" not in result["kb_sources"]
 

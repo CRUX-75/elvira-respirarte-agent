@@ -75,7 +75,6 @@ RULE_KEYWORDS = {
     "cancelacion",
     "reagendar",
     "fuera de horario",
-    "teleconsulta",
 }
 
 APPOINTMENT_RULE_STATES = {
