@@ -24,9 +24,11 @@ elvira_respirarte_prod
 Validated through pgweb:
 
 - kb_rules visible and active
-- RULE-001 to RULE-008 present
-- RULE-007 appointment_confirmation active
-- RULE-008 appointment_slot_policy active
+- obsolete `RULE-003 teleconsulta` removed from production
+- obsolete `RULE-007 appointment_confirmation` removed from production
+- `RULE-008 appointment_slot_policy` updated to present candidate preference windows without confirming the appointment
+- obsolete `HOR-05 Teleconsulta` removed from production
+- `HOR-03` Saturday note simplified to reflect the current domiciliary flow
 - kb_services, kb_schedules, patients, interactions and processed_messages accessible
 
 Operational rule:
@@ -50,8 +52,8 @@ Current repository:
 - Stable domain: `https://elvira.genflowautomation.com`
 - Meta webhook: `https://elvira.genflowautomation.com/webhook`
 - Webhook subscribed field: `messages`
-- Current phase: Sprint P6-F in progress — Controlled Sending Activation Plan
-- Next phase: TBD — Post-controlled activation scheduling / operational layer
+- Current phase: Sprint P6-F.8 completed — Appointment Request Containment & Human Handoff design sealed
+- Next phase: P6-F.9 — Appointment Request Persistence & Human Review Handoff
 
 Current production safety state:
 
@@ -90,16 +92,21 @@ Completed:
 - Sprint P6-D — Production Dry-Run Validation completed
 - Sprint P6-E — Pre-Go-Live Final Gate completed
 - Sprint P6-F.7.1 — Colombian Appointment Time Preference Context fix completed and production dry-run validated
+- Sprint P6-F.8 — Appointment Request Containment completed and production-validated
 - GitHub private repo created
 - `.gitignore` configured
 - `.env` confirmed as not versioned
 - P6-F operational runbook created: `docs/P6-F_CONTROLLED_SENDING_ACTIVATION_PLAN.md`
-- P6-F current scope: WhatsApp Manager readiness, Colombian number checklist, templates, EasyPanel variables, final dry-run, one-message activation, audit and rollback
+- P6-F.8 canonical decision document created: `docs/P6-F.8_APPOINTMENT_REQUEST_CONTAINMENT_AND_HANDOFF.md`
 - P6-F.7.1 completed: Colombian appointment-time preference context fixed and validated in production dry-run
 - P6-F.7.1 result: natural patient replies such as `La de 5 de la tarde` are now classified deterministically as `hora_cita`
 - P6-F.7.1 safety: appointment-time preference moves to `ST_CITA_PENDIENTE`, loads `kb_schedules + kb_rules`, and does not confirm real availability
+- P6-F.8 completed: relative appointment dates are resolved and repeated in human language, weekends and Colombian 2026 public holidays are blocked deterministically, and valid dates expose afternoon candidate preference windows only
+- P6-F.8 production validation: `/test/message-stateful` confirmed correct handling for `Mañana` and `El domingo`
+- P6-F.8 bugfix: weekday references such as `El domingo` inside `ST_CITA_FECHA` are now classified as `fecha_cita`, not `horarios`
+- P6-F.8 architectural decision: Elvira does not require external calendar integration in the current phase; the next operational layer will use `Solicitudes_Cita` plus human review by Dra. D'Aleman
 - P6-F production default rule: `WHATSAPP_SENDING_ENABLED=false` and `real_whatsapp_sending_allowed=false`
-- Current full test baseline: 66/66 tests passing
+- Current full test baseline: 76/76 tests passing
 
 ---
 
@@ -441,7 +448,7 @@ pytest
 
 Current full test baseline:
 
-60 passed
+76 passed
 
 Run KB tests:
 
@@ -595,9 +602,11 @@ elvira_respirarte_prod
 Validated through pgweb:
 
 - kb_rules visible and active
-- RULE-001 to RULE-008 present
-- RULE-007 appointment_confirmation active
-- RULE-008 appointment_slot_policy active
+- obsolete `RULE-003 teleconsulta` removed from production
+- obsolete `RULE-007 appointment_confirmation` removed from production
+- `RULE-008 appointment_slot_policy` updated to present candidate preference windows without confirming the appointment
+- obsolete `HOR-05 Teleconsulta` removed from production
+- `HOR-03` Saturday note simplified to reflect the current domiciliary flow
 - kb_services, kb_schedules, patients, interactions and processed_messages accessible
 
 Operational rule:
@@ -634,10 +643,10 @@ kb_schedules
 
 Current operational reference:
 
-Monday to Friday: home care 15:00–20:00
-Saturday: in-person consultation 08:00–12:00
-Sunday: no service
-Teleconsultation: available, schedule pending confirmation
+- Monday, Tuesday, Thursday and Friday: domiciliary consultations 15:00–19:00
+- Wednesday: domiciliary consultations 15:00–18:00
+- Saturday: no domiciliary service
+- Sunday and Colombian public holidays: no service
 kb_rules
 
 Includes operational rules for:
@@ -953,21 +962,24 @@ Sprint P6-E prepared Elvira for the final controlled sending phase without enabl
 Implemented:
 
 KB production records updated and validated:
-- kb_schedules HOR-01 to HOR-05 corrected
-- kb_rules RULE-001 to RULE-008 corrected
-- RULE-007 added as appointment time-slot disclaimer for Bogotá traffic variability
-- RULE-008 added as appointment slots/capacity policy
+- kb_schedules HOR-01 to HOR-04 are the current active operational schedules
+- obsolete HOR-05 Teleconsulta removed from production during P6-F.8 cleanup
+- obsolete RULE-003 teleconsulta removed from production during P6-F.8 cleanup
+- obsolete RULE-007 appointment_confirmation disclaimer removed from production
+- RULE-008 updated as the current appointment slot preference policy
 
 ADR-001 sealed:
 
-Option C — internal Python CalendarService inside the repository.
+Option C — internal Python `CalendarService` inside the repository.
 
-Architecture decision:
+Architecture decision updated after P6-F.8:
 
 Elvira keeps deterministic architecture.
 The LLM does not decide availability.
 The LLM does not confirm exact appointment times.
-Calendar availability will be owned by internal Python service logic.
+The current Respirarte operating model does **not** require an external calendar integration.
+The internal `CalendarService` remains useful only as deterministic candidate-slot logic for the current appointment request flow.
+The next operational handoff will be based on `Solicitudes_Cita` plus human review by Dra. D'Aleman, not automated calendar booking.
 
 Implemented in P6-E:
 
@@ -976,15 +988,15 @@ Implemented in P6-E:
   - ST_CITA_PENDIENTE
   - ST_CITA_FRANJA
 - explicit service intent still overrides appointment state and uses only kb_services
-- Elvira prompt now includes appointment time-slot guardrail
-- Elvira must use the system-provided time slot when registering or confirming appointment requests
-- Elvira must never confirm an exact hour by itself
-- if KB context includes the time-slot disclaimer, Elvira must include it textually
-- tests added for appointment disclaimer KB runtime behavior
-- internal CalendarService scaffold created
+- Elvira prompt and deterministic response logic preserve the boundary between preference capture and appointment confirmation
+- Elvira may present system-provided candidate slot windows as preferences
+- Elvira must never confirm an appointment by itself
+- the obsolete appointment time-slot disclaimer was removed in P6-F.8
+- KB runtime tests were updated to validate the current appointment slot preference policy
+- internal CalendarService scaffold remains available as deterministic candidate-slot logic
 - CalendarService builds deterministic candidate slots only
-- CalendarService does not confirm real availability yet
-- Google Calendar OAuth2 is not connected yet
+- CalendarService does not confirm real availability
+- external calendar integration is intentionally not part of the current operational phase
 
 Calendar scaffold:
 
@@ -1006,21 +1018,23 @@ It only builds appointment slot candidates.
 It does not confirm availability.
 It does not send messages.
 It does not modify Elvira state.
-It prepares the boundary for future Google Calendar OAuth2 integration.
+It remains an internal deterministic helper; current production workflow does not require external calendar integration.
 
 Tests added:
 
-- appointment-state KB context includes time-slot disclaimer rule
+- appointment-state KB context includes the current slot preference policy rule
 - service questions inside appointment state exclude appointment rules
 - CalendarService not configured without provider
 - CalendarService builds two slots for Monday
 - CalendarService builds one slot for Wednesday
 - CalendarService builds no slots for Sunday
 - CalendarService check_availability returns scaffold result
+- P6-F.8 date resolver tests cover human-readable dates, weekend blocking and Colombian public holidays
+- P6-F.8 graph-flow tests cover `Mañana`, `Pasado mañana en la mañana`, `El domingo` and holiday containment
 
 Validated baseline:
 
-60/60 tests passing
+76/76 tests passing
 
 Commits:
 

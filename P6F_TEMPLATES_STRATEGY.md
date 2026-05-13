@@ -15,9 +15,13 @@ Templates will be needed later for business-initiated conversations, reminders, 
 Minimum future templates:
 
 - appointment_reminder
-- appointment_confirmation
+- appointment_confirmation_by_staff
 - followup_after_therapy
 - reactivation_message
+
+Important boundary:
+
+`appointment_confirmation_by_staff` refers only to a future human-approved confirmation message after the Dra. D'Aleman or an authorized Respirarte team member has reviewed the request. It does not mean that Elvira confirms appointments autonomously.
 
 ## Current P6-F rule
 

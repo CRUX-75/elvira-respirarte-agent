@@ -35,5 +35,12 @@ When the Colombian number is ready:
 
 ## Safety rule
 
-Real sending must only be enabled in P6-F-6 after dry-run validation is successful.
+Real sending must only be enabled in P6-F-6 after:
+
+- dry-run validation is successful
+- P6-F.8 appointment request containment is approved
+- the operational handoff layer is completed and validated:
+  - appointment request persistence
+  - `Solicitudes_Cita`
+  - human review handoff for Dra. D'Aleman
 

@@ -230,9 +230,17 @@ It does not activate real WhatsApp sending.
 
 ---
 
-## P6-F.8 — Controlled Real WhatsApp Sending Activation Checklist
+## Deferred Controlled Real WhatsApp Sending Activation Checklist
 
-This checklist is prepared but not executed yet. Real WhatsApp sending must not be activated until explicitly authorized during the controlled live test.
+This checklist is prepared but **not executable yet**.
+
+After P6-F.8, real WhatsApp sending remains intentionally blocked until the next operational handoff layer is completed and validated:
+
+- appointment request persistence
+- `Solicitudes_Cita`
+- human review handoff for Dra. D'Aleman
+
+The controlled live sending checklist should only be executed after that hold is lifted.
 
 Activation window:
 
@@ -281,7 +289,7 @@ Expected:
 
 ---
 
-### P6-F.8.1 — Post-test Audit
+### Post-test Audit
 
 After the single live test, audit:
 
@@ -318,7 +326,7 @@ Validate:
 
 ---
 
-### P6-F.8.2 — Rollback Rule
+### Rollback Rule
 
 Rollback must happen immediately after the single authorized live test.
 
