@@ -13,18 +13,24 @@ def test_preferred_time_response_is_deterministic_with_slots():
         next_action="ask_preferred_time",
         fecha_actual_colombia="2026-05-11",
         fecha_solicitada="2026-05-12",
+        fecha_solicitada_texto="martes 12 de mayo",
         dia_semana_solicitado="martes",
         es_dia_disponible=True,
         slots_candidatos=["3:00 p. m.–5:00 p. m.", "5:00 p. m.–7:00 p. m."],
+        is_weekend=False,
+        is_colombia_holiday=False,
+        colombia_holiday_name=None,
         date_resolution_source="deterministic_relative_date_resolver",
     )
 
     result = llm.generate_llm_response(state)
 
     assert result.respuesta == (
-        "Perfecto. Podemos revisar estas franjas: "
-        "3:00 p. m.–5:00 p. m. o 5:00 p. m.–7:00 p. m.. "
-        "¿Cuál le gustaría que registre como preferencia?"
+        "Perfecto, se refiere a mañana, martes 12 de mayo. "
+        "La doctora solo atiende consultas domiciliarias en la tarde. "
+        "Para ese día tengo disponibles entre 3:00 p. m. y 5:00 p. m. "
+        "o entre 5:00 p. m. y 7:00 p. m. "
+        "¿Cuál le sirve mejor?"
     )
 
 
@@ -39,16 +45,22 @@ def test_preferred_time_response_is_deterministic_without_slots():
         next_action="ask_preferred_time",
         fecha_actual_colombia="2026-05-08",
         fecha_solicitada="2026-05-09",
+        fecha_solicitada_texto="sábado 9 de mayo",
         dia_semana_solicitado="sábado",
         es_dia_disponible=False,
         slots_candidatos=[],
+        is_weekend=True,
+        is_colombia_holiday=False,
+        colombia_holiday_name=None,
         date_resolution_source="deterministic_relative_date_resolver",
     )
 
     result = llm.generate_llm_response(state)
 
     assert result.respuesta == (
-        "Perfecto. ¿En qué horario le quedaría mejor para registrar su preferencia?"
+        "Se refiere a mañana, sábado 9 de mayo. "
+        "Ese día no se atienden consultas. "
+        "¿Le gustaría indicarme otro día entre semana?"
     )
 
 
@@ -63,9 +75,13 @@ def test_date_context_section_includes_deterministic_date_context():
         next_action="answer_general",
         fecha_actual_colombia="2026-05-08",
         fecha_solicitada="2026-05-09",
+        fecha_solicitada_texto="sábado 9 de mayo",
         dia_semana_solicitado="sábado",
         es_dia_disponible=False,
         slots_candidatos=[],
+        is_weekend=True,
+        is_colombia_holiday=False,
+        colombia_holiday_name=None,
         date_resolution_source="deterministic_relative_date_resolver",
     )
 
@@ -105,3 +121,65 @@ def test_date_context_section_does_not_expose_operational_day_without_requested_
     assert "No diga que hoy no se opera" in date_context
     assert "Día operativo según reglas internas: False" not in date_context
     assert "Slots candidatos generados" not in date_context
+
+
+def test_preferred_time_response_blocks_colombian_holiday():
+    state = ElviraState(
+        telefono="573001112233",
+        mensaje_original="Quiero cita el lunes",
+        sanitized_input="quiero cita el lunes",
+        estado_actual="ST_CITA_FECHA",
+        nuevo_estado="ST_CITA_FRANJA",
+        intent="fecha_cita",
+        next_action="ask_preferred_time",
+        fecha_actual_colombia="2026-05-17",
+        fecha_solicitada="2026-05-18",
+        fecha_solicitada_texto="lunes 18 de mayo",
+        dia_semana_solicitado="lunes",
+        es_dia_disponible=False,
+        slots_candidatos=[],
+        is_weekend=False,
+        is_colombia_holiday=True,
+        colombia_holiday_name="Ascensión de Jesús",
+        date_resolution_source="deterministic_relative_date_resolver",
+    )
+
+    result = llm.generate_llm_response(state)
+
+    assert result.respuesta == (
+        "Se refiere a lunes 18 de mayo. "
+        "Ese día no se atienden consultas porque corresponde al festivo de Ascensión de Jesús. "
+        "¿Le gustaría indicarme otro día entre semana?"
+    )
+
+
+def test_preferred_time_response_clarifies_afternoon_for_day_after_tomorrow_morning_request():
+    state = ElviraState(
+        telefono="573001112233",
+        mensaje_original="Pasado mañana en la mañana",
+        sanitized_input="pasado mañana en la mañana",
+        estado_actual="ST_CITA_FECHA",
+        nuevo_estado="ST_CITA_FRANJA",
+        intent="fecha_cita",
+        next_action="ask_preferred_time",
+        fecha_actual_colombia="2026-05-13",
+        fecha_solicitada="2026-05-15",
+        fecha_solicitada_texto="viernes 15 de mayo",
+        dia_semana_solicitado="viernes",
+        es_dia_disponible=True,
+        slots_candidatos=["3:00 p. m.–5:00 p. m.", "5:00 p. m.–7:00 p. m."],
+        is_weekend=False,
+        is_colombia_holiday=False,
+        colombia_holiday_name=None,
+        date_resolution_source="deterministic_relative_date_resolver",
+    )
+
+    result = llm.generate_llm_response(state)
+
+    assert result.respuesta == (
+        "Perfecto, se refiere a pasado mañana, viernes 15 de mayo. "
+        "La doctora solo atiende consultas domiciliarias en la tarde. "
+        "Para ese día tengo disponibles entre 3:00 p. m. y 5:00 p. m. "
+        "o entre 5:00 p. m. y 7:00 p. m. "
+        "¿Cuál le sirve mejor?"
+    )

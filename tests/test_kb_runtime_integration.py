@@ -332,9 +332,13 @@ def test_node_resolve_date_context_adds_deterministic_fields_for_appointment_dat
 
     assert result.fecha_actual_colombia == "2026-05-08"
     assert result.fecha_solicitada == "2026-05-09"
+    assert result.fecha_solicitada_texto == "sábado 9 de mayo"
     assert result.dia_semana_solicitado == "sábado"
     assert result.es_dia_disponible is False
     assert result.slots_candidatos == []
+    assert result.is_weekend is True
+    assert result.is_colombia_holiday is False
+    assert result.colombia_holiday_name is None
 
 
 def test_node_resolve_date_context_skips_non_appointment_date_intent():

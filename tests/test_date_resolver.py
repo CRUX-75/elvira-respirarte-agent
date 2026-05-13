@@ -75,3 +75,54 @@ def test_tomorrow_afternoon_does_not_depend_on_llm_interpretation():
     assert result.fecha_solicitada.isoformat() == "2026-05-09"
     assert result.dia_semana_solicitado == "sábado"
     assert result.source == "deterministic_relative_date_resolver"
+
+
+def test_resolver_adds_human_readable_requested_date_text_for_tomorrow():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    result = resolve_requested_date(
+        "Quiero cita mañana",
+        now=datetime(2026, 5, 13, 10, 0, tzinfo=ZoneInfo("America/Bogota")),
+    )
+
+    assert result.fecha_solicitada.isoformat() == "2026-05-14"
+    assert result.fecha_solicitada_texto == "jueves 14 de mayo"
+    assert result.is_weekend is False
+    assert result.is_colombia_holiday is False
+    assert result.colombia_holiday_name is None
+
+
+def test_resolver_marks_sunday_as_weekend_and_clears_slots():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    result = resolve_requested_date(
+        "Quiero cita mañana",
+        now=datetime(2026, 5, 16, 10, 0, tzinfo=ZoneInfo("America/Bogota")),
+    )
+
+    assert result.fecha_solicitada.isoformat() == "2026-05-17"
+    assert result.fecha_solicitada_texto == "domingo 17 de mayo"
+    assert result.is_weekend is True
+    assert result.is_colombia_holiday is False
+    assert result.es_dia_disponible is False
+    assert result.slots_candidatos == []
+
+
+def test_resolver_marks_colombian_holiday_and_clears_slots():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    result = resolve_requested_date(
+        "Quiero cita el lunes",
+        now=datetime(2026, 5, 17, 10, 0, tzinfo=ZoneInfo("America/Bogota")),
+    )
+
+    assert result.fecha_solicitada.isoformat() == "2026-05-18"
+    assert result.fecha_solicitada_texto == "lunes 18 de mayo"
+    assert result.is_weekend is False
+    assert result.is_colombia_holiday is True
+    assert result.colombia_holiday_name == "Ascensión de Jesús"
+    assert result.es_dia_disponible is False
+    assert result.slots_candidatos == []

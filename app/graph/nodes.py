@@ -53,9 +53,13 @@ def node_resolve_date_context(state: ElviraState, now=None) -> ElviraState:
             if result.fecha_solicitada
             else None
         )
+        state.fecha_solicitada_texto = result.fecha_solicitada_texto
         state.dia_semana_solicitado = result.dia_semana_solicitado
         state.es_dia_disponible = result.es_dia_disponible
         state.slots_candidatos = list(result.slots_candidatos)
+        state.is_weekend = result.is_weekend
+        state.is_colombia_holiday = result.is_colombia_holiday
+        state.colombia_holiday_name = result.colombia_holiday_name
         state.date_resolution_source = result.source
 
     except Exception as exc:

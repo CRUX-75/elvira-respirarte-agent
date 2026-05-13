@@ -33,6 +33,44 @@ Fuentes: {sources}
 {state.kb_context}"""
 
 
+def _build_requested_date_reference(state: ElviraState) -> str:
+    """
+    Build a natural patient-facing reference to the resolved appointment date.
+
+    Examples:
+    - "mañana, jueves 14 de mayo"
+    - "pasado mañana, viernes 15 de mayo"
+    - "domingo 17 de mayo"
+    """
+    fecha_texto = state.fecha_solicitada_texto or "la fecha indicada"
+    message = (state.sanitized_input or state.mensaje_original or "").lower()
+
+    if "pasado mañana" in message or "pasado manana" in message:
+        return f"pasado mañana, {fecha_texto}"
+
+    if "mañana" in message or "manana" in message:
+        return f"mañana, {fecha_texto}"
+
+    if "hoy" in message:
+        return f"hoy, {fecha_texto}"
+
+    return fecha_texto
+
+
+def _build_patient_afternoon_window(state: ElviraState) -> str:
+    """
+    Return the real patient-facing afternoon service window for domiciliary consultations.
+
+    This mirrors the currently approved Respirarte operational rules:
+    - Monday, Tuesday, Thursday, Friday: 3:00 p. m. to 7:00 p. m.
+    - Wednesday: 3:00 p. m. to 6:00 p. m.
+    """
+    if state.dia_semana_solicitado == "miércoles":
+        return "entre 3:00 p. m. y 6:00 p. m."
+
+    return "entre 3:00 p. m. y 7:00 p. m."
+
+
 def _build_date_context_section(state: ElviraState) -> str:
     if not state.fecha_solicitada:
         return (
@@ -88,22 +126,54 @@ def generate_llm_response(state: ElviraState) -> ElviraState:
         return state
 
     if state.next_action == "ask_preferred_time":
-        if state.slots_candidatos:
-            slots = " o ".join(state.slots_candidatos)
+        date_reference = _build_requested_date_reference(state)
+
+        if state.is_weekend:
             state.respuesta = (
-                f"Perfecto. Podemos revisar estas franjas: {slots}. "
-                "¿Cuál le gustaría que registre como preferencia?"
+                f"Se refiere a {date_reference}. "
+                "Ese día no se atienden consultas. "
+                "¿Le gustaría indicarme otro día entre semana?"
+            )
+            return state
+
+        if state.is_colombia_holiday:
+            holiday_detail = (
+                f" porque corresponde al festivo de {state.colombia_holiday_name}"
+                if state.colombia_holiday_name
+                else ""
+            )
+            state.respuesta = (
+                f"Se refiere a {date_reference}. "
+                f"Ese día no se atienden consultas{holiday_detail}. "
+                "¿Le gustaría indicarme otro día entre semana?"
+            )
+            return state
+
+        slots = " o ".join(
+            f"entre {slot.replace('–', ' y ')}"
+            for slot in state.slots_candidatos
+        )
+
+        if slots:
+            state.respuesta = (
+                f"Perfecto, se refiere a {date_reference}. "
+                "La doctora solo atiende consultas domiciliarias en la tarde. "
+                f"Para ese día tengo disponibles {slots} "
+                "¿Cuál le sirve mejor?"
             )
         else:
+            afternoon_window = _build_patient_afternoon_window(state)
             state.respuesta = (
-                "Perfecto. ¿En qué horario le quedaría mejor para registrar su preferencia?"
+                f"Perfecto, se refiere a {date_reference}. "
+                f"La doctora solo atiende consultas domiciliarias en la tarde, {afternoon_window} "
+                "¿Qué horario le gustaría que registre como preferencia?"
             )
         return state
 
     if state.next_action == "confirm_appointment_request":
         state.respuesta = (
-            "Gracias. Dejo registrada su preferencia para esa franja. "
-            "La disponibilidad debe ser validada por la Dra. D'Aleman o el equipo de Respirarte antes de confirmar la cita."
+            "Perfecto, queda registrada su solicitud para esa franja. "
+            "La Dra. D'Aleman le confirmará la cita."
         )
         return state
 

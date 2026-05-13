@@ -17,6 +17,21 @@ WEEKDAY_NAMES_ES = {
     6: "domingo",
 }
 
+MONTH_NAMES_ES = {
+    1: "enero",
+    2: "febrero",
+    3: "marzo",
+    4: "abril",
+    5: "mayo",
+    6: "junio",
+    7: "julio",
+    8: "agosto",
+    9: "septiembre",
+    10: "octubre",
+    11: "noviembre",
+    12: "diciembre",
+}
+
 WEEKDAY_WORDS_ES = {
     "lunes": 0,
     "martes": 1,
@@ -29,14 +44,39 @@ WEEKDAY_WORDS_ES = {
     "domingo": 6,
 }
 
+COLOMBIA_HOLIDAYS_2026 = {
+    date(2026, 1, 1): "Año Nuevo",
+    date(2026, 1, 12): "Día de los Reyes Magos",
+    date(2026, 3, 23): "Día de San José",
+    date(2026, 4, 2): "Jueves Santo",
+    date(2026, 4, 3): "Viernes Santo",
+    date(2026, 5, 1): "Día del Trabajo",
+    date(2026, 5, 18): "Ascensión de Jesús",
+    date(2026, 6, 8): "Corpus Christi",
+    date(2026, 6, 15): "Sagrado Corazón de Jesús",
+    date(2026, 6, 29): "San Pedro y San Pablo",
+    date(2026, 7, 20): "Día de la Independencia",
+    date(2026, 8, 7): "Batalla de Boyacá",
+    date(2026, 8, 17): "Asunción de la Virgen",
+    date(2026, 10, 12): "Día de la Raza",
+    date(2026, 11, 2): "Todos los Santos",
+    date(2026, 11, 16): "Independencia de Cartagena",
+    date(2026, 12, 8): "Inmaculada Concepción",
+    date(2026, 12, 25): "Navidad",
+}
+
 
 @dataclass(frozen=True)
 class RelativeDateResolution:
     fecha_actual_colombia: date
     fecha_solicitada: date | None
+    fecha_solicitada_texto: str | None
     dia_semana_solicitado: str | None
     es_dia_disponible: bool
     slots_candidatos: list[str]
+    is_weekend: bool
+    is_colombia_holiday: bool
+    colombia_holiday_name: str | None
     source: str = "deterministic_relative_date_resolver"
 
 
@@ -50,6 +90,12 @@ def _resolve_weekday_reference(base_date: date, target_weekday: int) -> date:
         days_ahead = 7
 
     return base_date + timedelta(days=days_ahead)
+
+
+def _format_requested_date_text(requested_date: date) -> str:
+    weekday = WEEKDAY_NAMES_ES[requested_date.weekday()]
+    month = MONTH_NAMES_ES[requested_date.month]
+    return f"{weekday} {requested_date.day} de {month}"
 
 
 def get_today_colombia(now: datetime | None = None) -> date:
@@ -94,19 +140,34 @@ def resolve_requested_date(
         return RelativeDateResolution(
             fecha_actual_colombia=fecha_actual_colombia,
             fecha_solicitada=None,
+            fecha_solicitada_texto=None,
             dia_semana_solicitado=None,
             es_dia_disponible=False,
             slots_candidatos=[],
+            is_weekend=False,
+            is_colombia_holiday=False,
+            colombia_holiday_name=None,
         )
+
+    is_weekend = requested_date.weekday() in {5, 6}
+    colombia_holiday_name = COLOMBIA_HOLIDAYS_2026.get(requested_date)
+    is_colombia_holiday = colombia_holiday_name is not None
 
     service = calendar_service or CalendarService()
     slots = service.build_default_slots(requested_date)
     slot_labels = [slot.label for slot in slots]
 
+    if is_weekend or is_colombia_holiday:
+        slot_labels = []
+
     return RelativeDateResolution(
         fecha_actual_colombia=fecha_actual_colombia,
         fecha_solicitada=requested_date,
+        fecha_solicitada_texto=_format_requested_date_text(requested_date),
         dia_semana_solicitado=WEEKDAY_NAMES_ES[requested_date.weekday()],
         es_dia_disponible=bool(slot_labels),
         slots_candidatos=slot_labels,
+        is_weekend=is_weekend,
+        is_colombia_holiday=is_colombia_holiday,
+        colombia_holiday_name=colombia_holiday_name,
     )
