@@ -4,7 +4,7 @@
 
 This file is the operational context for AI-assisted development on the Elvira / Respirarte project.
 
-It exists so ChatGPT or any coding assistant can understand the repository structure, architecture decisions, documentation hierarchy, and current phase without repeatedly rediscovering the repo from scratch.
+It exists so ChatGPT or any coding assistant can understand the repository structure, architecture decisions, documentation hierarchy, current branch, and current phase without rediscovering the repo from scratch.
 
 This file is not public-facing documentation. It is a working context file.
 
@@ -86,7 +86,7 @@ The source of truth for appointment request rules must remain in Python.
 
 ## Closed Appointment Request Phases
 
-The following phases are closed and committed:
+The following phases are closed and committed to main:
 
 - P6-F.9.2 — AppointmentRequest internal model spec
 - P6-F.9.3 — AppointmentRequest model
@@ -94,49 +94,125 @@ The following phases are closed and committed:
 - P6-F.9.5 — lifecycle validator
 - P6-F.9.6 — factory spec
 - P6-F.9.7 — factory implementation and progress handoff
+- P6-F.9.8 — AppointmentRequestService contract
+- P6-F.9.9 — AppointmentRequestService test plan
 
-Last known test baseline:
+Last known clean main validation baseline:
 
-```text
-44 passed
-Current Phase
+120 passed
+
+---
+
+## Current RED Branch
+
+Current branch:
+
+p6-f-9-10-appointment-request-service-tests
+
+This branch contains:
+
+- tests/test_appointment_request_service.py
+- docs/P6-F.9.10_APPOINTMENT_REQUEST_SERVICE_TESTS_RED_HANDOFF.md
+
+Expected RED result when running only the new service tests:
+
+ModuleNotFoundError: No module named 'app.services.appointment_request_service'
+
+This RED is intentional because the service implementation does not exist yet.
+
+Do not merge this branch to main while tests are red.
+
+---
+
+## Current Phase for Next Chat
 
 Active phase:
 
-P6-F.9.8 — AppointmentRequestService Contract
+P6-F.9.11 — AppointmentRequestService Implementation
 
 Objective:
 
-Define the contract of the service that will orchestrate AppointmentRequest creation, lifecycle transitions, prevention of duplicate active requests, and preservation of id_solicitud during contraoffers and rescheduling.
+Create the minimal deterministic service implementation required to make:
 
-This phase is specification-only.
+tests/test_appointment_request_service.py
 
-No implementation code before the contract spec is reviewed and accepted.
+pass.
 
-P6-F.9.8 Scope
+Expected file to create:
+
+app/services/appointment_request_service.py
+
+The implementation must satisfy:
+
+- docs/P6-F.9.8_APPOINTMENT_REQUEST_SERVICE_CONTRACT.md
+- docs/P6-F.9.9_APPOINTMENT_REQUEST_SERVICE_TEST_PLAN.md
+- tests/test_appointment_request_service.py
+
+---
+
+## P6-F.9.11 Scope
 
 In scope:
 
-Define AppointmentRequestService responsibilities.
-Define duplicate active request prevention.
-Define id_solicitud preservation.
-Define future service operations.
-Define service boundaries.
-Keep deterministic ownership in Python.
+- create AppointmentRequestService
+- create deterministic service-level errors
+- support create_or_reuse_active_request
+- support transition_request
+- support apply_contraoffer
+- support apply_reschedule
+- support active request reuse
+- preserve id_solicitud
+- keep repository dependency injectable
+- keep logic deterministic in Python
 
 Out of scope:
 
-Database implementation
-Google Sheets integration
-Calendar integration
-Telegram notifications
-n8n workflows
-WhatsApp sending changes
-therapy session package tracking
-remaining sessions tracking
-executed sessions tracking
-automatic appointment confirmation
-Development Protocol
+- PostgreSQL implementation
+- SQLAlchemy repository
+- Google Sheets integration
+- Calendar integration
+- Telegram notifications
+- n8n workflows
+- WhatsApp sending changes
+- Swagger endpoint
+- LangSmith validation
+- therapy session package tracking
+- remaining sessions tracking
+- executed sessions tracking
+- automatic appointment confirmation
+
+---
+
+## Next Startup Commands
+
+Start next chat from this branch:
+
+git checkout p6-f-9-10-appointment-request-service-tests
+
+Run the RED test:
+
+pytest tests/test_appointment_request_service.py
+
+Expected initial result:
+
+ModuleNotFoundError: No module named 'app.services.appointment_request_service'
+
+Then implement:
+
+app/services/appointment_request_service.py
+
+After implementation, validate:
+
+pytest tests/test_appointment_request_service.py
+pytest
+
+Target:
+
+all tests passing
+
+---
+
+## Development Protocol
 
 This project follows SDD: Specification-Driven Development.
 
@@ -144,17 +220,25 @@ No vibecoding.
 
 For non-trivial changes, follow this order:
 
-SPEC
-DESIGN
-CONTRACT
-TESTS
+1. SPEC
+2. DESIGN
+3. CONTRACT
+4. TESTS
+5. IMPLEMENTATION
+6. VALIDATION
+7. DOCS UPDATE
+
+For P6-F.9.11, SPEC, CONTRACT and TESTS already exist.
+
+The next allowed step is:
+
 IMPLEMENTATION
-VALIDATION
-DOCS UPDATE
 
-Before creating production code, define the relevant specification and expected tests.
+Do not create new specs before implementing the service unless a real gap is discovered.
 
-Working Rules
+---
+
+## Working Rules
 
 Work step by step.
 
@@ -174,13 +258,15 @@ Before adding new files, verify whether the target folder already exists.
 
 For this repo, use app/, never src/.
 
-Environment Note
+---
+
+## Environment Note
 
 If pytest fails with:
 
 ModuleNotFoundError: No module named 'fastapi'
 
-this is an environment/dependency issue, not necessarily a code regression.
+this is an environment or dependency issue, not necessarily a code regression.
 
 Check:
 
@@ -188,4 +274,3 @@ echo $VIRTUAL_ENV
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 pytest
-
