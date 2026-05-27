@@ -402,3 +402,129 @@ update semantics
 PostgreSQL table shape
 fake/in-memory repository tests first
 
+
+---
+
+## P6-F.9.12 — AppointmentRequestRepository Contract Progress
+
+Status: partially closed.
+
+Closed microblocks:
+
+- P6-F.9.12.1 — Repository Contract SPEC
+- P6-F.9.12.2 — Repository Protocol + In-Memory Contract Tests
+- P6-F.9.12.3 — Repository Protocol Extraction
+- P6-F.9.12.4 — Service wired to Repository Protocol
+
+Current validation result:
+
+```text
+140 passed
+Repository contract location
+
+The official repository contract now lives at:
+
+app/repositories/appointment_request_repository.py
+
+This file defines:
+
+ACTIVE_APPOINTMENT_REQUEST_STATES
+TERMINAL_APPOINTMENT_REQUEST_STATES
+AppointmentRequestRepository Protocol
+
+Official repository layer location:
+
+app/repositories/
+
+Do not create a src/ folder.
+
+AppointmentRequest active states
+
+Active states for repository lookup:
+
+nueva
+pendiente_datos
+pendiente_confirmacion
+confirmada
+reagendada
+
+These states still belong to the active operational appointment request flow.
+
+AppointmentRequest terminal states
+
+Terminal states:
+
+cancelada
+cerrada
+
+These states must not block creation of a new appointment request for the same patient.
+
+Repository contract methods
+
+The repository contract currently requires:
+
+save(request)
+update(request)
+get_by_id(id_solicitud)
+find_active_by_telefono(telefono)
+Service wiring decision
+
+AppointmentRequestService now depends on the official repository Protocol from:
+
+from app.repositories.appointment_request_repository import AppointmentRequestRepository
+
+The service must not define a duplicated internal repository Protocol.
+
+Boundary confirmed
+
+The repository owns persistence and retrieval only.
+
+The service owns orchestration decisions such as:
+
+create vs reuse active request
+lifecycle transitions
+contraoffer handling
+reschedule handling
+invalid transition errors
+not-found errors
+
+The repository must not own business logic, WhatsApp sending, Telegram notification, Google Sheets formatting, appointment availability, or doctor confirmation.
+
+Test coverage added
+
+Repository contract behavior is currently validated with an in-memory test adapter in:
+
+tests/test_appointment_request_repository_contract.py
+
+Covered behaviors:
+
+save request
+get request by id_solicitud
+return None for unknown ID
+update without duplication
+reject update for unknown request
+find active request by phone
+ignore terminal requests
+return latest active request when multiple active records exist
+Next recommended block
+
+P6-F.9.12.6 — Repository PostgreSQL Table Contract SPEC
+
+Objective:
+
+Define the future PostgreSQL table shape before writing SQL or repository implementation.
+
+No PostgreSQL implementation yet.
+
+The next block should specify:
+
+table name
+required columns
+nullable vs required fields
+primary key
+indexes
+active lookup ordering
+timestamp semantics
+mapping from AppointmentRequest model to DB row
+mapping from DB row back to AppointmentRequest
+
