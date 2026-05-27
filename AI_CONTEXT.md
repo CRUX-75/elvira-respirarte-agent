@@ -528,3 +528,142 @@ timestamp semantics
 mapping from AppointmentRequest model to DB row
 mapping from DB row back to AppointmentRequest
 
+
+---
+
+## P6-F.9.12.7 — PostgreSQL Repository Tests RED Closed
+
+Status: closed.
+
+Validation path:
+
+```text
+tests/test_postgres_appointment_request_repository.py
+
+Initial RED was confirmed correctly in stages:
+
+Missing repository implementation module:
+ModuleNotFoundError: No module named 'app.repositories.postgres_appointment_request_repository'
+After creating the skeleton implementation, tests reached the repository layer and failed with:
+NotImplementedError
+
+This confirmed that the test file was wired correctly and no production database connection was being touched.
+
+P6-F.9.12.8 — PostgreSQL Repository Implementation v1 Closed
+
+Status: closed / green.
+
+Validation result:
+
+149 passed
+
+Files added:
+
+app/repositories/postgres_appointment_request_repository.py
+tests/test_postgres_appointment_request_repository.py
+
+Implemented repository:
+
+PostgresAppointmentRequestRepository
+
+Repository methods implemented:
+
+save(request)
+update(request)
+get_by_id(id_solicitud)
+find_active_by_telefono(telefono)
+
+Implementation style:
+
+SQLAlchemy raw SQL
+sqlalchemy.text
+injectable Engine
+no global production engine import inside the repository
+AppointmentRequest model mapping via row._mapping
+timestamps normalized back to strings for the lightweight Pydantic model
+
+Important design decision:
+
+The repository accepts an injected SQLAlchemy Engine:
+
+def __init__(self, engine: Engine):
+    self.engine = engine
+
+This avoids accidental coupling to the production database and keeps the repository testable.
+
+The existing project pattern uses SQLAlchemy raw SQL repositories. This implementation follows that style while improving testability through dependency injection.
+
+Test setup:
+
+The PostgreSQL repository tests currently use a local SQLite in-memory engine to validate SQL behavior safely without touching production.
+
+This is intentional for the current repository implementation test layer.
+
+The real production table contract remains PostgreSQL-first and is documented in:
+
+docs/P6-F.9.12_POSTGRESQL_TABLE_CONTRACT_SPEC.md
+
+Covered behaviors:
+
+save inserts a row
+duplicate id_solicitud fails
+get_by_id returns AppointmentRequest
+get_by_id returns None for unknown ID
+update modifies existing row without duplicating
+update unknown fails deterministically
+find_active_by_telefono ignores terminal requests
+find_active_by_telefono returns latest active request using deterministic ordering
+find_active_by_telefono returns None when no request exists
+
+Active request ordering remains:
+
+updated_at DESC
+created_at DESC
+id_solicitud DESC
+
+Active states:
+
+nueva
+pendiente_datos
+pendiente_confirmacion
+confirmada
+reagendada
+
+Terminal states:
+
+cancelada
+cerrada
+
+SQLAlchemy detail:
+
+The active-state lookup uses:
+
+bindparam("active_states", expanding=True)
+
+This is required so SQLAlchemy expands the IN clause correctly across test and production-compatible engines.
+
+Boundary confirmed:
+
+The repository only persists and retrieves AppointmentRequest records.
+
+It does not own:
+
+appointment lifecycle decisions
+create vs reuse active request logic
+contraoffer handling
+reschedule handling
+doctor confirmation
+WhatsApp sending
+Google Sheets formatting
+Telegram notification
+Calendar logic
+n8n workflow logic
+
+Those responsibilities remain outside the repository.
+
+Next recommended block:
+
+P6-F.9.12.9 — Commit PostgreSQL Repository v1
+
+Before continuing with Google Sheets, Telegram, Swagger, LangSmith or production database migration, commit this green repository milestone.
+
