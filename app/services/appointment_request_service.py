@@ -2,6 +2,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from app.models.appointment_request import AppointmentRequest
+from app.repositories.appointment_request_repository import AppointmentRequestRepository
 
 
 COLOMBIA_TIMEZONE = "America/Bogota"
@@ -73,7 +74,7 @@ def _copy_with_updates(
 class AppointmentRequestService:
     """Deterministic orchestration service for AppointmentRequest lifecycle."""
 
-    def __init__(self, repository, factory=None):
+    def __init__(self, repository: AppointmentRequestRepository, factory=None):
         self.repository = repository
         self.factory = factory
 
