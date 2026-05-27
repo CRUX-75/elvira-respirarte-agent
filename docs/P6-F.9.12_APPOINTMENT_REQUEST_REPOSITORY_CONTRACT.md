@@ -143,7 +143,7 @@ appointment availability calculation
 automatic appointment confirmation
 Future implementation target
 
-A later block should implement a PostgreSQL-backed repository, likely under:
+A later block will implement a PostgreSQL-backed repository under:
 
 app/repositories/appointment_request_repository.py
 
