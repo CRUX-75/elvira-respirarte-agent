@@ -1,10 +1,6 @@
 import pytest
 
-from app.models.appointment_request import (
-    AppointmentRequest,
-    AppointmentRequestSource,
-    AppointmentRequestStatus,
-)
+from app.models.appointment_request import AppointmentRequest
 from app.services.appointment_request_factory import AppointmentRequestFactory
 from app.services.appointment_request_service import (
     AppointmentRequestNotFound,
@@ -14,15 +10,16 @@ from app.services.appointment_request_service import (
 
 
 ACTIVE_STATUSES = {
-    AppointmentRequestStatus.PENDIENTE,
-    AppointmentRequestStatus.CONTRAOFERTA,
-    AppointmentRequestStatus.REAGENDADA,
-    AppointmentRequestStatus.CONFIRMADA,
+    "nueva",
+    "pendiente_datos",
+    "pendiente_confirmacion",
+    "confirmada",
+    "reagendada",
 }
 
 TERMINAL_STATUSES = {
-    AppointmentRequestStatus.CANCELADA,
-    AppointmentRequestStatus.COMPLETADA,
+    "cancelada",
+    "cerrada",
 }
 
 
@@ -43,7 +40,7 @@ class FakeAppointmentRequestRepository:
 
     def find_active_by_telefono(self, telefono: str) -> AppointmentRequest | None:
         for request in self.requests.values():
-            if request.telefono == telefono and request.estado in ACTIVE_STATUSES:
+            if request.telefono == telefono and request.estado_solicitud in ACTIVE_STATUSES:
                 return request
         return None
 
@@ -67,7 +64,7 @@ def service(repository):
 def create_request(
     *,
     telefono: str = "+573001112233",
-    estado: AppointmentRequestStatus = AppointmentRequestStatus.PENDIENTE,
+    estado: str = "nueva",
     id_solicitud: str = "SOL-TEST-001",
 ) -> AppointmentRequest:
     return AppointmentRequest(
@@ -76,8 +73,8 @@ def create_request(
         nombre_paciente="Paciente Test",
         servicio_solicitado="Terapia respiratoria",
         direccion_domicilio="Calle 123 #45-67",
-        fuente=AppointmentRequestSource.WHATSAPP,
-        estado=estado,
+        fuente="whatsapp",
+        estado_solicitud=estado,
         fecha_solicitada="2026-05-27",
         franja_solicitada="tarde",
     )
@@ -91,27 +88,28 @@ def test_creates_new_request_when_no_active_request_exists(service, repository):
         direccion_domicilio="Calle 123 #45-67",
         fecha_solicitada="2026-05-27",
         franja_solicitada="tarde",
-        fuente=AppointmentRequestSource.WHATSAPP,
+        fuente="whatsapp",
     )
 
     assert request.id_solicitud
-    assert request.estado == AppointmentRequestStatus.PENDIENTE
+    assert request.estado_solicitud == "nueva"
     assert repository.count() == 1
 
 
 @pytest.mark.parametrize(
     "active_status",
     [
-        AppointmentRequestStatus.PENDIENTE,
-        AppointmentRequestStatus.CONTRAOFERTA,
-        AppointmentRequestStatus.REAGENDADA,
-        AppointmentRequestStatus.CONFIRMADA,
+        "nueva",
+        "pendiente_datos",
+        "pendiente_confirmacion",
+        "confirmada",
+        "reagendada",
     ],
 )
 def test_reuses_existing_active_request(service, repository, active_status):
     existing = create_request(
         estado=active_status,
-        id_solicitud=f"SOL-ACTIVE-{active_status.value}",
+        id_solicitud=f"SOL-ACTIVE-{active_status}",
     )
     repository.save(existing)
 
@@ -122,25 +120,25 @@ def test_reuses_existing_active_request(service, repository, active_status):
         direccion_domicilio="Calle 123 #45-67",
         fecha_solicitada="2026-05-28",
         franja_solicitada="mañana",
-        fuente=AppointmentRequestSource.WHATSAPP,
+        fuente="whatsapp",
     )
 
     assert result.id_solicitud == existing.id_solicitud
-    assert result.estado == active_status
+    assert result.estado_solicitud == active_status
     assert repository.count() == 1
 
 
 @pytest.mark.parametrize(
     "terminal_status",
     [
-        AppointmentRequestStatus.CANCELADA,
-        AppointmentRequestStatus.COMPLETADA,
+        "cancelada",
+        "cerrada",
     ],
 )
 def test_creates_new_request_after_terminal_request(service, repository, terminal_status):
     previous = create_request(
         estado=terminal_status,
-        id_solicitud=f"SOL-TERMINAL-{terminal_status.value}",
+        id_solicitud=f"SOL-TERMINAL-{terminal_status}",
     )
     repository.save(previous)
 
@@ -151,17 +149,17 @@ def test_creates_new_request_after_terminal_request(service, repository, termina
         direccion_domicilio="Calle 123 #45-67",
         fecha_solicitada="2026-05-28",
         franja_solicitada="mañana",
-        fuente=AppointmentRequestSource.WHATSAPP,
+        fuente="whatsapp",
     )
 
     assert result.id_solicitud != previous.id_solicitud
-    assert result.estado == AppointmentRequestStatus.PENDIENTE
+    assert result.estado_solicitud == "nueva"
     assert repository.count() == 2
 
 
 def test_preserves_id_solicitud_during_contraoffer(service, repository):
     existing = create_request(
-        estado=AppointmentRequestStatus.PENDIENTE,
+        estado="nueva",
         id_solicitud="SOL-CONTRA-001",
     )
     repository.save(existing)
@@ -174,13 +172,13 @@ def test_preserves_id_solicitud_during_contraoffer(service, repository):
     )
 
     assert result.id_solicitud == existing.id_solicitud
-    assert result.estado == AppointmentRequestStatus.CONTRAOFERTA
+    assert result.estado_solicitud == "pendiente_confirmacion"
     assert repository.count() == 1
 
 
 def test_preserves_id_solicitud_during_reschedule(service, repository):
     existing = create_request(
-        estado=AppointmentRequestStatus.CONFIRMADA,
+        estado="confirmada",
         id_solicitud="SOL-REAG-001",
     )
     repository.save(existing)
@@ -193,13 +191,13 @@ def test_preserves_id_solicitud_during_reschedule(service, repository):
     )
 
     assert result.id_solicitud == existing.id_solicitud
-    assert result.estado == AppointmentRequestStatus.REAGENDADA
+    assert result.estado_solicitud == "reagendada"
     assert repository.count() == 1
 
 
 def test_rejects_invalid_lifecycle_transition(service, repository):
     existing = create_request(
-        estado=AppointmentRequestStatus.COMPLETADA,
+        estado="cerrada",
         id_solicitud="SOL-INVALID-001",
     )
     repository.save(existing)
@@ -207,34 +205,34 @@ def test_rejects_invalid_lifecycle_transition(service, repository):
     with pytest.raises(InvalidAppointmentRequestTransition):
         service.transition_request(
             id_solicitud=existing.id_solicitud,
-            target_state=AppointmentRequestStatus.CONTRAOFERTA,
+            target_state="pendiente_confirmacion",
         )
 
     unchanged = repository.get_by_id(existing.id_solicitud)
 
-    assert unchanged.estado == AppointmentRequestStatus.COMPLETADA
+    assert unchanged.estado_solicitud == "cerrada"
 
 
 def test_raises_not_found_for_unknown_id_solicitud(service):
     with pytest.raises(AppointmentRequestNotFound):
         service.transition_request(
             id_solicitud="SOL-DOES-NOT-EXIST",
-            target_state=AppointmentRequestStatus.CONTRAOFERTA,
+            target_state="pendiente_confirmacion",
         )
 
 
 def test_terminal_states_are_not_active(repository):
     cancelled = create_request(
-        estado=AppointmentRequestStatus.CANCELADA,
+        estado="cancelada",
         id_solicitud="SOL-CANCELLED-001",
     )
-    completed = create_request(
-        estado=AppointmentRequestStatus.COMPLETADA,
-        id_solicitud="SOL-COMPLETED-001",
+    closed = create_request(
+        estado="cerrada",
+        id_solicitud="SOL-CLOSED-001",
     )
 
     repository.save(cancelled)
-    repository.save(completed)
+    repository.save(closed)
 
     active = repository.find_active_by_telefono(cancelled.telefono)
 

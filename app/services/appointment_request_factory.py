@@ -88,3 +88,38 @@ def create_appointment_request(
         created_at=iso_timestamp,
         updated_at=iso_timestamp,
     )
+
+
+
+class AppointmentRequestFactory:
+    """Factory wrapper for AppointmentRequest creation.
+
+    Kept intentionally small for P6-F.9.11.
+    The previous function-based factory remains the single creation source.
+    """
+
+    def create(
+        self,
+        *,
+        telefono: str,
+        nombre_paciente: str | None = None,
+        servicio_solicitado: str | None = None,
+        direccion_domicilio: str | None = None,
+        fecha_solicitada: str | None = None,
+        franja_solicitada: str | None = None,
+        source_interaction_id: str | None = None,
+        observaciones: str | None = None,
+        now: datetime | None = None,
+        **_: object,
+    ) -> AppointmentRequest:
+        return create_appointment_request(
+            telefono=telefono,
+            nombre_paciente=nombre_paciente,
+            servicio_solicitado=servicio_solicitado,
+            direccion_domicilio=direccion_domicilio,
+            fecha_solicitada=fecha_solicitada,
+            franja_solicitada=franja_solicitada,
+            source_interaction_id=source_interaction_id,
+            observaciones=observaciones,
+            now=now,
+        )
