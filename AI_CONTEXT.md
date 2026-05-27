@@ -667,3 +667,143 @@ P6-F.9.12.9 — Commit PostgreSQL Repository v1
 
 Before continuing with Google Sheets, Telegram, Swagger, LangSmith or production database migration, commit this green repository milestone.
 
+
+---
+
+## P6-F.9.12.10 — Production PostgreSQL Migration SPEC / SQL Draft Closed
+
+Status: closed / green / committed.
+
+Validation result:
+
+```text
+149 passed
+
+Working tree after commit:
+
+clean
+
+File added:
+
+scripts/sql/001_create_appointment_requests.sql
+
+Purpose:
+
+This SQL draft defines the future production PostgreSQL table for AppointmentRequest persistence.
+
+Table:
+
+appointment_requests
+
+Important operational rule:
+
+This SQL file is versioned and reviewable, but it must not be executed automatically by the application.
+
+Production execution remains a separate controlled step.
+
+Columns included:
+
+id_solicitud
+telefono
+nombre_paciente
+estado_solicitud
+intent_origen
+canal_origen
+fecha_solicitada
+franja_solicitada
+hora_solicitada_texto
+fecha_aceptada
+franja_aceptada
+fecha_confirmada
+franja_confirmada
+servicio_solicitado
+direccion_domicilio
+observaciones
+motivo_reagendamiento
+motivo_cancelacion
+source_interaction_id
+created_by
+updated_by
+created_at
+updated_at
+
+PostgreSQL constraints included:
+
+id_solicitud TEXT PRIMARY KEY
+estado_solicitud CHECK valid lifecycle states
+canal_origen CHECK valid source values
+created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
+Valid estado_solicitud values:
+
+nueva
+pendiente_datos
+pendiente_confirmacion
+confirmada
+reagendada
+cancelada
+cerrada
+
+Valid canal_origen values:
+
+whatsapp
+manual
+system
+
+Indexes included:
+
+idx_appointment_requests_telefono
+idx_appointment_requests_active_lookup
+
+Active lookup index order:
+
+telefono,
+estado_solicitud,
+updated_at DESC,
+created_at DESC,
+id_solicitud DESC
+
+Current persistence milestone status:
+
+The appointment request persistence layer now has:
+
+repository protocol
+in-memory contract tests
+PostgreSQL table contract spec
+PostgreSQL repository tests
+PostgreSQL repository implementation v1
+SQL migration draft
+full test suite green
+
+Current validation baseline:
+
+149 passed
+
+Current branch:
+
+p6-f-9-10-appointment-request-service-tests
+
+Merge readiness:
+
+This branch is close to merge-ready, pending final verification:
+
+Run full test suite.
+Confirm working tree is clean.
+Review recent commits.
+Merge into main only if all checks are green.
+
+Recommended next block:
+
+P6-F.9.12.11 — Branch Merge Readiness Check
+
+Suggested commands:
+
+pytest -q
+git status --short
+git log --oneline -5
+
+If clean and green, the branch may be merged into main.
+
+Do not start Google Sheets, Telegram, Swagger, LangSmith, WhatsApp sending, or production SQL execution before this merge-readiness check is closed.
+
