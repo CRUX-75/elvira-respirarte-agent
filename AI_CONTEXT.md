@@ -274,3 +274,131 @@ echo $VIRTUAL_ENV
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 pytest
+
+---
+
+## P6-F.9.11 — AppointmentRequestService Implementation Closed
+
+Status: closed.
+
+Validation result:
+
+```text
+133 passed
+
+Branch used:
+
+p6-f-9-10-appointment-request-service-tests
+
+Implemented / modified files:
+
+app/services/appointment_request_factory.py
+app/services/appointment_request_service.py
+tests/test_appointment_request_service.py
+Key implementation decision
+
+AppointmentRequestFactory was added as a class wrapper, but it must not duplicate AppointmentRequest construction logic.
+
+The wrapper delegates to the existing function-based factory:
+
+create_appointment_request()
+
+This keeps the factory DRY and avoids creating a second source of truth for AppointmentRequest defaults.
+
+Real AppointmentRequest lifecycle contract
+
+The service and tests were aligned with the real AppointmentRequest model contract.
+
+Valid states are:
+
+nueva
+pendiente_datos
+pendiente_confirmacion
+confirmada
+reagendada
+cancelada
+cerrada
+
+Invalid/non-existing states that must not be used:
+
+pendiente
+contraoferta
+completada
+
+Important clarification:
+
+AppointmentRequestStatus is not an Enum with members such as .PENDIENTE.
+
+It is treated according to the model's real Literal/string contract.
+
+Contraoffer representation
+
+There is no separate contraoferta state in the model.
+
+A contraoffer is represented operationally as:
+
+pendiente_confirmacion
+
+Meaning:
+
+The request is waiting for patient acceptance, doctor review, or confirmation after a proposed change.
+
+AppointmentRequestService responsibilities implemented
+
+The minimal service now supports:
+
+creating a new appointment request
+reusing an existing active request
+preventing duplicate active requests
+applying contraoffer logic while preserving id_solicitud
+applying reschedule logic while preserving id_solicitud
+validating basic lifecycle transitions
+raising deterministic errors for invalid transitions
+raising deterministic errors for unknown request IDs
+Important invariant
+
+id_solicitud must be preserved during:
+
+contraoffers
+rescheduling
+lifecycle transitions
+
+Contraoffers and rescheduling update the same operational request. They must not create a new request.
+
+Explicitly out of scope for P6-F.9.11
+
+No implementation was added for:
+
+PostgreSQL repository
+Google Sheets integration
+Calendar integration
+Telegram notification
+n8n workflow
+WhatsApp sending changes
+automatic appointment confirmation
+therapy/session package tracking
+Architecture boundary confirmed
+
+Appointment request lifecycle remains owned by FastAPI/Python.
+
+Google Sheets may later become a human-visible operational inbox, but it must not own appointment state or validation rules.
+
+n8n may later send auxiliary notifications, but it must not own core appointment request logic.
+
+Next recommended block
+
+P6-F.9.12 — AppointmentRequestRepository Contract / Persistence Preparation
+
+Recommended next objective:
+
+Define the repository contract before implementing real persistence.
+
+The next block should clarify:
+
+repository interface
+required persistence operations
+active request lookup
+update semantics
+PostgreSQL table shape
+fake/in-memory repository tests first
+
