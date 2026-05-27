@@ -237,3 +237,68 @@ Goal:
 Define where and how AppointmentRequestService enters the existing message flow without changing behavior prematurely.
 
 Do not implement runtime integration before writing the SPEC.
+
+---
+
+## P6-F.9.13.2 — SQL Migration Draft Review Result
+
+Status:
+
+CLOSED / GREEN
+
+Reviewed file:
+
+```text
+scripts/sql/001_create_appointment_requests.sql
+
+Review result:
+
+The SQL migration draft is coherent with the AppointmentRequest persistence contract.
+
+Confirmed:
+
+CREATE TABLE IF NOT EXISTS appointment_requests
+id_solicitud TEXT PRIMARY KEY
+lifecycle state CHECK constraint
+source channel CHECK constraint
+required telefono
+required estado_solicitud
+required canal_origen
+created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+index idx_appointment_requests_telefono
+index idx_appointment_requests_active_lookup
+
+The active lookup index matches the repository lookup strategy:
+
+telefono,
+estado_solicitud,
+updated_at DESC,
+created_at DESC,
+id_solicitud DESC
+
+Important decision:
+
+No PostgreSQL trigger for updated_at is required at this stage.
+
+Reason:
+
+PostgresAppointmentRequestRepository.update() explicitly persists updated_at from the AppointmentRequest model. The repository owns persistence behavior and the service/model layer owns lifecycle timestamps.
+
+This keeps timestamp updates deterministic and visible in Python instead of adding hidden database-side behavior.
+
+Boundary confirmed:
+
+The SQL migration only creates a new table and indexes.
+
+It does not:
+
+modify existing production tables
+activate runtime persistence
+connect AppointmentRequestService to WhatsApp flow
+touch Google Sheets
+touch Telegram
+touch n8n
+change WhatsApp sending flags
+
+Production SQL has still not been executed.
