@@ -302,3 +302,93 @@ touch n8n
 change WhatsApp sending flags
 
 Production SQL has still not been executed.
+
+---
+
+## P6-F.9.13.5 — Production Migration Post-Checks Result
+
+Status:
+
+CLOSED / GREEN
+
+Execution method:
+
+pgweb via EasyPanel browser UI.
+
+Production database:
+
+elvira_respirarte_prod
+
+Migration result:
+
+The `appointment_requests` table was created successfully in production.
+
+Pre-check result:
+
+Before migration, the production database contained the existing operational tables:
+
+- interactions
+- kb_rules
+- kb_schedules
+- kb_services
+- patients
+- processed_messages
+
+The `appointment_requests` table did not exist before migration.
+
+Post-check result:
+
+The `appointment_requests` table now exists in production.
+
+Verified columns:
+
+- id_solicitud
+- telefono
+- nombre_paciente
+- estado_solicitud
+- intent_origen
+- canal_origen
+- fecha_solicitada
+- franja_solicitada
+- hora_solicitada_texto
+- fecha_aceptada
+- franja_aceptada
+- fecha_confirmada
+- franja_confirmada
+- servicio_solicitado
+- direccion_domicilio
+- observaciones
+- motivo_reagendamiento
+- motivo_cancelacion
+- source_interaction_id
+- created_by
+- updated_by
+- created_at
+- updated_at
+
+Verified constraints:
+
+- appointment_requests_canal_origen_check
+- appointment_requests_estado_solicitud_check
+- appointment_requests_pkey
+
+Verified indexes:
+
+- appointment_requests_pkey
+- idx_appointment_requests_active_lookup
+- idx_appointment_requests_telefono
+
+Boundary confirmed:
+
+The migration only created the new table and indexes.
+
+No runtime integration was activated.
+
+No WhatsApp sending behavior was changed.
+
+No Google Sheets integration was touched.
+
+No Telegram or n8n workflow was touched.
+
+No existing production table was modified.
+

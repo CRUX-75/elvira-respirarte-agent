@@ -648,3 +648,107 @@ Current true project status:
 - Branch merge-ready
 - Working tree clean
 
+
+---
+
+## P6-F.9.13 — Controlled Production DB Migration
+
+Status:
+
+PARTIALLY CLOSED / PRODUCTION TABLE CREATED / POST-CHECKS GREEN
+
+Completed microblocks:
+
+- P6-F.9.13.1 — Production DB Migration Plan SPEC
+- P6-F.9.13.2 — SQL Migration Draft Review
+- P6-F.9.13.3 — Production DB Access Method Confirmation
+- P6-F.9.13.4 — Production Pre-Check Queries
+- P6-F.9.13.5 — Production Migration Post-Checks
+
+Execution method:
+
+pgweb via EasyPanel browser UI.
+
+Production database:
+
+elvira_respirarte_prod
+
+Migration executed:
+
+scripts/sql/001_create_appointment_requests.sql
+
+Production result:
+
+The `appointment_requests` table now exists in production.
+
+Verified production columns:
+
+- id_solicitud
+- telefono
+- nombre_paciente
+- estado_solicitud
+- intent_origen
+- canal_origen
+- fecha_solicitada
+- franja_solicitada
+- hora_solicitada_texto
+- fecha_aceptada
+- franja_aceptada
+- fecha_confirmada
+- franja_confirmada
+- servicio_solicitado
+- direccion_domicilio
+- observaciones
+- motivo_reagendamiento
+- motivo_cancelacion
+- source_interaction_id
+- created_by
+- updated_by
+- created_at
+- updated_at
+
+Verified production constraints:
+
+- appointment_requests_canal_origen_check
+- appointment_requests_estado_solicitud_check
+- appointment_requests_pkey
+
+Verified production indexes:
+
+- appointment_requests_pkey
+- idx_appointment_requests_active_lookup
+- idx_appointment_requests_telefono
+
+Important boundary:
+
+The production migration only created the new table and indexes.
+
+Still NOT done:
+
+- runtime integration
+- AppointmentRequestService connection to WhatsApp flow
+- Google Sheets adapter
+- Telegram notification
+- n8n workflow changes
+- WhatsApp sending changes
+- Swagger endpoint
+- LangSmith appointment request validation
+
+Current production behavior remains unchanged.
+
+Next recommended microblock:
+
+P6-F.9.13.6 — Application Health / Ready Safety Check
+
+Objective:
+
+Confirm that after the production DB migration, the deployed application is still healthy and no runtime behavior changed.
+
+Recommended checks:
+
+- open `/health`
+- open `/ready`
+- confirm no runtime errors in EasyPanel logs
+- confirm WhatsApp sending flag remains unchanged
+- confirm app behavior remains unchanged
+
