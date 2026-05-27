@@ -752,3 +752,38 @@ Recommended checks:
 - confirm WhatsApp sending flag remains unchanged
 - confirm app behavior remains unchanged
 
+
+---
+
+## P6-F.9.13.6 — Application Health / Ready Safety Check
+
+Status:
+
+CLOSED / GREEN
+
+Production readiness check after creating `appointment_requests` table passed.
+
+Production `/ready` result confirmed:
+
+- status: ready
+- environment: production
+- app_version: 0.2.1
+- whatsapp_sending_enabled: false
+- kb_runtime_enabled: true
+- database configured: true
+- repositories configured: patients, interactions, processed_messages, kb
+- LangSmith tracing enabled: true
+- LangSmith project: elvira-respirarte-prod
+- OpenAI configured: true
+- WhatsApp configured: true
+- hard_failures: []
+- real_whatsapp_sending_allowed: false
+
+Conclusion:
+
+The production application remained healthy after the DB migration.
+
+The new `appointment_requests` production table exists, but runtime integration is still not connected.
+
+Current production behavior remains unchanged.
+

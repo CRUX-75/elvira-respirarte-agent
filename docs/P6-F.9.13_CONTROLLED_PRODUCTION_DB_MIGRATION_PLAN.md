@@ -392,3 +392,59 @@ No Telegram or n8n workflow was touched.
 
 No existing production table was modified.
 
+
+---
+
+## P6-F.9.13.6 — Application Health / Ready Safety Check Result
+
+Status:
+
+CLOSED / GREEN
+
+Production endpoint checked:
+
+```text
+/ready
+
+Result:
+
+{
+  "status": "ready",
+  "service": "elvira-respirarte-agent",
+  "environment": "production",
+  "app_version": "0.2.1",
+  "whatsapp_sending_enabled": false,
+  "kb_runtime_enabled": true,
+  "database": {
+    "configured": true
+  },
+  "repositories": {
+    "patients": "configured",
+    "interactions": "configured",
+    "processed_messages": "configured",
+    "kb": "configured"
+  },
+  "langsmith": {
+    "tracing_enabled": true,
+    "project": "elvira-respirarte-prod",
+    "configured": true
+  },
+  "openai_configured": true,
+  "whatsapp_configured": true,
+  "hard_failures": [],
+  "safety": {
+    "real_whatsapp_sending_allowed": false,
+    "p6a_rule": "WHATSAPP_SENDING_ENABLED must remain false during P6-A"
+  }
+}
+
+Conclusion:
+
+The production application remains healthy after the appointment_requests table migration.
+
+No runtime behavior changed.
+
+WhatsApp sending remains disabled.
+
+No hard failures were detected.
+
