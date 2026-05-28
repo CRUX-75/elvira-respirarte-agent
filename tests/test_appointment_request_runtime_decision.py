@@ -227,8 +227,11 @@ def test_allows_hora_cita_ready_for_human_review():
             nuevo_estado="ST_CITA_PENDIENTE",
             next_action="confirm_appointment_request",
             fecha_solicitada="2026-05-29",
-            slots_candidatos=["14:00-16:00", "16:00-18:00"],
-            mensaje_original="En la tarde",
+            slots_candidatos=[
+                "3:00 p. m.–5:00 p. m.",
+                "5:00 p. m.–7:00 p. m.",
+            ],
+            mensaje_original="A las 3",
         ),
         telefono="573001112233",
         nombre="Paciente Test",
@@ -243,8 +246,8 @@ def test_allows_hora_cita_ready_for_human_review():
     assert decision.canal_origen == "whatsapp"
     assert decision.estado_solicitud == "pendiente_confirmacion"
     assert decision.fecha_solicitada == "2026-05-29"
-    assert decision.franja_solicitada == "14:00-16:00"
-    assert decision.hora_solicitada_texto == "En la tarde"
+    assert decision.franja_solicitada == "3:00 p. m.–5:00 p. m."
+    assert decision.hora_solicitada_texto == "A las 3"
     assert decision.source_interaction_id == "wamid.test-013"
 
 
@@ -255,8 +258,11 @@ def test_allows_hora_cita_without_nombre():
             nuevo_estado="ST_CITA_PENDIENTE",
             next_action="confirm_appointment_request",
             fecha_solicitada="2026-05-29",
-            slots_candidatos=["14:00-16:00"],
-            mensaje_original="En la tarde",
+            slots_candidatos=[
+                "3:00 p. m.–5:00 p. m.",
+                "5:00 p. m.–7:00 p. m.",
+            ],
+            mensaje_original="A las 5",
         ),
         telefono="573001112233",
         nombre=None,
@@ -265,6 +271,7 @@ def test_allows_hora_cita_without_nombre():
 
     assert decision.should_persist is True
     assert decision.nombre_paciente is None
+    assert decision.franja_solicitada == "5:00 p. m.–7:00 p. m."
 
 
 def test_skips_blank_telefono():
@@ -303,3 +310,393 @@ def test_skips_wrong_state_or_action():
 
     assert decision.should_persist is False
     assert decision.reason == "skipped_wrong_state_or_action"
+
+
+def test_p6f91425_maps_concrete_three_oclock_to_first_slot():
+    decision = decide_appointment_request_persistence(
+        intent="hora_cita",
+        nuevo_estado="ST_CITA_PENDIENTE",
+        next_action="confirm_appointment_request",
+        fecha_solicitada="2026-05-29",
+        fecha_solicitada_texto="viernes 29 de mayo",
+        slots_candidatos=[
+            "3:00 p. m.–5:00 p. m.",
+            "5:00 p. m.–7:00 p. m.",
+        ],
+        es_dia_disponible=True,
+        is_weekend=False,
+        is_colombia_holiday=False,
+        mensaje_original="se puede a las 3?",
+    )
+
+    assert decision.should_persist is True
+    assert decision.franja_solicitada == "3:00 p. m.–5:00 p. m."
+
+
+def test_p6f91425_maps_concrete_five_oclock_to_second_slot():
+    decision = decide_appointment_request_persistence(
+        intent="hora_cita",
+        nuevo_estado="ST_CITA_PENDIENTE",
+        next_action="confirm_appointment_request",
+        fecha_solicitada="2026-05-29",
+        fecha_solicitada_texto="viernes 29 de mayo",
+        slots_candidatos=[
+            "3:00 p. m.–5:00 p. m.",
+            "5:00 p. m.–7:00 p. m.",
+        ],
+        es_dia_disponible=True,
+        is_weekend=False,
+        is_colombia_holiday=False,
+        mensaje_original="se puede a las 5?",
+    )
+
+    assert decision.should_persist is True
+    assert decision.franja_solicitada == "5:00 p. m.–7:00 p. m."
+
+
+def test_p6f91425_maps_ordinal_selection_to_expected_slot():
+    first_decision = decide_appointment_request_persistence(
+        intent="hora_cita",
+        nuevo_estado="ST_CITA_PENDIENTE",
+        next_action="confirm_appointment_request",
+        fecha_solicitada="2026-05-29",
+        fecha_solicitada_texto="viernes 29 de mayo",
+        slots_candidatos=[
+            "3:00 p. m.–5:00 p. m.",
+            "5:00 p. m.–7:00 p. m.",
+        ],
+        es_dia_disponible=True,
+        is_weekend=False,
+        is_colombia_holiday=False,
+        mensaje_original="la primera franja",
+    )
+
+    second_decision = decide_appointment_request_persistence(
+        intent="hora_cita",
+        nuevo_estado="ST_CITA_PENDIENTE",
+        next_action="confirm_appointment_request",
+        fecha_solicitada="2026-05-29",
+        fecha_solicitada_texto="viernes 29 de mayo",
+        slots_candidatos=[
+            "3:00 p. m.–5:00 p. m.",
+            "5:00 p. m.–7:00 p. m.",
+        ],
+        es_dia_disponible=True,
+        is_weekend=False,
+        is_colombia_holiday=False,
+        mensaje_original="el segundo horario",
+    )
+
+    assert first_decision.should_persist is True
+    assert first_decision.franja_solicitada == "3:00 p. m.–5:00 p. m."
+
+    assert second_decision.should_persist is True
+    assert second_decision.franja_solicitada == "5:00 p. m.–7:00 p. m."
+
+
+def test_p6f91425_blocks_unsupported_loose_hour_inside_slot():
+    decision = decide_appointment_request_persistence(
+        intent="hora_cita",
+        nuevo_estado="ST_CITA_PENDIENTE",
+        next_action="confirm_appointment_request",
+        fecha_solicitada="2026-05-29",
+        fecha_solicitada_texto="viernes 29 de mayo",
+        slots_candidatos=[
+            "3:00 p. m.–5:00 p. m.",
+            "5:00 p. m.–7:00 p. m.",
+        ],
+        es_dia_disponible=True,
+        is_weekend=False,
+        is_colombia_holiday=False,
+        mensaje_original="se puede a las 4?",
+    )
+
+    assert decision.should_persist is False
+    assert decision.reason == "skipped_unsupported_slot_selection"
+    assert decision.franja_solicitada is None
+
+
+def test_p6f91425_blocks_unsupported_loose_hour_and_does_not_fallback_to_first_slot():
+    decision = decide_appointment_request_persistence(
+        intent="hora_cita",
+        nuevo_estado="ST_CITA_PENDIENTE",
+        next_action="confirm_appointment_request",
+        fecha_solicitada="2026-05-29",
+        fecha_solicitada_texto="viernes 29 de mayo",
+        slots_candidatos=[
+            "3:00 p. m.–5:00 p. m.",
+            "5:00 p. m.–7:00 p. m.",
+        ],
+        es_dia_disponible=True,
+        is_weekend=False,
+        is_colombia_holiday=False,
+        mensaje_original="a las 6",
+    )
+
+    assert decision.should_persist is False
+    assert decision.reason == "skipped_unsupported_slot_selection"
+    assert decision.franja_solicitada is None
+
+
+def test_p6f91425_maps_concrete_three_oclock_to_first_slot():
+    decision = decide_appointment_request_persistence(
+        state=make_state(
+            intent="hora_cita",
+            nuevo_estado="ST_CITA_PENDIENTE",
+            next_action="confirm_appointment_request",
+            fecha_solicitada="2026-05-29",
+            slots_candidatos=[
+                "3:00 p. m.–5:00 p. m.",
+                "5:00 p. m.–7:00 p. m.",
+            ],
+            mensaje_original="se puede a las 3?",
+        ),
+        telefono="573001112233",
+        nombre="Paciente Test",
+        source_interaction_id="wamid.test-p6f91425-001",
+    )
+
+    assert decision.should_persist is True
+    assert decision.franja_solicitada == "3:00 p. m.–5:00 p. m."
+
+
+def test_p6f91425_maps_concrete_five_oclock_to_second_slot():
+    decision = decide_appointment_request_persistence(
+        state=make_state(
+            intent="hora_cita",
+            nuevo_estado="ST_CITA_PENDIENTE",
+            next_action="confirm_appointment_request",
+            fecha_solicitada="2026-05-29",
+            slots_candidatos=[
+                "3:00 p. m.–5:00 p. m.",
+                "5:00 p. m.–7:00 p. m.",
+            ],
+            mensaje_original="se puede a las 5?",
+        ),
+        telefono="573001112233",
+        nombre="Paciente Test",
+        source_interaction_id="wamid.test-p6f91425-002",
+    )
+
+    assert decision.should_persist is True
+    assert decision.franja_solicitada == "5:00 p. m.–7:00 p. m."
+
+
+def test_p6f91425_maps_ordinal_selection_to_expected_slot():
+    first_decision = decide_appointment_request_persistence(
+        state=make_state(
+            intent="hora_cita",
+            nuevo_estado="ST_CITA_PENDIENTE",
+            next_action="confirm_appointment_request",
+            fecha_solicitada="2026-05-29",
+            slots_candidatos=[
+                "3:00 p. m.–5:00 p. m.",
+                "5:00 p. m.–7:00 p. m.",
+            ],
+            mensaje_original="la primera franja",
+        ),
+        telefono="573001112233",
+        nombre="Paciente Test",
+        source_interaction_id="wamid.test-p6f91425-003",
+    )
+
+    second_decision = decide_appointment_request_persistence(
+        state=make_state(
+            intent="hora_cita",
+            nuevo_estado="ST_CITA_PENDIENTE",
+            next_action="confirm_appointment_request",
+            fecha_solicitada="2026-05-29",
+            slots_candidatos=[
+                "3:00 p. m.–5:00 p. m.",
+                "5:00 p. m.–7:00 p. m.",
+            ],
+            mensaje_original="el segundo horario",
+        ),
+        telefono="573001112233",
+        nombre="Paciente Test",
+        source_interaction_id="wamid.test-p6f91425-004",
+    )
+
+    assert first_decision.should_persist is True
+    assert first_decision.franja_solicitada == "3:00 p. m.–5:00 p. m."
+
+    assert second_decision.should_persist is True
+    assert second_decision.franja_solicitada == "5:00 p. m.–7:00 p. m."
+
+
+def test_p6f91425_blocks_unsupported_loose_hour_inside_slot():
+    decision = decide_appointment_request_persistence(
+        state=make_state(
+            intent="hora_cita",
+            nuevo_estado="ST_CITA_PENDIENTE",
+            next_action="confirm_appointment_request",
+            fecha_solicitada="2026-05-29",
+            slots_candidatos=[
+                "3:00 p. m.–5:00 p. m.",
+                "5:00 p. m.–7:00 p. m.",
+            ],
+            mensaje_original="se puede a las 4?",
+        ),
+        telefono="573001112233",
+        nombre="Paciente Test",
+        source_interaction_id="wamid.test-p6f91425-005",
+    )
+
+    assert decision.should_persist is False
+    assert decision.reason == "skipped_unsupported_slot_selection"
+    assert decision.franja_solicitada is None
+
+
+def test_p6f91425_blocks_unsupported_loose_hour_and_does_not_fallback_to_first_slot():
+    decision = decide_appointment_request_persistence(
+        state=make_state(
+            intent="hora_cita",
+            nuevo_estado="ST_CITA_PENDIENTE",
+            next_action="confirm_appointment_request",
+            fecha_solicitada="2026-05-29",
+            slots_candidatos=[
+                "3:00 p. m.–5:00 p. m.",
+                "5:00 p. m.–7:00 p. m.",
+            ],
+            mensaje_original="a las 6",
+        ),
+        telefono="573001112233",
+        nombre="Paciente Test",
+        source_interaction_id="wamid.test-p6f91425-006",
+    )
+
+    assert decision.should_persist is False
+    assert decision.reason == "skipped_unsupported_slot_selection"
+    assert decision.franja_solicitada is None
+
+
+def test_p6f91425_maps_concrete_three_oclock_to_first_slot():
+    decision = decide_appointment_request_persistence(
+        state=make_state(
+            intent="hora_cita",
+            nuevo_estado="ST_CITA_PENDIENTE",
+            next_action="confirm_appointment_request",
+            fecha_solicitada="2026-05-29",
+            slots_candidatos=[
+                "3:00 p. m.–5:00 p. m.",
+                "5:00 p. m.–7:00 p. m.",
+            ],
+            mensaje_original="se puede a las 3?",
+        ),
+        telefono="573001112233",
+        nombre="Paciente Test",
+        source_interaction_id="wamid.test-p6f91425-001",
+    )
+
+    assert decision.should_persist is True
+    assert decision.franja_solicitada == "3:00 p. m.–5:00 p. m."
+
+
+def test_p6f91425_maps_concrete_five_oclock_to_second_slot():
+    decision = decide_appointment_request_persistence(
+        state=make_state(
+            intent="hora_cita",
+            nuevo_estado="ST_CITA_PENDIENTE",
+            next_action="confirm_appointment_request",
+            fecha_solicitada="2026-05-29",
+            slots_candidatos=[
+                "3:00 p. m.–5:00 p. m.",
+                "5:00 p. m.–7:00 p. m.",
+            ],
+            mensaje_original="se puede a las 5?",
+        ),
+        telefono="573001112233",
+        nombre="Paciente Test",
+        source_interaction_id="wamid.test-p6f91425-002",
+    )
+
+    assert decision.should_persist is True
+    assert decision.franja_solicitada == "5:00 p. m.–7:00 p. m."
+
+
+def test_p6f91425_maps_ordinal_selection_to_expected_slot():
+    first_decision = decide_appointment_request_persistence(
+        state=make_state(
+            intent="hora_cita",
+            nuevo_estado="ST_CITA_PENDIENTE",
+            next_action="confirm_appointment_request",
+            fecha_solicitada="2026-05-29",
+            slots_candidatos=[
+                "3:00 p. m.–5:00 p. m.",
+                "5:00 p. m.–7:00 p. m.",
+            ],
+            mensaje_original="la primera franja",
+        ),
+        telefono="573001112233",
+        nombre="Paciente Test",
+        source_interaction_id="wamid.test-p6f91425-003",
+    )
+
+    second_decision = decide_appointment_request_persistence(
+        state=make_state(
+            intent="hora_cita",
+            nuevo_estado="ST_CITA_PENDIENTE",
+            next_action="confirm_appointment_request",
+            fecha_solicitada="2026-05-29",
+            slots_candidatos=[
+                "3:00 p. m.–5:00 p. m.",
+                "5:00 p. m.–7:00 p. m.",
+            ],
+            mensaje_original="el segundo horario",
+        ),
+        telefono="573001112233",
+        nombre="Paciente Test",
+        source_interaction_id="wamid.test-p6f91425-004",
+    )
+
+    assert first_decision.should_persist is True
+    assert first_decision.franja_solicitada == "3:00 p. m.–5:00 p. m."
+
+    assert second_decision.should_persist is True
+    assert second_decision.franja_solicitada == "5:00 p. m.–7:00 p. m."
+
+
+def test_p6f91425_blocks_unsupported_loose_hour_inside_slot():
+    decision = decide_appointment_request_persistence(
+        state=make_state(
+            intent="hora_cita",
+            nuevo_estado="ST_CITA_PENDIENTE",
+            next_action="confirm_appointment_request",
+            fecha_solicitada="2026-05-29",
+            slots_candidatos=[
+                "3:00 p. m.–5:00 p. m.",
+                "5:00 p. m.–7:00 p. m.",
+            ],
+            mensaje_original="se puede a las 4?",
+        ),
+        telefono="573001112233",
+        nombre="Paciente Test",
+        source_interaction_id="wamid.test-p6f91425-005",
+    )
+
+    assert decision.should_persist is False
+    assert decision.reason == "skipped_unsupported_slot_selection"
+    assert decision.franja_solicitada is None
+
+
+def test_p6f91425_blocks_unsupported_loose_hour_and_does_not_fallback_to_first_slot():
+    decision = decide_appointment_request_persistence(
+        state=make_state(
+            intent="hora_cita",
+            nuevo_estado="ST_CITA_PENDIENTE",
+            next_action="confirm_appointment_request",
+            fecha_solicitada="2026-05-29",
+            slots_candidatos=[
+                "3:00 p. m.–5:00 p. m.",
+                "5:00 p. m.–7:00 p. m.",
+            ],
+            mensaje_original="a las 6",
+        ),
+        telefono="573001112233",
+        nombre="Paciente Test",
+        source_interaction_id="wamid.test-p6f91425-006",
+    )
+
+    assert decision.should_persist is False
+    assert decision.reason == "skipped_unsupported_slot_selection"
+    assert decision.franja_solicitada is None

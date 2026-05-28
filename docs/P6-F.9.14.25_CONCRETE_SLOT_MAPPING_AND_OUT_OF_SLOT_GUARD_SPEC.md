@@ -6,89 +6,132 @@ SPEC CREATED
 
 ## Problem
 
-Production Swagger dry-run showed that a concrete patient message:
+Production Swagger validation showed that when the patient says:
 
 `se puede a las 5?`
 
-was persisted with the wrong slot:
+after Elvira has offered:
 
-Observed:
+- 3:00 p. m.–5:00 p. m.
+- 5:00 p. m.–7:00 p. m.
+
+the system persists:
 
 `franja_solicitada = 3:00 p. m.–5:00 p. m.`
 
-Expected:
+instead of:
 
 `franja_solicitada = 5:00 p. m.–7:00 p. m.`
 
-## Root cause
+## Root Cause
 
-The current AppointmentRequest persistence decision uses the first candidate slot as fallback:
+The runtime decision currently falls back blindly to the first candidate slot:
 
 `franja_solicitada = slots[0] if slots else None`
 
-This is unsafe when multiple candidate slots exist.
+This is unsafe because the patient may have clearly selected the second visible slot.
 
-## Required behavior
+## Objective
 
-When multiple candidate slots exist, the system must map concrete patient selections to the correct offered slot.
+Implement deterministic slot mapping before AppointmentRequest persistence.
 
-### Valid first-slot selections
+The system must map concrete patient expressions to one of the visible offered slots.
 
-These should map to:
+## Valid Slot Mapping
+
+The following expressions must map to:
 
 `3:00 p. m.–5:00 p. m.`
 
 Examples:
 
-- `A las 3`
-- `se puede a las 3?`
-- `a las tres`
-- `de 3 a 5`
-- `la primera`
-- `el primer horario`
+- A las 3
+- se puede a las 3?
+- a las tres
+- de 3 a 5
+- la primera
+- el primer horario
+- la primera franja
 
-### Valid second-slot selections
-
-These should map to:
+The following expressions must map to:
 
 `5:00 p. m.–7:00 p. m.`
 
 Examples:
 
-- `A las 5`
-- `se puede a las 5?`
-- `a las cinco`
-- `de 5 a 7`
-- `la segunda`
-- `el segundo horario`
+- A las 5
+- se puede a las 5?
+- a las cinco
+- de 5 a 7
+- la segunda
+- el segundo horario
+- la segunda franja
 
-## Out-of-slot guard
+## Out-of-Slot Guard
 
-If the patient gives another specific hour that is not one of the offered slot starts or slot labels, the system must not persist an AppointmentRequest.
+Unsupported loose hours must not be accepted.
 
 Examples:
 
-- `se puede a las 4?`
-- `se puede a las 6?`
-- `a las 2`
-- `a las 7`
-- `a las 10`
+- se puede a las 4?
+- se puede a las 6?
+- a las 2
+- a las 7
+- a las 10
 
 Expected behavior:
 
+- do not default to the first slot
 - do not persist AppointmentRequest
-- return a deterministic skip reason
-- keep the flow asking the patient to choose one of the offered concrete franjas
+- keep the flow in slot-selection mode
+- ask the patient to choose one of the offered franjas
 
-## Important product decision
+## Product Rule
 
-Even if a time like `4` is inside the `3:00 p. m.–5:00 p. m.` range, it must not be interpreted as a valid selection.
+The system works with visible appointment franjas, not arbitrary exact hours inside a franja.
 
-The patient must choose one of the visible offered franjas, not a loose hour inside the range.
+Even if `4` is technically inside `3:00 p. m.–5:00 p. m.`, it must not be interpreted as a valid slot selection.
 
-## Scope
+## Expected Copy
 
-This block focuses on deterministic persistence decision and slot mapping.
+For unsupported loose hours, Elvira should answer:
+
+`Por ahora solo puedo registrar su preferencia dentro de estas dos franjas: de 3:00 p. m. a 5:00 p. m. o de 5:00 p. m. a 7:00 p. m. ¿Cuál de las dos le queda mejor?`
+
+## Implementation Direction
+
+Add a deterministic helper near:
+
+`app/services/appointment_request_runtime.py`
+
+Possible helper:
+
+`resolve_requested_slot_from_message(message, slots)`
+
+The helper should return:
+
+- selected slot string when mapping is valid
+- None when the message is ambiguous or unsupported
+
+Remove the blind fallback:
+
+`franja_solicitada = slots[0] if slots else None`
+
+## Tests First
+
+Add RED tests in:
+
+`tests/test_appointment_request_runtime_decision.py`
+
+Test groups:
+
+1. first slot concrete mapping
+2. second slot concrete mapping
+3. ordinal slot mapping
+4. unsupported loose hours blocked
+5. no fallback to first slot
+
+## Safety Boundaries
 
 Do not touch:
 
@@ -100,19 +143,4 @@ Do not touch:
 - Calendar
 - doctor confirmation automation
 - therapy/session package tracking
-
-## Expected implementation direction
-
-Create a deterministic helper near AppointmentRequest runtime decision logic.
-
-Possible helper:
-
-`resolve_requested_slot_from_message(message, slots)`
-
-Expected outcomes:
-
-- selected slot string when the message clearly maps to an offered slot
-- `None` when the message is unclear, unsupported, or outside offered slots
-
-AppointmentRequest persistence must not default blindly to `slots[0]` when multiple slots exist.
 

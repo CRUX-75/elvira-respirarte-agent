@@ -245,7 +245,7 @@ def test_stateful_endpoint_persists_ready_hora_cita_with_synthetic_source_intera
         next_action="confirm_appointment_request",
         fecha_solicitada="2026-05-29",
         slots_candidatos=["14:00-18:00"],
-        mensaje_original="En la tarde",
+        mensaje_original="A las 3",
         is_weekend=False,
         is_colombia_holiday=False,
         es_dia_disponible=True,
@@ -257,7 +257,7 @@ def test_stateful_endpoint_persists_ready_hora_cita_with_synthetic_source_intera
         json={
             "telefono": "573001112233",
             "nombre": "Paciente Test",
-            "mensaje": "En la tarde",
+            "mensaje": "A las 3",
         },
     )
 

@@ -1,8 +1,90 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from app.graph.state import ElviraState
+
+
+
+def _normalize_slot_message(message: str | None) -> str:
+    if not message:
+        return ""
+
+    normalized = message.lower().strip()
+    replacements = {
+        "á": "a",
+        "é": "e",
+        "í": "i",
+        "ó": "o",
+        "ú": "u",
+        "ü": "u",
+        "ñ": "n",
+        "¿": " ",
+        "?": " ",
+        ".": " ",
+        ",": " ",
+        ";": " ",
+        ":": " ",
+    }
+
+    for source, target in replacements.items():
+        normalized = normalized.replace(source, target)
+
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized
+
+
+def resolve_requested_slot_from_message(
+    message: str | None,
+    slots: list[str],
+) -> str | None:
+    """Resolve a patient message to one of the visible offered appointment slots.
+
+    The business flow registers offered franjas, not arbitrary exact loose hours
+    inside a franja.
+    """
+
+    if not slots:
+        return None
+
+    normalized = _normalize_slot_message(message)
+
+    if not normalized:
+        return None
+
+    first_slot = slots[0] if len(slots) >= 1 else None
+    second_slot = slots[1] if len(slots) >= 2 else None
+
+    first_patterns = (
+        r"\b(a las )?3\b",
+        r"\b(a las )?tres\b",
+        r"\bde 3 a 5\b",
+        r"\b3 a 5\b",
+        r"\bprimera\b",
+        r"\bprimer horario\b",
+        r"\bprimer turno\b",
+        r"\bprimera franja\b",
+    )
+
+    second_patterns = (
+        r"\b(a las )?5\b",
+        r"\b(a las )?cinco\b",
+        r"\bde 5 a 7\b",
+        r"\b5 a 7\b",
+        r"\bsegunda\b",
+        r"\bsegundo horario\b",
+        r"\bsegundo turno\b",
+        r"\bsegunda franja\b",
+    )
+
+    if first_slot and any(re.search(pattern, normalized) for pattern in first_patterns):
+        return first_slot
+
+    if second_slot and any(re.search(pattern, normalized) for pattern in second_patterns):
+        return second_slot
+
+    return None
 
 
 @dataclass(frozen=True)
@@ -149,8 +231,23 @@ def decide_appointment_request_persistence(
         )
 
     slots = list(state.slots_candidatos or [])
-    franja_solicitada = slots[0] if slots else None
+    franja_solicitada = resolve_requested_slot_from_message(
+        state.mensaje_original,
+        slots,
+    )
     hora_solicitada_texto = state.mensaje_original or None
+
+    if franja_solicitada is None:
+        return AppointmentPersistenceDecision(
+            should_persist=False,
+            reason="skipped_unsupported_slot_selection",
+            telefono=normalized_phone,
+            nombre_paciente=nombre,
+            intent_origen=state.intent,
+            fecha_solicitada=state.fecha_solicitada,
+            hora_solicitada_texto=hora_solicitada_texto,
+            source_interaction_id=source_interaction_id,
+        )
 
     if not franja_solicitada and not hora_solicitada_texto:
         return AppointmentPersistenceDecision(

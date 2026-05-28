@@ -204,7 +204,7 @@ def test_stateful_endpoint_applies_context_before_hora_cita_persistence(monkeypa
         next_action="confirm_appointment_request",
         fecha_solicitada=None,
         slots_candidatos=[],
-        mensaje_original="En la tarde",
+        mensaje_original="A las 3",
     )
 
     patient = {
@@ -231,7 +231,7 @@ def test_stateful_endpoint_applies_context_before_hora_cita_persistence(monkeypa
         json={
             "telefono": "573001112233",
             "nombre": "Paciente Test",
-            "mensaje": "En la tarde",
+            "mensaje": "A las 3",
         },
     )
 
