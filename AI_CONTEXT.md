@@ -1006,3 +1006,392 @@ Expected test goals:
 - Patient state still updates correctly when persistence succeeds.
 - No real WhatsApp sending is touched.
 
+
+---
+
+## P6-F.9.14.8 — Stateful Test Endpoint Wiring Tests
+
+Status:
+
+CLOSED / RED-THEN-GREEN / GREEN
+
+Validation:
+
+170 passed after later routing fix.
+
+New test file:
+
+tests/test_stateful_appointment_request_wiring.py
+
+Covered behaviors:
+
+- `/test/message-stateful` returns `appointment_request_decision`
+- general messages skip AppointmentRequest persistence
+- initial `cita` messages skip AppointmentRequest persistence
+- `fecha_cita` messages skip AppointmentRequest persistence
+- ready `hora_cita` messages can persist or reuse AppointmentRequest
+- response includes `appointment_request` metadata when persistence succeeds
+- synthetic `test-stateful-{uuid4()}` WhatsApp message ID is used as `source_interaction_id`
+- patient state still updates correctly
+- real WhatsApp sending is not touched
+
+---
+
+## P6-F.9.14.9 — Minimal Stateful Runtime Wiring
+
+Status:
+
+CLOSED / GREEN
+
+Changed files:
+
+- app/main.py
+- app/services/appointment_request_service.py
+
+The first AppointmentRequest runtime wiring now exists only in:
+
+POST /test/message-stateful
+
+The real WhatsApp webhook remains out of scope.
+
+Runtime behavior:
+
+- generates synthetic `whatsapp_message_id = test-stateful-{uuid4()}`
+- calls `decide_appointment_request_persistence(...)`
+- always returns `appointment_request_decision`
+- returns `appointment_request = null` when skipped
+- when persistence is allowed, uses:
+  - `PostgresAppointmentRequestRepository(engine)`
+  - `AppointmentRequestService(repository=...)`
+- returns AppointmentRequest metadata:
+  - id_solicitud
+  - estado_solicitud
+  - source_interaction_id
+  - fecha_solicitada
+  - franja_solicitada
+
+Important:
+
+`source_interaction_id` currently uses the synthetic WhatsApp message ID because `save_interaction()` still inserts interactions but does not return a real interaction row ID.
+
+---
+
+## P6-F.9.14.10 — Stateful Runtime Wiring Closure
+
+Status:
+
+CLOSED / COMMITTED / CLEAN
+
+Documentation:
+
+docs/P6-F.9.14.10_STATEFUL_RUNTIME_WIRING_CLOSURE.md
+
+Documented that:
+
+- first runtime wiring is limited to `/test/message-stateful`
+- `/webhook` real remains untouched
+- WhatsApp real sending remains untouched
+- Google Sheets, Telegram, n8n, doctor confirmation, calendar, and therapy/session tracking remain out of scope
+
+---
+
+## P6-F.9.14.11 — Stateful Runtime Dry-Run Validation Plan
+
+Status:
+
+DOCUMENT CREATED
+
+Documentation:
+
+docs/P6-F.9.14.11_STATEFUL_RUNTIME_DRY_RUN_VALIDATION_PLAN.md
+
+Important note:
+
+Verify whether this file has been committed. It appeared as untracked during cleanup.
+
+Validation target:
+
+POST /test/message-stateful
+
+Dry-run sequence:
+
+1. Hola buenos días
+2. Quiero pedir una cita
+3. El viernes
+4. En la tarde
+
+---
+
+## P6-F.9.14.12 — Time Window Intent Routing Fix
+
+Status:
+
+CLOSED / RED-THEN-GREEN / GREEN
+
+Changed files:
+
+- app/services/intent.py
+- tests/test_intent.py
+
+Bug found in production dry-run:
+
+When the patient was already in:
+
+ST_CITA_FRANJA
+
+and answered:
+
+En la tarde
+
+the system incorrectly classified the message as:
+
+fecha_cita
+
+instead of:
+
+hora_cita
+
+Root cause:
+
+In `ST_CITA_FRANJA`, generic time-window phrases like `en la tarde` were not included in the slot selection patterns. They later matched the date patterns and returned `fecha_cita`.
+
+Fix:
+
+In `ST_CITA_FRANJA`, these phrases are now treated as `hora_cita`:
+
+- en la tarde
+- por la tarde
+- tarde
+- en la mañana
+- por la mañana
+- mañana
+- en la noche
+- por la noche
+- noche
+
+Validation:
+
+170 passed
+
+Production Swagger dry-run confirmed the routing fix:
+
+Input:
+
+En la tarde
+
+Result:
+
+- intent = hora_cita
+- nuevo_estado = ST_CITA_PENDIENTE
+- next_action = confirm_appointment_request
+
+---
+
+## New Runtime Bug Found — Appointment Context Lost Between Turns
+
+Status:
+
+OPEN / NEXT ARCHITECTURAL FIX NEEDED
+
+Production Swagger dry-run result after P6-F.9.14.12:
+
+The routing bug is fixed, but AppointmentRequest persistence still does not happen.
+
+Final turn:
+
+Input:
+
+En la tarde
+
+Runtime result:
+
+- estado_anterior = ST_CITA_FRANJA
+- intent = hora_cita
+- nuevo_estado = ST_CITA_PENDIENTE
+- next_action = confirm_appointment_request
+- appointment_request_decision.should_persist = false
+- appointment_request_decision.reason = skipped_missing_fecha_solicitada
+- appointment_request = null
+
+Diagnosis:
+
+The appointment date context from the previous turn is lost.
+
+Previous turn:
+
+Input:
+
+El viernes
+
+Resolved:
+
+- fecha_solicitada = 2026-05-29
+- fecha_solicitada_texto = viernes 29 de mayo
+- slots_candidatos:
+  - 3:00 p. m.–5:00 p. m.
+  - 5:00 p. m.–7:00 p. m.
+- nuevo_estado = ST_CITA_FRANJA
+
+Next turn:
+
+Input:
+
+En la tarde
+
+The system has only:
+
+- estado_actual = ST_CITA_FRANJA
+
+but no persisted:
+
+- fecha_solicitada
+- fecha_solicitada_texto
+- slots_candidatos
+- availability flags
+
+Therefore the decision function correctly blocks persistence with:
+
+skipped_missing_fecha_solicitada
+
+This is not a decision function bug.
+
+The decision function is protecting correctly.
+
+---
+
+## Appointment Context Carryover Decision
+
+Decision:
+
+Persist active appointment context in `patients`.
+
+Recommended new column:
+
+appointment_context JSONB
+
+Reason:
+
+`patients` already stores the current conversational state through `estado_actual`.
+
+The appointment context is operational state needed to continue the current appointment flow.
+
+Do not store this first in `interactions` for runtime carryover, because `interactions` is audit/history and currently does not hold stateful appointment context.
+
+Expected JSON shape:
+
+```json
+{
+  "fecha_solicitada": "2026-05-29",
+  "fecha_solicitada_texto": "viernes 29 de mayo",
+  "slots_candidatos": [
+    "3:00 p. m.–5:00 p. m.",
+    "5:00 p. m.–7:00 p. m."
+  ],
+  "es_dia_disponible": true,
+  "is_weekend": false,
+  "is_colombia_holiday": false,
+  "colombia_holiday_name": null
+}
+
+Capture rule:
+
+Store appointment context when:
+
+result.intent == "fecha_cita"
+result.nuevo_estado == "ST_CITA_FRANJA"
+result.fecha_solicitada is present
+
+Carryover rule:
+
+Apply stored appointment context when:
+
+result.intent == "hora_cita"
+result.nuevo_estado == "ST_CITA_PENDIENTE"
+result.fecha_solicitada is missing
+patient.appointment_context has a stored fecha_solicitada
+
+Fields to restore before calling decide_appointment_request_persistence(...):
+
+fecha_solicitada
+fecha_solicitada_texto
+slots_candidatos
+es_dia_disponible
+is_weekend
+is_colombia_holiday
+colombia_holiday_name
+
+Clear rule minimum:
+
+Clear appointment context when:
+
+AppointmentRequest persistence succeeds
+opt_out becomes true
+
+Still out of scope:
+
+POST /webhook
+real WhatsApp sending
+Google Sheets
+Telegram
+n8n
+doctor confirmation
+calendar integration
+therapy/session package tracking
+Next Exact Block
+
+P6-F.9.14.13 — Appointment Context Carryover SPEC
+
+Objective:
+
+Create and commit:
+
+docs/P6-F.9.14.13_APPOINTMENT_CONTEXT_CARRYOVER_SPEC.md
+
+Then proceed with:
+
+P6-F.9.14.14 — Appointment Context Pure Helpers + Tests
+
+Planned files:
+
+app/services/appointment_context.py
+tests/test_appointment_context.py
+
+Planned pure helpers:
+
+capture_appointment_context_from_state(state)
+apply_appointment_context_to_state(state, context)
+should_clear_appointment_context(state, persisted: bool)
+
+Then:
+
+P6-F.9.14.15 — Patient Repository Appointment Context Methods
+
+Expected work:
+
+add appointment_context JSONB to schema/migration draft
+add patient repository methods:
+update_patient_appointment_context(...)
+clear_patient_appointment_context(...)
+
+Then:
+
+P6-F.9.14.16 — Stateful Endpoint Carryover Wiring
+
+Expected work in /test/message-stateful only:
+
+apply context carryover before decide_appointment_request_persistence(...)
+capture context after fecha_cita / ST_CITA_FRANJA
+clear context if AppointmentRequest persisted successfully
+clear context if opt_out true
+
+Critical boundary:
+
+Do not touch real POST /webhook yet.
+Do not touch WhatsApp sending.
+Do not touch Google Sheets.
+Do not touch Telegram.
+Do not touch n8n.
+
+Follow SDD:
+
+SPEC → tests RED → implementation mínima → pytest → docs → commit.
