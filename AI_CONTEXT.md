@@ -1679,3 +1679,142 @@ Objective:
 
 Execute and validate the controlled production migration for patients.appointment_context before running Swagger dry-run again.
 
+
+---
+
+## P6-F.9.14.19 — Appointment Flow Hardening: Relative Dates, Time Windows & Clarification Guards
+
+Status:
+
+SPEC CREATED / READY FOR TESTS
+
+Reason for new block:
+
+Production Swagger validation showed that the appointment flow is still too fragile for real patients.
+
+Important finding:
+
+The message:
+
+`Maniana en la tarde`
+
+while the patient was in `ST_CITA_FECHA` produced:
+
+- intent = fecha_cita
+- nuevo_estado = ST_CITA_FRANJA
+- fecha_solicitada = null
+- slots_candidatos = []
+- response text included vague wording such as "la fecha indicada"
+
+This is unsafe because Elvira advanced to an operational appointment state without a resolved date.
+
+Core decision:
+
+Relative date and time window must be parsed independently.
+
+Examples:
+
+- "mañana en la tarde" means relative_date = tomorrow, time_window = afternoon
+- "mañana en la mañana" means relative_date = tomorrow, time_window = morning
+- "en la mañana" means time_window = morning, but no date
+- "en la tarde" means time_window = afternoon, but no date unless context exists
+
+Normalization requirement:
+
+The system must support:
+
+- mañana
+- manana
+- maniana
+- pasado mañana
+- pasado manana
+- pasado maniana
+
+Schedule rule from KB:
+
+Domiciliary care is not available in the morning.
+
+Current KB schedule:
+
+- HOR-01: Monday to Friday except Wednesday, domiciliary, 15:00–19:00, two visible slots: 15:00–17:00 and 17:00–19:00
+- HOR-02: Wednesday, domiciliary, 15:00–18:00, one visible slot: 15:00–17:00
+- HOR-03: Saturday, no domiciliary service
+- HOR-04: Sunday, no service except explicit doctor instruction
+
+Behavior decision:
+
+If the patient says "mañana/manana/maniana en la mañana":
+
+- resolve tomorrow as date
+- confirm the resolved date
+- explain that domiciliary care is only available in the afternoon
+- offer the valid KB-backed afternoon slots
+- do not accept morning as a valid domiciliary appointment slot
+
+If the patient says "mañana/manana/maniana en la tarde":
+
+- resolve tomorrow as date
+- confirm the resolved date
+- offer valid KB-backed afternoon slots
+- ask which slot works better
+
+Hard guard:
+
+The system must never move to ST_CITA_FRANJA when fecha_solicitada is null.
+
+The system must never move to ST_CITA_PENDIENTE when date context is missing.
+
+Vague phrase guard:
+
+Elvira must not say:
+
+- "la fecha indicada"
+- "ese día"
+- "la fecha solicitada"
+
+unless fecha_solicitada_texto exists.
+
+Clarification handling:
+
+If the patient asks:
+
+- "cuál fecha?"
+- "qué fecha indicada?"
+- "no entendí"
+- "qué quiere decir?"
+
+inside appointment flow, Elvira must answer with a short clarification and ask again for the date, instead of treating it as a broad general question.
+
+New SPEC:
+
+docs/P6-F.9.14.19_APPOINTMENT_FLOW_HARDENING_SPEC.md
+
+Next chat starting point:
+
+Continue with P6-F.9.14.19 tests RED.
+
+First inspect:
+
+- app/services/intent.py
+- date resolver module
+- state machine module
+- existing tests for date resolution and appointment routing
+
+Then add failing tests for:
+
+- Maniana en la tarde
+- Maniana en la maniana
+- En la maniana without date
+- Cual fecha indicada?
+- guard against ST_CITA_FRANJA without fecha_solicitada
+
+Do not touch yet:
+
+- POST /webhook
+- WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+
