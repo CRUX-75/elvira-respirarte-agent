@@ -126,3 +126,53 @@ def test_resolver_marks_colombian_holiday_and_clears_slots():
     assert result.colombia_holiday_name == "Ascensión de Jesús"
     assert result.es_dia_disponible is False
     assert result.slots_candidatos == []
+
+def test_p6f91419_resolver_supports_maniana_variant_for_tomorrow_afternoon():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    result = resolve_requested_date(
+        "Maniana en la tarde",
+        now=datetime(2026, 5, 13, 10, 0, tzinfo=ZoneInfo("America/Bogota")),
+    )
+
+    assert result.fecha_solicitada.isoformat() == "2026-05-14"
+    assert result.fecha_solicitada_texto == "jueves 14 de mayo"
+    assert result.es_dia_disponible is True
+    assert result.slots_candidatos == [
+        "3:00 p. m.–5:00 p. m.",
+        "5:00 p. m.–7:00 p. m.",
+    ]
+
+
+def test_p6f91419_resolver_supports_maniana_variant_for_tomorrow_morning():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    result = resolve_requested_date(
+        "Maniana en la maniana",
+        now=datetime(2026, 5, 13, 10, 0, tzinfo=ZoneInfo("America/Bogota")),
+    )
+
+    assert result.fecha_solicitada.isoformat() == "2026-05-14"
+    assert result.fecha_solicitada_texto == "jueves 14 de mayo"
+    assert result.es_dia_disponible is True
+    assert result.slots_candidatos == [
+        "3:00 p. m.–5:00 p. m.",
+        "5:00 p. m.–7:00 p. m.",
+    ]
+
+
+def test_p6f91419_time_window_without_date_does_not_resolve_requested_date():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    result = resolve_requested_date(
+        "En la maniana",
+        now=datetime(2026, 5, 13, 10, 0, tzinfo=ZoneInfo("America/Bogota")),
+    )
+
+    assert result.fecha_solicitada is None
+    assert result.fecha_solicitada_texto is None
+    assert result.es_dia_disponible is False
+    assert result.slots_candidatos == []

@@ -1818,3 +1818,124 @@ Do not touch yet:
 - Calendar
 - doctor confirmation automation
 
+
+
+---
+
+## P6-F.9.14.19 — Appointment Flow Hardening: Relative Dates, Time Windows & Clarification Guards
+
+Status:
+
+CLOSED / RED-THEN-GREEN / GREEN / READY TO COMMIT
+
+Validation:
+
+Targeted tests:
+
+```bash
+pytest tests/test_date_resolver.py tests/test_intent.py tests/test_state_machine.py -q
+
+Full suite:
+
+pytest -q
+
+Latest result:
+
+196 passed
+
+Reason for block:
+
+Production Swagger validation showed that the appointment flow was still fragile with mixed relative-date and time-window phrases.
+
+Unsafe examples:
+
+Maniana en la tarde
+Maniana en la maniana
+En la maniana
+Cual fecha indicada?
+
+Main risks fixed:
+
+maniana was not recognized as a patient typo/transliteration for mañana
+en la maniana could be incorrectly interpreted as tomorrow instead of a morning-only time window
+clarification questions could fall back to general
+the flow could advance to ST_CITA_FRANJA without a resolved fecha_solicitada
+Elvira could use vague wording such as la fecha indicada
+
+Implemented changes:
+
+app/services/date_resolver.py
+supports maniana as a relative-date variant when it really means tomorrow
+supports pasado maniana
+prevents en la maniana / por la maniana from being interpreted as tomorrow when no date exists
+app/services/intent.py
+normalizes maniana safely in intent classification
+routes appointment clarification questions inside appointment-date context:
+Cual fecha indicada?
+Cuál fecha indicada?
+Qué fecha indicada?
+No entendí
+Qué quiere decir?
+app/graph/nodes.py
+adds deterministic guard after date resolution:
+if intent == fecha_cita
+and nuevo_estado == ST_CITA_FRANJA
+and fecha_solicitada is missing
+then force the flow back to:
+nuevo_estado = ST_CITA_FECHA
+next_action = ask_preferred_date
+state_reason = missing_fecha_solicitada_guard
+app/services/llm.py
+removes unsafe fallback wording la fecha indicada
+updates ask_preferred_date response to:
+Claro, me refiero a la fecha de la cita. ¿Para qué día le gustaría agendarla?
+recognizes maniana / pasado maniana in patient-facing date references
+
+Tests added/updated:
+
+tests/test_date_resolver.py
+Maniana en la tarde resolves to tomorrow + afternoon slots
+Maniana en la maniana resolves to tomorrow while redirecting to valid afternoon slots
+En la maniana without date does not resolve a requested date
+tests/test_intent.py
+Maniana variants route to fecha_cita in appointment date state
+clarification questions remain in appointment date context
+tests/test_state_machine.py
+Maniana en la tarde resolves date and offers slots
+Maniana en la maniana resolves date but redirects to afternoon slots
+En la maniana without date does not advance to ST_CITA_FRANJA
+Cual fecha indicada? does not become general
+guard blocks ST_CITA_FRANJA when fecha_solicitada is missing
+
+Safety boundaries preserved:
+
+Still not touched:
+
+POST /webhook
+real WhatsApp sending
+Google Sheets
+Telegram
+n8n
+Calendar
+doctor confirmation automation
+therapy/session package tracking
+
+Current conclusion:
+
+P6-F.9.14.19 closes the appointment-flow hardening gap for relative-date typos, time-window-only phrases, clarification questions, and missing-date state transitions.
+
+The system now prevents advancing into ST_CITA_FRANJA without deterministic fecha_solicitada.
+
+Next recommended step:
+
+Commit P6-F.9.14.19.
+
+After commit, run a controlled Swagger dry-run against /test/message-stateful for:
+
+Quiero pedir una cita
+Maniana en la tarde
+En la maniana
+Cual fecha indicada?
+Maniana en la maniana
+
+Do not touch real /webhook or WhatsApp sending yet.

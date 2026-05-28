@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -81,7 +82,19 @@ class RelativeDateResolution:
 
 
 def _normalize_text(text: str | None) -> str:
-    return (text or "").strip().lower()
+    normalized = (text or "").strip().lower()
+    replacements = {
+        "á": "a",
+        "é": "e",
+        "í": "i",
+        "ó": "o",
+        "ú": "u",
+        "ñ": "n",
+    }
+    for source, target in replacements.items():
+        normalized = normalized.replace(source, target)
+
+    return normalized
 
 
 def _resolve_weekday_reference(base_date: date, target_weekday: int) -> date:
@@ -121,9 +134,19 @@ def resolve_requested_date(
 
     requested_date: date | None = None
 
-    if "pasado mañana" in normalized_message or "pasado manana" in normalized_message:
+    if (
+        "pasado mañana" in normalized_message
+        or "pasado manana" in normalized_message
+        or "pasado maniana" in normalized_message
+    ):
         requested_date = fecha_actual_colombia + timedelta(days=2)
-    elif "mañana" in normalized_message or "manana" in normalized_message:
+    elif (
+        re.search(r"\bmanana\b", normalized_message)
+        or (
+            re.search(r"\bmaniana\b", normalized_message)
+            and not re.fullmatch(r"(en|por) la maniana", normalized_message)
+        )
+    ):
         requested_date = fecha_actual_colombia + timedelta(days=1)
     elif "hoy" in normalized_message:
         requested_date = fecha_actual_colombia

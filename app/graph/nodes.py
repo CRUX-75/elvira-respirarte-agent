@@ -62,6 +62,16 @@ def node_resolve_date_context(state: ElviraState, now=None) -> ElviraState:
         state.colombia_holiday_name = result.colombia_holiday_name
         state.date_resolution_source = result.source
 
+        if (
+            state.intent == "fecha_cita"
+            and state.nuevo_estado == "ST_CITA_FRANJA"
+            and not state.fecha_solicitada
+        ):
+            state.nuevo_estado = "ST_CITA_FECHA"
+            state.estado_actual = "ST_CITA_FECHA"
+            state.next_action = "ask_preferred_date"
+            state.state_reason = "missing_fecha_solicitada_guard"
+
     except Exception as exc:
         # Date resolution failure must not block the conversational core.
         logger.warning("Date context resolution skipped: %s", exc)

@@ -9,6 +9,7 @@ def normalize_text(text: str) -> str:
     replacements = {"á":"a","é":"e","í":"i","ó":"o","ú":"u","ñ":"n"}
     for k, v in replacements.items():
         text = text.replace(k, v)
+    text = text.replace("maniana", "manana")
     text = re.sub(r"\s+", " ", text)
     return text
 
@@ -55,6 +56,16 @@ def classify_intent(message: str, current_state: str = "ST_INIT") -> Intent:
     # FECHA/HORA por contexto de cita
     date_context_states = {"ST_CITA_FECHA", "ST_CITA_FRANJA", "ST_CITA_PENDIENTE"}
     if current_state in date_context_states:
+        clarification_patterns = [
+            r"\bcual fecha\b",
+            r"\bque fecha\b",
+            r"\bfecha indicada\b",
+            r"\bno entendi\b",
+            r"\bque quiere decir\b",
+        ]
+        if any(re.search(p, msg) for p in clarification_patterns):
+            return "fecha_cita"
+
         time_patterns = [
             r"\b\d{1,2}\s*(am|pm)\b",
             r"\b\d{1,2}:\d{2}\b",

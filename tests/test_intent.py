@@ -64,3 +64,21 @@ def test_p6f71_colombian_time_preference_is_detected_inside_appointment_slot_sta
 
 def test_en_la_tarde_in_st_cita_franja_is_hora_cita():
     assert classify_intent("En la tarde", "ST_CITA_FRANJA") == "hora_cita"
+
+
+def test_p6f91419_maniana_variant_is_fecha_cita_inside_appointment_date_state():
+    assert classify_intent("Maniana en la tarde", "ST_CITA_FECHA") == "fecha_cita"
+    assert classify_intent("Maniana en la maniana", "ST_CITA_FECHA") == "fecha_cita"
+
+
+def test_p6f91419_clarification_question_stays_in_appointment_date_context():
+    cases = [
+        "Cual fecha indicada?",
+        "Cuál fecha indicada?",
+        "Qué fecha indicada?",
+        "No entendí",
+        "Qué quiere decir?",
+    ]
+
+    for message in cases:
+        assert classify_intent(message, "ST_CITA_FECHA") == "fecha_cita"

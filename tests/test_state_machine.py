@@ -250,3 +250,158 @@ def test_p6f8_sunday_word_inside_appointment_date_state_is_treated_as_date(monke
         "Ese día no se atienden consultas. "
         "¿Le gustaría indicarme otro día entre semana?"
     )
+
+
+def test_p6f91419_maniana_afternoon_resolves_date_and_offers_slots(monkeypatch):
+    from datetime import date
+    from app.services import date_resolver
+
+    monkeypatch.setattr(
+        date_resolver,
+        "get_today_colombia",
+        lambda now=None: date(2026, 5, 13),
+    )
+
+    msg = IncomingMessage(
+        telefono="573001112233",
+        mensaje="Maniana en la tarde",
+        estado_actual="ST_CITA_FECHA",
+    )
+
+    result = process_message(msg)
+
+    assert result.intent == "fecha_cita"
+    assert result.nuevo_estado == "ST_CITA_FRANJA"
+    assert result.next_action == "ask_preferred_time"
+    assert result.fecha_solicitada == "2026-05-14"
+    assert result.fecha_solicitada_texto == "jueves 14 de mayo"
+    assert result.slots_candidatos == [
+        "3:00 p. m.–5:00 p. m.",
+        "5:00 p. m.–7:00 p. m.",
+    ]
+
+    assert "jueves 14 de mayo" in result.respuesta
+    assert "la fecha indicada" not in result.respuesta.lower()
+
+
+def test_p6f91419_maniana_morning_resolves_date_but_redirects_to_afternoon_slots(monkeypatch):
+    from datetime import date
+    from app.services import date_resolver
+
+    monkeypatch.setattr(
+        date_resolver,
+        "get_today_colombia",
+        lambda now=None: date(2026, 5, 13),
+    )
+
+    msg = IncomingMessage(
+        telefono="573001112233",
+        mensaje="Maniana en la maniana",
+        estado_actual="ST_CITA_FECHA",
+    )
+
+    result = process_message(msg)
+
+    assert result.intent == "fecha_cita"
+    assert result.nuevo_estado == "ST_CITA_FRANJA"
+    assert result.next_action == "ask_preferred_time"
+    assert result.fecha_solicitada == "2026-05-14"
+    assert result.fecha_solicitada_texto == "jueves 14 de mayo"
+
+    assert "jueves 14 de mayo" in result.respuesta
+    assert "solo atiende consultas domiciliarias en la tarde" in result.respuesta.lower()
+    assert "3:00 p. m." in result.respuesta
+    assert "la fecha indicada" not in result.respuesta.lower()
+
+
+def test_p6f91419_time_window_without_date_does_not_advance_to_slot_state(monkeypatch):
+    from datetime import date
+    from app.services import date_resolver
+
+    monkeypatch.setattr(
+        date_resolver,
+        "get_today_colombia",
+        lambda now=None: date(2026, 5, 13),
+    )
+
+    msg = IncomingMessage(
+        telefono="573001112233",
+        mensaje="En la maniana",
+        estado_actual="ST_CITA_FECHA",
+    )
+
+    result = process_message(msg)
+
+    assert result.intent == "fecha_cita"
+    assert result.nuevo_estado == "ST_CITA_FECHA"
+    assert result.next_action == "ask_preferred_date"
+    assert result.fecha_solicitada is None
+    assert result.fecha_solicitada_texto is None
+    assert result.slots_candidatos == []
+
+    assert "qué día" in result.respuesta.lower() or "que día" in result.respuesta.lower()
+    assert "la fecha indicada" not in result.respuesta.lower()
+
+
+def test_p6f91419_clarification_question_does_not_become_general(monkeypatch):
+    from datetime import date
+    from app.services import date_resolver
+
+    monkeypatch.setattr(
+        date_resolver,
+        "get_today_colombia",
+        lambda now=None: date(2026, 5, 13),
+    )
+
+    msg = IncomingMessage(
+        telefono="573001112233",
+        mensaje="Cual fecha indicada?",
+        estado_actual="ST_CITA_FECHA",
+    )
+
+    result = process_message(msg)
+
+    assert result.intent == "fecha_cita"
+    assert result.nuevo_estado == "ST_CITA_FECHA"
+    assert result.next_action == "ask_preferred_date"
+    assert result.fecha_solicitada is None
+    assert result.fecha_solicitada_texto is None
+
+    assert "fecha" in result.respuesta.lower()
+    assert "la fecha indicada" not in result.respuesta.lower()
+
+
+def test_p6f91419_guard_blocks_st_cita_franja_without_fecha_solicitada(monkeypatch):
+    from app.services import date_resolver
+
+    def fake_resolve_requested_date(*args, **kwargs):
+        from datetime import date
+        from app.services.date_resolver import RelativeDateResolution
+
+        return RelativeDateResolution(
+            fecha_actual_colombia=date(2026, 5, 13),
+            fecha_solicitada=None,
+            fecha_solicitada_texto=None,
+            dia_semana_solicitado=None,
+            es_dia_disponible=False,
+            slots_candidatos=[],
+            is_weekend=False,
+            is_colombia_holiday=False,
+            colombia_holiday_name=None,
+        )
+
+    monkeypatch.setattr(date_resolver, "resolve_requested_date", fake_resolve_requested_date)
+
+    msg = IncomingMessage(
+        telefono="573001112233",
+        mensaje="Mañana en la tarde",
+        estado_actual="ST_CITA_FECHA",
+    )
+
+    result = process_message(msg)
+
+    assert result.intent == "fecha_cita"
+    assert result.nuevo_estado == "ST_CITA_FECHA"
+    assert result.next_action == "ask_preferred_date"
+    assert result.fecha_solicitada is None
+    assert result.slots_candidatos == []

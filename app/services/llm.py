@@ -42,13 +42,13 @@ def _build_requested_date_reference(state: ElviraState) -> str:
     - "pasado mañana, viernes 15 de mayo"
     - "domingo 17 de mayo"
     """
-    fecha_texto = state.fecha_solicitada_texto or "la fecha indicada"
+    fecha_texto = state.fecha_solicitada_texto or "la fecha solicitada"
     message = (state.sanitized_input or state.mensaje_original or "").lower()
 
-    if "pasado mañana" in message or "pasado manana" in message:
+    if "pasado mañana" in message or "pasado manana" in message or "pasado maniana" in message:
         return f"pasado mañana, {fecha_texto}"
 
-    if "mañana" in message or "manana" in message:
+    if "mañana" in message or "manana" in message or "maniana" in message:
         return f"mañana, {fecha_texto}"
 
     if "hoy" in message:
@@ -120,7 +120,7 @@ def generate_llm_response(state: ElviraState) -> ElviraState:
 
     if state.next_action == "ask_preferred_date":
         state.respuesta = (
-            "Claro, con gusto le ayudamos a coordinar la cita. "
+            "Claro, me refiero a la fecha de la cita. "
             "¿Para qué día le gustaría agendarla?"
         )
         return state
