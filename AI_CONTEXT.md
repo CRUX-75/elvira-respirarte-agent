@@ -2104,3 +2104,72 @@ Do not touch:
 - Calendar
 - doctor confirmation automation
 - therapy/session package tracking
+
+---
+
+## P6-F.9.14.21 — Appointment Initial Copy + Slot Disclaimer Polish
+
+Status:
+
+CLOSED / RED-THEN-GREEN / GREEN / COMMITTED / CLEAN
+
+Reason:
+
+The initial appointment response to `Quiero pedir una cita` was too confusing because it said:
+
+`Claro, me refiero a la fecha de la cita...`
+
+This sounded like a clarification even though the patient had just started the appointment flow.
+
+Change:
+
+The initial `ask_preferred_date` copy now says:
+
+`Claro, con muchísimo gusto. Le cuento que las atenciones domiciliarias se manejan solamente en la tarde, normalmente en dos franjas: de 3:00 p. m. a 5:00 p. m. o de 5:00 p. m. a 7:00 p. m. ¿Para qué día le gustaría agendar su cita?`
+
+Important nuance:
+
+This copy explains the general afternoon-only domiciliary rule and usual candidate windows, but it does not confirm real date-specific availability.
+
+Files changed:
+
+- app/services/llm.py
+- tests/test_state_machine.py
+
+Tests updated:
+
+- `test_cita_flow` now protects the exact initial appointment copy.
+- `test_p6f91419_clarification_question_does_not_become_general` now validates that clarification questions remain inside appointment-date context and still ask for the appointment day without using unsafe wording like `la fecha indicada`.
+
+Validation:
+
+- Targeted state machine tests GREEN
+- Full suite GREEN
+- Working tree clean after commit
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy/session package tracking
+
+Current conclusion:
+
+The initial appointment copy is now warmer, clearer, and aligned with the approved domiciliary slot disclaimer.
+
+Next recommended block:
+
+P6-F.9.14.22 — Controlled Swagger Copy Dry-Run
+
+Objective:
+
+Validate in production Swagger through `/test/message-stateful` only that `Quiero pedir una cita` returns the new initial appointment copy.
+
+Do not touch real `/webhook`, WhatsApp sending, Google Sheets, Telegram, n8n, Calendar, or doctor confirmation automation.
