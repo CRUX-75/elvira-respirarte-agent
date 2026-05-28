@@ -120,8 +120,11 @@ def generate_llm_response(state: ElviraState) -> ElviraState:
 
     if state.next_action == "ask_preferred_date":
         state.respuesta = (
-            "Claro, me refiero a la fecha de la cita. "
-            "¿Para qué día le gustaría agendarla?"
+            "Claro, con muchísimo gusto. "
+            "Le cuento que las atenciones domiciliarias se manejan solamente en la tarde, "
+            "normalmente en dos franjas: de 3:00 p. m. a 5:00 p. m. "
+            "o de 5:00 p. m. a 7:00 p. m. "
+            "¿Para qué día le gustaría agendar su cita?"
         )
         return state
 

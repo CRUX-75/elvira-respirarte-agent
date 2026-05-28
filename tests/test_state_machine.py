@@ -15,6 +15,13 @@ def test_cita_flow():
     assert result.intent == "cita"
     assert result.nuevo_estado == "ST_CITA_FECHA"
     assert result.next_action == "ask_preferred_date"
+    assert result.respuesta == (
+        "Claro, con muchísimo gusto. "
+        "Le cuento que las atenciones domiciliarias se manejan solamente en la tarde, "
+        "normalmente en dos franjas: de 3:00 p. m. a 5:00 p. m. "
+        "o de 5:00 p. m. a 7:00 p. m. "
+        "¿Para qué día le gustaría agendar su cita?"
+    )
 
 def test_fecha_cita_flow():
     msg = IncomingMessage(telefono="573001112233", mensaje="Mañana en la tarde", estado_actual="ST_CITA_FECHA")
@@ -367,7 +374,8 @@ def test_p6f91419_clarification_question_does_not_become_general(monkeypatch):
     assert result.fecha_solicitada is None
     assert result.fecha_solicitada_texto is None
 
-    assert "fecha" in result.respuesta.lower()
+    assert "qué día" in result.respuesta.lower() or "para qué día" in result.respuesta.lower()
+    assert "agendar su cita" in result.respuesta.lower()
     assert "la fecha indicada" not in result.respuesta.lower()
 
 
