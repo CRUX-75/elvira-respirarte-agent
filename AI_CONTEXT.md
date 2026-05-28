@@ -2681,3 +2681,181 @@ Latest known full suite before this new block:
 
 198 passed
 
+
+
+---
+
+## P6-F.9.14.25 — Concrete Slot Mapping & Out-of-Slot Guard
+
+Status:
+
+CLOSED / RED-THEN-GREEN / GREEN / COMMITTED
+
+Reason:
+
+Production Swagger dry-run in P6-F.9.14.24 revealed a concrete slot mapping bug.
+
+Scenario:
+
+1. Elvira offered two appointment franjas:
+   - 3:00 p. m.–5:00 p. m.
+   - 5:00 p. m.–7:00 p. m.
+2. Patient replied:
+   - `se puede a las 5?`
+3. The system persisted:
+   - franja_solicitada = 3:00 p. m.–5:00 p. m.
+4. Expected:
+   - franja_solicitada = 5:00 p. m.–7:00 p. m.
+
+Root cause:
+
+app/services/appointment_request_runtime.py used a blind first-slot fallback:
+
+franja_solicitada = slots[0] if slots else None
+
+This caused any concrete or loose time expression to default to the first offered slot.
+
+Implemented fix:
+
+File changed:
+
+- app/services/appointment_request_runtime.py
+
+New deterministic helper:
+
+- resolve_requested_slot_from_message(message, slots)
+
+The helper maps concrete patient slot selections to the correct visible offered franja.
+
+Supported first-slot mappings:
+
+- A las 3
+- se puede a las 3?
+- a las tres
+- de 3 a 5
+- la primera
+- el primer horario
+- la primera franja
+
+Maps to:
+
+3:00 p. m.–5:00 p. m.
+
+Supported second-slot mappings:
+
+- A las 5
+- se puede a las 5?
+- a las cinco
+- de 5 a 7
+- la segunda
+- el segundo horario
+- la segunda franja
+
+Maps to:
+
+5:00 p. m.–7:00 p. m.
+
+New guard:
+
+Unsupported loose hours are blocked.
+
+Examples:
+
+- se puede a las 4?
+- se puede a las 6?
+- a las 2
+- a las 7
+- a las 10
+
+Expected behavior:
+
+- AppointmentRequest persistence is blocked
+- no fallback to the first slot
+- decision reason = skipped_unsupported_slot_selection
+
+Important product rule:
+
+The business flow registers visible appointment franjas, not arbitrary exact loose hours inside a franja.
+
+Even if `4` is technically inside `3:00 p. m.–5:00 p. m.`, it must not be interpreted as a valid slot selection.
+
+The patient must choose one of the visible offered franjas.
+
+Tests changed:
+
+- tests/test_appointment_request_runtime_decision.py
+- tests/test_stateful_appointment_context_carryover.py
+- tests/test_stateful_appointment_request_wiring.py
+
+Test coverage added/updated:
+
+- maps `se puede a las 3?` to first slot
+- maps `se puede a las 5?` to second slot
+- maps ordinal selections:
+  - la primera franja
+  - el segundo horario
+- blocks unsupported loose hours:
+  - se puede a las 4?
+  - a las 6
+- confirms no fallback to the first slot
+- updates legacy persistence tests to use concrete slot selections instead of generic `En la tarde`
+
+Validation:
+
+Targeted decision tests:
+
+21 passed
+
+Stateful endpoint/carryover tests:
+
+6 passed
+
+Full suite:
+
+203 passed
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy/session package tracking
+
+Conclusion:
+
+The concrete slot mapping bug is fixed.
+
+The system no longer defaults to the first available franja when the patient clearly selects the second one or asks for an unsupported loose hour.
+
+Next recommended block:
+
+P6-F.9.14.26 — Controlled Swagger Concrete Slot Mapping Dry-Run
+
+Objective:
+
+Validate in production through `/test/message-stateful` only that:
+
+1. `se puede a las 5?` persists:
+   - franja_solicitada = 5:00 p. m.–7:00 p. m.
+
+2. `se puede a las 3?` persists:
+   - franja_solicitada = 3:00 p. m.–5:00 p. m.
+
+3. `se puede a las 4?` does not persist and asks the patient to choose between the visible franjas.
+
+Do not touch:
+
+- real POST /webhook
+- WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+
