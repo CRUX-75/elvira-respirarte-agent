@@ -1,3 +1,5 @@
+from dataclasses import asdict
+
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.responses import PlainTextResponse
 
@@ -17,6 +19,14 @@ from app.repositories.processed_messages import (
     mark_message_processed,
 )
 from app.repositories.interactions import save_interaction
+from app.repositories.postgres_appointment_request_repository import (
+    PostgresAppointmentRequestRepository,
+)
+from app.services.appointment_request_runtime import (
+    decide_appointment_request_persistence,
+)
+from app.services.appointment_request_service import AppointmentRequestService
+from app.db.session import engine
 from app.config import settings
 from app.services.readiness import build_ready_report
 
@@ -431,6 +441,37 @@ def test_message_stateful(message: IncomingMessage):
     delivery_status = "sending_skipped"
     logged_response = f"[TEST_STATEFUL_WHATSAPP_SENDING_DISABLED] {result.respuesta}"
 
+    appointment_request_decision = decide_appointment_request_persistence(
+        state=result,
+        telefono=telefono,
+        nombre=nombre,
+        source_interaction_id=whatsapp_message_id,
+    )
+    appointment_request_metadata = None
+
+    if appointment_request_decision.should_persist:
+        appointment_repository = PostgresAppointmentRequestRepository(engine)
+        appointment_service = AppointmentRequestService(
+            repository=appointment_repository,
+        )
+        appointment_request = appointment_service.create_or_reuse_active_request(
+            telefono=appointment_request_decision.telefono or telefono,
+            nombre_paciente=appointment_request_decision.nombre_paciente or nombre or "",
+            servicio_solicitado=appointment_request_decision.servicio_solicitado or "",
+            direccion_domicilio=appointment_request_decision.direccion_domicilio or "",
+            fecha_solicitada=appointment_request_decision.fecha_solicitada,
+            franja_solicitada=appointment_request_decision.franja_solicitada,
+            source_interaction_id=appointment_request_decision.source_interaction_id,
+            fuente=appointment_request_decision.canal_origen,
+        )
+        appointment_request_metadata = {
+            "id_solicitud": appointment_request.id_solicitud,
+            "estado_solicitud": appointment_request.estado_solicitud,
+            "source_interaction_id": appointment_request.source_interaction_id,
+            "fecha_solicitada": appointment_request.fecha_solicitada,
+            "franja_solicitada": appointment_request.franja_solicitada,
+        }
+
     save_interaction(
         patient_id=str(patient["id"]),
         telefono=telefono,
@@ -465,5 +506,7 @@ def test_message_stateful(message: IncomingMessage):
     response["whatsapp_message_id"] = whatsapp_message_id
     response["persisted_state"] = result.nuevo_estado
     response["patient_id"] = str(patient["id"])
+    response["appointment_request_decision"] = asdict(appointment_request_decision)
+    response["appointment_request"] = appointment_request_metadata
 
     return response
