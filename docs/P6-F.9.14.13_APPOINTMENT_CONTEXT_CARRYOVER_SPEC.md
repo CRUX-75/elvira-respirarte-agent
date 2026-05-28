@@ -2,70 +2,78 @@
 
 ## Status
 
-PLANNED
+DRAFT / SPEC
+
+## Objective
+
+Define how Elvira carries active appointment context across conversational turns during the stateful appointment request flow.
+
+This block solves the runtime bug discovered in `/test/message-stateful` where the patient provides a valid appointment date in one turn and then selects a time window in the next turn, but the resolved date context is no longer available when AppointmentRequest persistence is evaluated.
 
 ## Problem
 
-AppointmentRequest persistence currently fails after the patient selects a time window.
+During the appointment flow, the system currently resolves appointment date information only inside the current runtime state object.
 
-Observed production dry-run:
+Example flow:
 
-1. Patient says: "El viernes"
+1. Patient says: `El viernes`
 2. Runtime resolves:
-   - fecha_solicitada = 2026-05-29
-   - slots_candidatos = ["3:00 p. m.–5:00 p. m.", "5:00 p. m.–7:00 p. m."]
-   - nuevo_estado = ST_CITA_FRANJA
-3. Patient says: "En la tarde"
-4. Runtime correctly classifies:
-   - intent = hora_cita
-   - nuevo_estado = ST_CITA_PENDIENTE
-   - next_action = confirm_appointment_request
-5. But AppointmentRequest persistence is skipped:
-   - reason = skipped_missing_fecha_solicitada
+   - `fecha_solicitada = 2026-05-29`
+   - `fecha_solicitada_texto = viernes 29 de mayo`
+   - `slots_candidatos`
+   - availability flags
+3. Runtime moves patient to:
+   - `ST_CITA_FRANJA`
+4. Patient then says: `En la tarde`
+5. Runtime correctly routes:
+   - `intent = hora_cita`
+   - `nuevo_estado = ST_CITA_PENDIENTE`
+   - `next_action = confirm_appointment_request`
+6. AppointmentRequest persistence is skipped because:
+   - `fecha_solicitada` is missing
 
-Root cause:
+The decision function is behaving correctly.
 
-The date context from the previous turn is not persisted across messages.
+The bug is not in the decision function.
 
-## Current Persistence
+The bug is that appointment context is not persisted between turns.
 
-`patients` persists:
+## Current Storage Limitation
 
-- telefono
-- nombre
-- estado_actual
-- opt_out
+`patients` currently persists the conversational state, mainly:
+
+- `telefono`
+- `nombre`
+- `estado_actual`
+- `opt_out`
 - timestamps
 
-`interactions` persists:
+`interactions` stores audit/history data but is not designed as active conversational state.
 
-- mensaje
-- respuesta
-- intent
-- estado_anterior
-- nuevo_estado
-- next_action
-- state_reason
-- versions
-- kb flags
-- WhatsApp metadata
+`ElviraState` contains appointment fields, but only during a single request lifecycle.
 
-Neither table currently persists the active appointment date context.
+Therefore, after the `fecha_cita` turn is processed, the active appointment context is lost before the following `hora_cita` turn.
 
 ## Decision
 
-Persist active appointment context in `patients`.
+Persist active appointment context in the `patients` table as a JSONB field.
 
-New column:
+Recommended column:
 
 ```sql
 appointment_context JSONB
 
-This field stores only the active conversational appointment context needed to continue a pending appointment request.
+Reason:
 
-Appointment Context Contract
+patients already represents the current patient-level conversational state.
 
-Expected shape:
+The appointment context is operational state required to continue the active appointment request flow.
+
+This avoids misusing interactions as state storage and keeps the carryover deterministic, explicit, and auditable.
+
+Appointment Context Shape
+
+Expected JSON shape:
 
 {
   "fecha_solicitada": "2026-05-29",
@@ -81,21 +89,13 @@ Expected shape:
 }
 Capture Rule
 
-Store appointment context when:
+Capture and store appointment context when all conditions are true:
 
 result.intent == "fecha_cita"
 result.nuevo_estado == "ST_CITA_FRANJA"
 result.fecha_solicitada is present
-Carryover Rule
 
-Apply stored appointment context when:
-
-result.intent == "hora_cita"
-result.nuevo_estado == "ST_CITA_PENDIENTE"
-result.fecha_solicitada is missing
-patient.appointment_context has a stored fecha_solicitada
-
-The runtime should fill:
+Fields to capture:
 
 fecha_solicitada
 fecha_solicitada_texto
@@ -105,45 +105,97 @@ is_weekend
 is_colombia_holiday
 colombia_holiday_name
 
-before calling decide_appointment_request_persistence(...).
+If no fecha_solicitada exists, no appointment context should be stored.
+
+Carryover Rule
+
+Apply stored appointment context when all conditions are true:
+
+result.intent == "hora_cita"
+result.nuevo_estado == "ST_CITA_PENDIENTE"
+result.fecha_solicitada is missing
+patient.appointment_context exists
+patient.appointment_context.fecha_solicitada exists
+
+Fields to restore before calling decide_appointment_request_persistence(...):
+
+fecha_solicitada
+fecha_solicitada_texto
+slots_candidatos
+es_dia_disponible
+is_weekend
+is_colombia_holiday
+colombia_holiday_name
+
+The restored context must be applied only to the in-memory runtime state/result used for the persistence decision.
 
 Clear Rule
 
-Clear appointment context when:
+Clear patient.appointment_context when:
 
-request is persisted successfully
+AppointmentRequest persistence succeeds
 opt_out becomes true
-flow leaves appointment states in a later cleanup phase
 
-For this block, minimum required clear behavior:
+Minimum current scope does not require clearing on every unrelated message.
 
-clear after successful AppointmentRequest persistence
-clear on opt_out
-Safety Boundaries
+Additional cleanup rules may be added later after observing real flow behavior.
 
-Still out of scope:
+Runtime Boundary
 
-POST /webhook wiring
+This block prepares the carryover strategy for:
+
+POST /test/message-stateful
+
+The real WhatsApp webhook remains out of scope.
+
+Explicitly Out of Scope
+
+Do not touch in this block:
+
+real POST /webhook
 real WhatsApp sending
 Google Sheets
 Telegram
 n8n
-doctor confirmation
-calendar integration
+Calendar integration
+doctor confirmation flow
 therapy/session package tracking
-Success Criteria
+automatic appointment confirmation
+remaining session tracking
+executed session tracking
+Planned Next Block
 
-The same Swagger dry-run flow should complete:
+Next block:
 
-"Hola buenos días"
-"Quiero pedir una cita"
-"El viernes"
-"En la tarde"
+P6-F.9.14.14 — Appointment Context Pure Helpers + Tests
 
-Expected final response:
+Planned files:
 
-intent = hora_cita
-nuevo_estado = ST_CITA_PENDIENTE
-appointment_request_decision.should_persist = true
-appointment_request.estado_solicitud = pendiente_confirmacion
-appointment_request.source_interaction_id = whatsapp_message_id
+app/services/appointment_context.py
+tests/test_appointment_context.py
+
+Planned pure helpers:
+
+capture_appointment_context_from_state(state)
+apply_appointment_context_to_state(state, context)
+should_clear_appointment_context(state, persisted: bool)
+Acceptance Criteria
+
+This SPEC is accepted when it clearly defines:
+
+the lost-context problem
+why patients.appointment_context JSONB is the right storage location
+capture rules
+carryover rules
+clear rules
+runtime scope
+explicit out-of-scope boundaries
+next implementation block
+Architectural Rule Preserved
+
+El canal transporta.
+El workflow controla.
+La KB informa.
+El modelo redacta.
+La state machine protege.
+El log permite auditar.
