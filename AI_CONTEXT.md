@@ -1939,3 +1939,168 @@ Cual fecha indicada?
 Maniana en la maniana
 
 Do not touch real /webhook or WhatsApp sending yet.
+
+
+---
+
+## P6-F.9.14.20 — Controlled Stateful Swagger Dry-Run
+
+Status:
+
+CLOSED / TECHNICALLY GREEN / PRODUCT COPY GAP IDENTIFIED
+
+Production Swagger endpoint validated:
+
+POST /test/message-stateful
+
+Real POST /webhook was not touched.
+
+Real WhatsApp sending remained disabled.
+
+Validated production dry-run sequence:
+
+1. `Quiero pedir una cita`
+2. `Maniana en la tarde`
+3. `A las 3`
+
+Final technical result:
+
+- `Quiero pedir una cita` correctly moved the patient from `ST_INIT` to `ST_CITA_FECHA`.
+- `Maniana en la tarde` correctly resolved:
+  - `fecha_solicitada = 2026-05-29`
+  - `fecha_solicitada_texto = viernes 29 de mayo`
+  - `slots_candidatos = ["3:00 p. m.–5:00 p. m.", "5:00 p. m.–7:00 p. m."]`
+  - `nuevo_estado = ST_CITA_FRANJA`
+- `A las 3` correctly moved the patient to:
+  - `intent = hora_cita`
+  - `nuevo_estado = ST_CITA_PENDIENTE`
+  - `next_action = confirm_appointment_request`
+- `AppointmentRequest` was created successfully in production PostgreSQL.
+- `appointment_request.estado_solicitud = pendiente_confirmacion`
+- `appointment_request.fecha_solicitada = 2026-05-29`
+- `appointment_request.franja_solicitada = 3:00 p. m.–5:00 p. m.`
+- `source_interaction_id` used the synthetic `test-stateful-*` ID.
+- `delivery_status = sending_skipped`
+- real WhatsApp sending remained off.
+
+Hotfix completed during this block:
+
+P6-F.9.14.20.1 — AppointmentRequest Production Insert Hotfix
+
+Reason:
+
+The first production dry-run failed on the final appointment persistence step with a 500 error.
+
+Root cause:
+
+`PostgresAppointmentRequestRepository.save()` inserted explicit NULL values for `created_at` and `updated_at`.
+
+PostgreSQL did not apply the table defaults because NULL was passed explicitly.
+
+Observed error:
+
+`null value in column "created_at" of relation "appointment_requests" violates not-null constraint`
+
+Fix:
+
+- Repository INSERT now uses:
+  - `COALESCE(:created_at, CURRENT_TIMESTAMP)`
+  - `COALESCE(:updated_at, CURRENT_TIMESTAMP)`
+- Repository UPDATE now preserves `created_at` and refreshes `updated_at` safely:
+  - `created_at = COALESCE(:created_at, created_at)`
+  - `updated_at = COALESCE(:updated_at, CURRENT_TIMESTAMP)`
+- `AppointmentRequestService.create_or_reuse_active_request(...)` now accepts:
+  - `estado_solicitud: str = "nueva"`
+- `/test/message-stateful` now passes:
+  - `estado_solicitud=appointment_request_decision.estado_solicitud or "nueva"`
+
+Validation after hotfix:
+
+- local tests green
+- production Swagger dry-run green
+- AppointmentRequest persistence confirmed
+
+Important product finding:
+
+The test phrase `En la tarde` after Elvira already offered two afternoon slots is not a good real-patient final selection.
+
+Reason:
+
+If Elvira already says:
+
+- `3:00 p. m.–5:00 p. m.`
+- `5:00 p. m.–7:00 p. m.`
+
+then a generic response like `En la tarde` is ambiguous and should not select the first slot by default in a future hardening block.
+
+Correct final test phrase used:
+
+`A las 3`
+
+This correctly selected the first slot and created the AppointmentRequest.
+
+Future hardening candidate:
+
+Slot Selection Precision Guard
+
+Rule idea:
+
+When multiple candidate slots exist, generic phrases like `en la tarde`, `por la tarde`, or `tarde` should keep the patient in `ST_CITA_FRANJA` and ask them to choose between the specific slots instead of persisting an AppointmentRequest.
+
+Do not implement this yet unless explicitly started as a new block.
+
+Product copy gap found:
+
+Initial appointment response currently says:
+
+`Claro, me refiero a la fecha de la cita. ¿Para qué día le gustaría agendarla?`
+
+This is not acceptable as the first response to:
+
+`Quiero pedir una cita`
+
+It sounds unnatural and confusing.
+
+Approved next block:
+
+P6-F.9.14.21 — Appointment Initial Copy + Slot Disclaimer Polish
+
+Approved initial response direction:
+
+`Claro, con muchísimo gusto. Le cuento que las atenciones domiciliarias se manejan solamente en la tarde, normalmente en dos franjas: de 3:00 p. m. a 5:00 p. m. o de 5:00 p. m. a 7:00 p. m. ¿Para qué día le gustaría agendar su cita?`
+
+Important nuance:
+
+At the initial appointment request, Elvira may explain the general afternoon-only domiciliary rule and usual candidate windows, but must not confirm real date-specific availability yet because no date has been selected.
+
+Next exact starting point:
+
+P6-F.9.14.21 — Appointment Initial Copy + Slot Disclaimer Polish
+
+First command:
+
+grep -R "me refiero a la fecha" -n app tests
+
+Then follow SDD:
+
+1. Inspect copy source.
+2. Add RED test for initial appointment copy.
+3. Add/adjust clarification test if needed.
+4. Implement minimal copy/prompt change.
+5. Run targeted tests.
+6. Run full suite.
+7. Update docs if needed.
+8. Commit.
+
+Safety boundaries still active:
+
+Do not touch:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy/session package tracking
