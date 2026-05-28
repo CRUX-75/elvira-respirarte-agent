@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import JSON, text
 
 from app.db.session import engine
 
@@ -156,4 +156,52 @@ def update_patient_last_message(patient_id: str) -> None:
                 """
             ),
             {"patient_id": patient_id},
+        )
+
+def update_patient_appointment_context(
+    telefono: str,
+    appointment_context: dict[str, Any] | None,
+) -> None:
+    telefono = (telefono or "").strip()
+
+    if not telefono:
+        raise ValueError("telefono is required")
+
+    if not appointment_context:
+        raise ValueError("appointment_context is required")
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE patients
+                SET appointment_context = :appointment_context,
+                    updated_at = NOW()
+                WHERE telefono = :telefono
+                """
+            ).bindparams(appointment_context=JSON),
+            {
+                "telefono": telefono,
+                "appointment_context": appointment_context,
+            },
+        )
+
+
+def clear_patient_appointment_context(telefono: str) -> None:
+    telefono = (telefono or "").strip()
+
+    if not telefono:
+        raise ValueError("telefono is required")
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE patients
+                SET appointment_context = NULL,
+                    updated_at = NOW()
+                WHERE telefono = :telefono
+                """
+            ),
+            {"telefono": telefono},
         )
