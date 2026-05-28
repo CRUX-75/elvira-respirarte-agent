@@ -2368,3 +2368,97 @@ Objective:
 
 Validate in production through `/test/message-stateful` only that after Elvira offers two slots, the patient reply `En la tarde` stays in `ST_CITA_FRANJA` and asks for a concrete slot instead of creating an AppointmentRequest.
 
+
+---
+
+## P6-F.9.14.24 — Controlled Swagger Slot Guard Dry-Run
+
+Status:
+
+PARTIAL / NEW SLOT MAPPING BUG FOUND
+
+Production endpoint validated:
+
+POST /test/message-stateful
+
+Real POST /webhook was not touched.
+
+Real WhatsApp sending remained disabled.
+
+Validated sequence:
+
+1. `Quiero pedir una cita`
+2. `Para maniana`
+3. `se puede a las 5?`
+
+Observed successful behavior:
+
+- Initial appointment copy was correct.
+- `Para maniana` correctly resolved:
+  - fecha_solicitada = 2026-05-29
+  - fecha_solicitada_texto = viernes 29 de mayo
+  - slots_candidatos:
+    - 3:00 p. m.–5:00 p. m.
+    - 5:00 p. m.–7:00 p. m.
+  - nuevo_estado = ST_CITA_FRANJA
+- Final message `se puede a las 5?` correctly classified as:
+  - intent = hora_cita
+  - nuevo_estado = ST_CITA_PENDIENTE
+  - next_action = confirm_appointment_request
+  - appointment_request_decision.should_persist = true
+
+Bug found:
+
+The final concrete selection:
+
+`se puede a las 5?`
+
+was persisted with the wrong requested slot:
+
+Observed:
+
+franja_solicitada = 3:00 p. m.–5:00 p. m.
+
+Expected:
+
+franja_solicitada = 5:00 p. m.–7:00 p. m.
+
+Diagnosis:
+
+The system appears to select the first candidate slot as fallback instead of mapping the patient's concrete time expression to the correct offered slot.
+
+This is not the same as the ambiguous `En la tarde` guard.
+
+This is a new concrete slot mapping bug.
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy/session package tracking
+
+Next recommended block:
+
+P6-F.9.14.25 — Concrete Slot Mapping Guard
+
+Objective:
+
+Map concrete patient slot selections to the correct candidate slot before AppointmentRequest persistence.
+
+Examples:
+
+- `A las 3`, `a las tres`, `de 3 a 5`, `la primera`
+  → 3:00 p. m.–5:00 p. m.
+
+- `A las 5`, `a las cinco`, `de 5 a 7`, `la segunda`
+  → 5:00 p. m.–7:00 p. m.
+
+The system must not default to the first slot when the patient clearly selected the second slot.
+
