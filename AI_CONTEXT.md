@@ -787,3 +787,222 @@ The new `appointment_requests` production table exists, but runtime integration 
 
 Current production behavior remains unchanged.
 
+
+---
+
+## P6-F.9.14 — Runtime Integration Preparation
+
+Status:
+
+PARTIALLY CLOSED / READY FOR STATEFUL TEST ENDPOINT WIRING TESTS
+
+Recently closed blocks:
+
+- P6-F.9.14.1 — Runtime Integration SPEC
+- P6-F.9.14.2 — Runtime Integration Design
+- P6-F.9.14.3 — Runtime Flow Inspection
+- P6-F.9.14.4 — Appointment Persistence Decision Function SPEC
+- P6-F.9.14.5 — Decision Function Tests
+- P6-F.9.14.6 — Decision Function Implementation
+- P6-F.9.14.7 — Repository/Service Runtime Wiring Design
+
+Latest validation:
+
+165 passed
+
+Current working tree at closure:
+
+clean
+
+---
+
+## Runtime Flow Inspection Findings
+
+Main runtime file:
+
+app/main.py
+
+Relevant endpoints:
+
+- POST /webhook
+- POST /test/message
+- POST /test/message-stateful
+
+Important finding:
+
+`/test/message-stateful` is the safest first validation surface for AppointmentRequest runtime integration.
+
+Reason:
+
+- It reads patient state from PostgreSQL.
+- It processes the message through the real LangGraph flow.
+- It persists interactions.
+- It updates patient state.
+- It never sends real WhatsApp messages.
+- It generates a synthetic `whatsapp_message_id`.
+
+Real `/webhook` integration is explicitly deferred.
+
+---
+
+## Interaction Linkage Decision
+
+`save_interaction()` currently inserts into `interactions` but returns `None`.
+
+Therefore, the first AppointmentRequest runtime integration will use:
+
+source_interaction_id = whatsapp_message_id
+
+For `/test/message-stateful`, this means:
+
+source_interaction_id = synthetic test-stateful whatsapp_message_id
+
+A later improvement may modify interaction persistence to return a real interaction row ID, but that is out of scope for the first runtime wiring.
+
+---
+
+## Appointment Request Runtime Decision Function
+
+New file:
+
+app/services/appointment_request_runtime.py
+
+New pure decision function:
+
+decide_appointment_request_persistence(...)
+
+New decision object:
+
+AppointmentPersistenceDecision
+
+Test file:
+
+tests/test_appointment_request_runtime_decision.py
+
+Important properties:
+
+- pure
+- deterministic
+- no DB access
+- no network access
+- no LLM call
+- no FastAPI dependency
+- unit tested
+
+---
+
+## Decision Function Rules
+
+The decision function skips persistence for:
+
+- general
+- servicios
+- horarios
+- pago
+- reglas
+- urgencia
+- optout
+- cita
+- fecha_cita
+
+The first allowed persistence case is intentionally narrow.
+
+It allows persistence only when:
+
+- intent == "hora_cita"
+- nuevo_estado == "ST_CITA_PENDIENTE"
+- next_action == "confirm_appointment_request"
+- fecha_solicitada is present
+- date is not weekend
+- date is not a Colombia holiday
+- es_dia_disponible is not False
+- a time preference exists through slots_candidatos or raw message text
+
+When persistence is allowed:
+
+estado_solicitud = "pendiente_confirmacion"
+
+The function never returns:
+
+estado_solicitud = "confirmada"
+
+Doctor/human confirmation remains a future flow.
+
+---
+
+## Repository/Service Runtime Wiring Design
+
+Design document:
+
+docs/P6-F.9.14.7_REPOSITORY_SERVICE_RUNTIME_WIRING_DESIGN.md
+
+First wiring target:
+
+POST /test/message-stateful
+
+Do not wire real WhatsApp webhook yet.
+
+Runtime should later use:
+
+- PostgresAppointmentRequestRepository(engine)
+- AppointmentRequestService(repository=...)
+- decide_appointment_request_persistence(...)
+
+The response from `/test/message-stateful` should later include:
+
+appointment_request_decision
+
+and, when persistence succeeds:
+
+appointment_request metadata
+
+Candidate metadata:
+
+- id_solicitud
+- estado_solicitud
+- source_interaction_id
+
+---
+
+## Safety Boundaries Still Active
+
+Do not touch yet:
+
+- real POST /webhook integration
+- WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- doctor confirmation flow
+- calendar integration
+- therapy package/session tracking
+
+WHATSAPP_SENDING_ENABLED must remain false unless a later controlled sending block explicitly changes it.
+
+---
+
+## Next Exact Block
+
+P6-F.9.14.8 — Stateful Test Endpoint Wiring Tests
+
+Goal:
+
+Write failing tests first for appointment request wiring in `/test/message-stateful`.
+
+Before implementation:
+
+1. Inspect AppointmentRequestService method signatures.
+2. Inspect existing FastAPI TestClient patterns.
+3. Write failing endpoint tests.
+4. Only then implement minimal wiring.
+
+Expected test goals:
+
+- `/test/message-stateful` returns appointment_request_decision for skipped messages.
+- General/cita/fecha_cita messages skip persistence.
+- hora_cita ready state creates or reuses AppointmentRequest.
+- Response includes appointment_request metadata when persisted.
+- Synthetic whatsapp_message_id is used as source_interaction_id.
+- Patient state still updates correctly when persistence succeeds.
+- No real WhatsApp sending is touched.
+
