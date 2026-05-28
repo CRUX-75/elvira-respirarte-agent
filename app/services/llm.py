@@ -181,14 +181,6 @@ def generate_llm_response(state: ElviraState) -> ElviraState:
         )
         return state
 
-    if state.next_action == "ask_specific_time_slot":
-        state.respuesta = (
-            "Para continuar, por favor elija una de las franjas disponibles: "
-            "de 3:00 p. m. a 5:00 p. m. o de 5:00 p. m. a 7:00 p. m. "
-            "¿Cuál le queda mejor?"
-        )
-        return state
-
     if state.next_action == "confirm_appointment_request":
         state.respuesta = (
             "Perfecto, queda registrada su solicitud para esa franja. "
