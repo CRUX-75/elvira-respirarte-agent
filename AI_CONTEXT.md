@@ -2462,3 +2462,222 @@ Examples:
 
 The system must not default to the first slot when the patient clearly selected the second slot.
 
+
+---
+
+## P6-F.9.14.24 — Controlled Swagger Slot Guard Dry-Run
+
+Status:
+
+PARTIAL / NEW CONCRETE SLOT MAPPING BUG FOUND
+
+Production endpoint validated:
+
+POST /test/message-stateful
+
+Real POST /webhook was not touched.
+
+Real WhatsApp sending remained disabled.
+
+Validated sequence:
+
+1. `Quiero pedir una cita`
+2. `Para maniana`
+3. `se puede a las 5?`
+
+Observed successful behavior:
+
+Initial appointment copy was correct.
+
+`Para maniana` correctly resolved:
+
+- fecha_solicitada = 2026-05-29
+- fecha_solicitada_texto = viernes 29 de mayo
+- slots_candidatos:
+  - 3:00 p. m.–5:00 p. m.
+  - 5:00 p. m.–7:00 p. m.
+- nuevo_estado = ST_CITA_FRANJA
+- next_action = ask_preferred_time
+
+Final message:
+
+`se puede a las 5?`
+
+correctly classified as:
+
+- intent = hora_cita
+- nuevo_estado = ST_CITA_PENDIENTE
+- next_action = confirm_appointment_request
+- appointment_request_decision.should_persist = true
+
+Bug found:
+
+The final concrete selection:
+
+`se puede a las 5?`
+
+was persisted with the wrong requested slot.
+
+Observed:
+
+franja_solicitada = 3:00 p. m.–5:00 p. m.
+
+Expected:
+
+franja_solicitada = 5:00 p. m.–7:00 p. m.
+
+Root cause found in:
+
+app/services/appointment_request_runtime.py
+
+Current unsafe logic:
+
+franja_solicitada = slots[0] if slots else None
+
+This blindly selects the first candidate slot whenever slots exist.
+
+This explains why a clear patient preference for 5 p. m. was persisted as the 3–5 p. m. slot.
+
+Additional cleanup finding:
+
+app/services/llm.py currently contains a duplicated block for:
+
+if state.next_action == "ask_specific_time_slot":
+
+This should be cleaned in the next block or before final implementation.
+
+Important product decision:
+
+The patient may ask:
+
+- `se puede a las 3?`
+- `se puede a las 5?`
+
+These must map deterministically to the visible offered franjas:
+
+- `se puede a las 3?` → 3:00 p. m.–5:00 p. m.
+- `se puede a las 5?` → 5:00 p. m.–7:00 p. m.
+
+If the patient asks for another loose hour outside the offered slot starts, for example:
+
+- `se puede a las 4?`
+- `se puede a las 6?`
+- `a las 2`
+- `a las 7`
+- `a las 10`
+
+the agent must not persist an AppointmentRequest.
+
+Expected behavior for unsupported loose hours:
+
+- stay in ST_CITA_FRANJA
+- do not trigger confirm_appointment_request
+- do not persist AppointmentRequest
+- answer that only the offered franjas can be registered as preference
+- ask the patient to choose between the two offered franjas
+
+Product nuance:
+
+Even if a loose time such as `4` is technically inside 3:00 p. m.–5:00 p. m., it must not be interpreted as a valid slot selection.
+
+The business flow works with visible appointment franjas, not arbitrary exact hours inside a franja.
+
+Correct assistant copy direction:
+
+`Por ahora solo puedo registrar su preferencia dentro de estas dos franjas: de 3:00 p. m. a 5:00 p. m. o de 5:00 p. m. a 7:00 p. m. ¿Cuál de las dos le queda mejor?`
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy/session package tracking
+
+Conclusion:
+
+P6-F.9.14.24 is not fully GREEN because the Swagger dry-run revealed a new concrete slot mapping bug.
+
+Next exact block:
+
+P6-F.9.14.25 — Concrete Slot Mapping & Out-of-Slot Guard
+
+Objective:
+
+Implement deterministic slot mapping before AppointmentRequest persistence.
+
+Required valid mappings:
+
+- `A las 3`
+- `se puede a las 3?`
+- `a las tres`
+- `de 3 a 5`
+- `la primera`
+- `el primer horario`
+
+must map to:
+
+3:00 p. m.–5:00 p. m.
+
+And:
+
+- `A las 5`
+- `se puede a las 5?`
+- `a las cinco`
+- `de 5 a 7`
+- `la segunda`
+- `el segundo horario`
+
+must map to:
+
+5:00 p. m.–7:00 p. m.
+
+Required blocking behavior:
+
+Unsupported loose hours such as:
+
+- `se puede a las 4?`
+- `se puede a las 6?`
+- `a las 2`
+- `a las 7`
+- `a las 10`
+
+must not default to the first slot.
+
+Recommended starting point in next chat:
+
+1. Clean duplicated `ask_specific_time_slot` block in app/services/llm.py.
+2. Create SPEC:
+
+docs/P6-F.9.14.25_CONCRETE_SLOT_MAPPING_AND_OUT_OF_SLOT_GUARD_SPEC.md
+
+3. Add RED tests in:
+
+tests/test_appointment_request_runtime_decision.py
+
+4. Implement deterministic helper near:
+
+app/services/appointment_request_runtime.py
+
+Possible helper:
+
+resolve_requested_slot_from_message(message, slots)
+
+5. Remove blind fallback:
+
+franja_solicitada = slots[0] if slots else None
+
+6. Run targeted tests.
+7. Run full suite.
+8. Update docs.
+9. Commit.
+
+Latest known full suite before this new block:
+
+198 passed
+
