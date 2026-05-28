@@ -89,6 +89,7 @@ class AppointmentRequestService:
         franja_solicitada: str | None = None,
         source_interaction_id: str | None = None,
         fuente: str = "whatsapp",
+        estado_solicitud: str = "nueva",
     ) -> AppointmentRequest:
         active_request = self.repository.find_active_by_telefono(telefono)
 
@@ -102,7 +103,7 @@ class AppointmentRequestService:
             "servicio_solicitado": servicio_solicitado,
             "direccion_domicilio": direccion_domicilio,
             "fuente": fuente,
-            "estado_solicitud": "nueva",
+            "estado_solicitud": estado_solicitud,
             "fecha_solicitada": fecha_solicitada,
             "franja_solicitada": franja_solicitada,
             "source_interaction_id": source_interaction_id,

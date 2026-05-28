@@ -479,6 +479,7 @@ def test_message_stateful(message: IncomingMessage):
             franja_solicitada=appointment_request_decision.franja_solicitada,
             source_interaction_id=appointment_request_decision.source_interaction_id,
             fuente=appointment_request_decision.canal_origen,
+            estado_solicitud=appointment_request_decision.estado_solicitud or "nueva",
         )
         appointment_request_persisted = True
         appointment_request_metadata = {

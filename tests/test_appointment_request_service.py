@@ -237,3 +237,22 @@ def test_terminal_states_are_not_active(repository):
     active = repository.find_active_by_telefono(cancelled.telefono)
 
     assert active is None
+
+
+def test_create_or_reuse_active_request_allows_runtime_status(repository):
+    service = AppointmentRequestService(repository=repository)
+
+    request = service.create_or_reuse_active_request(
+        telefono="3001234567",
+        nombre_paciente="Paciente Runtime",
+        servicio_solicitado="",
+        direccion_domicilio="",
+        fecha_solicitada="2026-05-29",
+        franja_solicitada="3:00 p. m.–5:00 p. m.",
+        source_interaction_id="test-stateful-runtime-status",
+        estado_solicitud="pendiente_confirmacion",
+    )
+
+    assert request.estado_solicitud == "pendiente_confirmacion"
+    assert request.fecha_solicitada == "2026-05-29"
+    assert request.franja_solicitada == "3:00 p. m.–5:00 p. m."

@@ -90,8 +90,8 @@ class PostgresAppointmentRequestRepository:
                         :source_interaction_id,
                         :created_by,
                         :updated_by,
-                        :created_at,
-                        :updated_at
+                        COALESCE(:created_at, CURRENT_TIMESTAMP),
+                        COALESCE(:updated_at, CURRENT_TIMESTAMP)
                     )
                     RETURNING *
                     """
@@ -129,8 +129,8 @@ class PostgresAppointmentRequestRepository:
                         source_interaction_id = :source_interaction_id,
                         created_by = :created_by,
                         updated_by = :updated_by,
-                        created_at = :created_at,
-                        updated_at = :updated_at
+                        created_at = COALESCE(:created_at, created_at),
+                        updated_at = COALESCE(:updated_at, CURRENT_TIMESTAMP)
                     WHERE id_solicitud = :id_solicitud
                     RETURNING *
                     """
