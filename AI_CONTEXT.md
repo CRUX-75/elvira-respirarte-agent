@@ -1395,3 +1395,287 @@ Do not touch n8n.
 Follow SDD:
 
 SPEC → tests RED → implementation mínima → pytest → docs → commit.
+
+
+---
+
+## P6-F.9.14.13 — Appointment Context Carryover SPEC
+
+Status:
+
+CLOSED / SPEC / COMMITTED
+
+Documentation:
+
+docs/P6-F.9.14.13_APPOINTMENT_CONTEXT_CARRYOVER_SPEC.md
+
+Problem solved at specification level:
+
+The appointment date context was lost between turns.
+
+Observed dry-run flow:
+
+1. Patient says: `El viernes`
+2. Runtime resolves:
+   - `fecha_solicitada = 2026-05-29`
+   - `fecha_solicitada_texto = viernes 29 de mayo`
+   - `slots_candidatos`
+   - availability flags
+3. Patient state moves to `ST_CITA_FRANJA`
+4. Patient says: `En la tarde`
+5. Runtime routes correctly:
+   - `intent = hora_cita`
+   - `nuevo_estado = ST_CITA_PENDIENTE`
+   - `next_action = confirm_appointment_request`
+6. AppointmentRequest persistence was skipped because:
+   - `fecha_solicitada` was missing
+
+Decision:
+
+Persist active appointment context in:
+
+patients.appointment_context JSONB
+
+Expected JSON shape:
+
+{
+  "fecha_solicitada": "2026-05-29",
+  "fecha_solicitada_texto": "viernes 29 de mayo",
+  "slots_candidatos": [
+    "3:00 p. m.–5:00 p. m.",
+    "5:00 p. m.–7:00 p. m."
+  ],
+  "es_dia_disponible": true,
+  "is_weekend": false,
+  "is_colombia_holiday": false,
+  "colombia_holiday_name": null
+}
+
+Capture rule:
+
+Store context when:
+
+- result.intent == "fecha_cita"
+- result.nuevo_estado == "ST_CITA_FRANJA"
+- result.fecha_solicitada is present
+
+Carryover rule:
+
+Apply stored context when:
+
+- result.intent == "hora_cita"
+- result.nuevo_estado == "ST_CITA_PENDIENTE"
+- result.fecha_solicitada is missing
+- patient.appointment_context has fecha_solicitada
+
+Clear rule:
+
+Clear context when:
+
+- AppointmentRequest persistence succeeds
+- opt_out becomes true
+
+---
+
+## P6-F.9.14.14 — Appointment Context Pure Helpers + Tests
+
+Status:
+
+CLOSED / RED-THEN-GREEN / GREEN / COMMITTED
+
+Files:
+
+- app/services/appointment_context.py
+- tests/test_appointment_context.py
+
+Implemented pure helpers:
+
+- capture_appointment_context_from_state(state)
+- apply_appointment_context_to_state(state, context)
+- should_clear_appointment_context(state, persisted: bool)
+
+Properties:
+
+- pure
+- deterministic
+- no DB access
+- no network access
+- no FastAPI dependency
+- no LLM dependency
+
+Validated behaviors:
+
+- captures context after fecha_cita -> ST_CITA_FRANJA
+- returns None when not fecha_cita
+- returns None when fecha_solicitada missing
+- restores context for hora_cita -> ST_CITA_PENDIENTE when fecha is missing
+- does not override an already present fecha_solicitada
+- ignores invalid context without fecha_solicitada
+- clears after successful persistence
+- clears on opt_out
+- does not clear otherwise
+
+---
+
+## P6-F.9.14.15 — Patient Appointment Context Repository Methods
+
+Status:
+
+CLOSED / RED-THEN-GREEN / GREEN / COMMITTED
+
+Documentation:
+
+docs/P6-F.9.14.15_PATIENT_APPOINTMENT_CONTEXT_REPOSITORY_SPEC.md
+
+Migration draft:
+
+scripts/sql/002_add_patient_appointment_context.sql
+
+Migration SQL:
+
+ALTER TABLE patients
+ADD COLUMN IF NOT EXISTS appointment_context JSONB;
+
+Repository file:
+
+app/repositories/patients.py
+
+Implemented methods:
+
+- update_patient_appointment_context(telefono, appointment_context)
+- clear_patient_appointment_context(telefono)
+
+Responsibilities:
+
+The repository only persists or clears context.
+
+It must not decide:
+
+- when to capture context
+- when to apply carryover
+- when to clear context
+- whether AppointmentRequest should be created
+- appointment lifecycle transitions
+- WhatsApp sending
+- Google Sheets sync
+- Telegram notification
+- n8n workflows
+
+Tests:
+
+tests/test_patient_appointment_context_repository.py
+
+Validated:
+
+- update stores JSON-compatible appointment_context
+- clear sets appointment_context to NULL
+- telefono is required
+- context is required for update
+
+---
+
+## P6-F.9.14.16 — Stateful Endpoint Carryover Wiring
+
+Status:
+
+CLOSED / RED-THEN-GREEN / GREEN / COMMITTED
+
+Documentation:
+
+docs/P6-F.9.14.16_STATEFUL_ENDPOINT_CARRYOVER_WIRING_CLOSURE.md
+
+Runtime changed:
+
+POST /test/message-stateful only.
+
+Real POST /webhook remains untouched.
+
+Files changed:
+
+- app/main.py
+- tests/test_stateful_appointment_context_carryover.py
+- tests/test_stateful_appointment_request_wiring.py
+
+Runtime behavior added to /test/message-stateful:
+
+1. Reads patient.appointment_context
+2. Applies stored context before calling decide_appointment_request_persistence(...)
+3. Captures context after fecha_cita -> ST_CITA_FRANJA
+4. Persists AppointmentRequest when decision allows it
+5. Clears context after successful AppointmentRequest persistence
+6. Clears context when opt_out is true
+
+Validation:
+
+pytest tests/test_stateful_appointment_request_wiring.py -q
+
+Result:
+
+4 passed
+
+pytest tests/test_stateful_appointment_context_carryover.py -q
+
+Result:
+
+2 passed
+
+Full suite:
+
+pytest -q
+
+Result:
+
+186 passed
+
+Important test isolation fix:
+
+tests/test_stateful_appointment_request_wiring.py now monkeypatches:
+
+- update_patient_appointment_context
+- clear_patient_appointment_context
+
+Reason:
+
+After carryover wiring, /test/message-stateful may call these repository functions.
+
+Unit tests must not reach the real production database.
+
+Observed previous failure:
+
+The test tried to resolve production host `elvira_elvira`.
+
+This was fixed by proper monkeypatching.
+
+Current safety boundaries preserved:
+
+Still not touched:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation flow
+- therapy/session package tracking
+- automatic appointment confirmation
+
+Current conclusion:
+
+The stateful dry-run endpoint now supports appointment context carryover.
+
+The original dry-run bug is fixed at the /test/message-stateful layer.
+
+Before validating in production Swagger, production DB must receive:
+
+ALTER TABLE patients
+ADD COLUMN IF NOT EXISTS appointment_context JSONB;
+
+Next exact block:
+
+P6-F.9.14.17 — Controlled Production Migration: patients.appointment_context
+
+Objective:
+
+Execute and validate the controlled production migration for patients.appointment_context before running Swagger dry-run again.
+
