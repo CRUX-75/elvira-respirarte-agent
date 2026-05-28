@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import JSON, text
+import json
+
+from sqlalchemy import text
 
 from app.db.session import engine
 
@@ -175,14 +177,14 @@ def update_patient_appointment_context(
             text(
                 """
                 UPDATE patients
-                SET appointment_context = :appointment_context,
+                SET appointment_context = CAST(:appointment_context AS jsonb),
                     updated_at = NOW()
                 WHERE telefono = :telefono
                 """
-            ).bindparams(appointment_context=JSON),
+            ),
             {
                 "telefono": telefono,
-                "appointment_context": appointment_context,
+                "appointment_context": json.dumps(appointment_context),
             },
         )
 

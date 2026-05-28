@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from app.repositories import patients
@@ -60,12 +62,12 @@ def test_update_patient_appointment_context_persists_json_context(monkeypatch):
     call = fake_engine.conn.calls[0]
 
     assert "UPDATE patients" in call["sql"]
-    assert "appointment_context = :appointment_context" in call["sql"]
+    assert "appointment_context = CAST(:appointment_context AS jsonb)" in call["sql"]
     assert "updated_at = NOW()" in call["sql"]
     assert "telefono = :telefono" in call["sql"]
 
     assert call["params"]["telefono"] == "573001119991"
-    assert call["params"]["appointment_context"] == context
+    assert json.loads(call["params"]["appointment_context"]) == context
 
 
 def test_update_patient_appointment_context_requires_telefono():
