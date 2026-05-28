@@ -60,3 +60,7 @@ def test_p6f71_colombian_time_preference_is_detected_inside_appointment_slot_sta
 
     for message in cases:
         assert classify_intent(message, "ST_CITA_FRANJA") == "hora_cita"
+
+
+def test_en_la_tarde_in_st_cita_franja_is_hora_cita():
+    assert classify_intent("En la tarde", "ST_CITA_FRANJA") == "hora_cita"

@@ -80,6 +80,17 @@ def classify_intent(message: str, current_state: str = "ST_INIT") -> Intent:
                 r"\bme sirve\b",
                 r"\bme queda bien\b",
 
+                # Selecciones generales de franja cuando ya estamos esperando horario
+                r"\ben la tarde\b",
+                r"\bpor la tarde\b",
+                r"\btarde\b",
+                r"\ben la manana\b",
+                r"\bpor la manana\b",
+                r"\bmanana\b",
+                r"\ben la noche\b",
+                r"\bpor la noche\b",
+                r"\bnoche\b",
+
                 # Selecciones horarias en lenguaje natural colombiano
                 r"\bla de \d{1,2}(?: de la (?:manana|tarde|noche))?\b",
                 r"\bla de (?:una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)(?: de la (?:manana|tarde|noche))?\b",
