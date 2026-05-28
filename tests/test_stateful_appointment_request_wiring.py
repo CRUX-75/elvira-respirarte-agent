@@ -68,6 +68,8 @@ def _patch_stateful_endpoint_dependencies(monkeypatch, fake_result):
         "save_interaction": None,
         "update_patient_state": None,
         "update_patient_last_message": None,
+        "update_patient_appointment_context": None,
+        "clear_patient_appointment_context": None,
         "appointment_service_call": None,
         "whatsapp_send_called": False,
     }
@@ -99,9 +101,17 @@ def _patch_stateful_endpoint_dependencies(monkeypatch, fake_result):
     def fake_update_patient_last_message(**kwargs):
         calls["update_patient_last_message"] = kwargs
 
+    def fake_update_patient_appointment_context(**kwargs):
+        calls["update_patient_appointment_context"] = kwargs
+
+    def fake_clear_patient_appointment_context(**kwargs):
+        calls["clear_patient_appointment_context"] = kwargs
+
     monkeypatch.setattr(main, "save_interaction", fake_save_interaction)
     monkeypatch.setattr(main, "update_patient_state", fake_update_patient_state)
     monkeypatch.setattr(main, "update_patient_last_message", fake_update_patient_last_message)
+    monkeypatch.setattr(main, "update_patient_appointment_context", fake_update_patient_appointment_context)
+    monkeypatch.setattr(main, "clear_patient_appointment_context", fake_clear_patient_appointment_context)
 
     # These attributes do not exist yet before runtime wiring.
     # raising=False keeps this test file RED for response contract first,

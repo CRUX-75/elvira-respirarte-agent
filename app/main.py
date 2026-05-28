@@ -10,7 +10,9 @@ from app.services.tracing import traced_process_message
 from app.services.whatsapp import send_whatsapp_message
 from app.repositories.logs import log_interaction, log_ignored, log_error
 from app.repositories.patients import (
+    clear_patient_appointment_context,
     get_or_create_patient_by_phone,
+    update_patient_appointment_context,
     update_patient_state,
     update_patient_last_message,
 )
@@ -21,6 +23,11 @@ from app.repositories.processed_messages import (
 from app.repositories.interactions import save_interaction
 from app.repositories.postgres_appointment_request_repository import (
     PostgresAppointmentRequestRepository,
+)
+from app.services.appointment_context import (
+    apply_appointment_context_to_state,
+    capture_appointment_context_from_state,
+    should_clear_appointment_context,
 )
 from app.services.appointment_request_runtime import (
     decide_appointment_request_persistence,
@@ -409,6 +416,8 @@ def test_message_stateful(message: IncomingMessage):
     - processes the message with that state
     - stores the interaction
     - updates the patient state
+    - can persist AppointmentRequest in dry-run mode
+    - can carry appointment context between turns
     - never sends a WhatsApp message
     """
 
@@ -441,13 +450,20 @@ def test_message_stateful(message: IncomingMessage):
     delivery_status = "sending_skipped"
     logged_response = f"[TEST_STATEFUL_WHATSAPP_SENDING_DISABLED] {result.respuesta}"
 
+    result = apply_appointment_context_to_state(
+        result,
+        patient.get("appointment_context"),
+    )
+
     appointment_request_decision = decide_appointment_request_persistence(
         state=result,
         telefono=telefono,
         nombre=nombre,
         source_interaction_id=whatsapp_message_id,
     )
+
     appointment_request_metadata = None
+    appointment_request_persisted = False
 
     if appointment_request_decision.should_persist:
         appointment_repository = PostgresAppointmentRequestRepository(engine)
@@ -464,6 +480,7 @@ def test_message_stateful(message: IncomingMessage):
             source_interaction_id=appointment_request_decision.source_interaction_id,
             fuente=appointment_request_decision.canal_origen,
         )
+        appointment_request_persisted = True
         appointment_request_metadata = {
             "id_solicitud": appointment_request.id_solicitud,
             "estado_solicitud": appointment_request.estado_solicitud,
@@ -500,6 +517,16 @@ def test_message_stateful(message: IncomingMessage):
 
     update_patient_last_message(patient_id=str(patient["id"]))
 
+    captured_appointment_context = capture_appointment_context_from_state(result)
+    if captured_appointment_context:
+        update_patient_appointment_context(
+            telefono=telefono,
+            appointment_context=captured_appointment_context,
+        )
+
+    if should_clear_appointment_context(result, persisted=appointment_request_persisted):
+        clear_patient_appointment_context(telefono=telefono)
+
     response = result.model_dump()
     response["test_endpoint"] = "message-stateful"
     response["delivery_status"] = delivery_status
@@ -510,3 +537,4 @@ def test_message_stateful(message: IncomingMessage):
     response["appointment_request"] = appointment_request_metadata
 
     return response
+
