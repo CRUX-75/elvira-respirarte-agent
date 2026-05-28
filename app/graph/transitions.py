@@ -1,6 +1,18 @@
 from app.graph.state import ElviraState
 
 
+_AMBIGUOUS_SLOT_SELECTION_MESSAGES = {
+    "en la tarde",
+    "por la tarde",
+    "tarde",
+}
+
+
+def _is_ambiguous_slot_selection(message: str | None) -> bool:
+    normalized = (message or "").strip().lower()
+    return normalized in _AMBIGUOUS_SLOT_SELECTION_MESSAGES
+
+
 def apply_state_transition(state: ElviraState) -> ElviraState:
     """
     State machine pura y determinística.
@@ -40,8 +52,17 @@ def apply_state_transition(state: ElviraState) -> ElviraState:
         state.state_reason = "Paciente indicó fecha o franja horaria."
         return state
 
-    # HORA CITA — paciente dio hora
+    # HORA CITA — paciente dio hora o selección de franja
     if intent == "hora_cita":
+        if (
+            previous_state == "ST_CITA_FRANJA"
+            and _is_ambiguous_slot_selection(state.mensaje_original)
+        ):
+            state.nuevo_estado = "ST_CITA_FRANJA"
+            state.next_action = "ask_specific_time_slot"
+            state.state_reason = "ambiguous_slot_selection_guard"
+            return state
+
         state.nuevo_estado = "ST_CITA_PENDIENTE"
         state.next_action = "confirm_appointment_request"
         state.state_reason = "Paciente indicó hora de preferencia."

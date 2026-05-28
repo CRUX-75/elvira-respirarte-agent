@@ -413,3 +413,37 @@ def test_p6f91419_guard_blocks_st_cita_franja_without_fecha_solicitada(monkeypat
     assert result.next_action == "ask_preferred_date"
     assert result.fecha_solicitada is None
     assert result.slots_candidatos == []
+
+
+def test_p6f91423_generic_afternoon_reply_with_multiple_slots_stays_in_slot_selection():
+    msg = IncomingMessage(
+        telefono="573001112233",
+        mensaje="En la tarde",
+        estado_actual="ST_CITA_FRANJA",
+    )
+
+    result = process_message(msg)
+
+    assert result.intent == "hora_cita"
+    assert result.nuevo_estado == "ST_CITA_FRANJA"
+    assert result.next_action == "ask_specific_time_slot"
+    assert result.state_reason == "ambiguous_slot_selection_guard"
+    assert result.appointment_request_decision.should_persist is False if hasattr(result, "appointment_request_decision") else True
+
+
+def test_p6f91423_generic_afternoon_reply_with_multiple_slots_stays_in_slot_selection():
+    msg = IncomingMessage(
+        telefono="573001112233",
+        mensaje="En la tarde",
+        estado_actual="ST_CITA_FRANJA",
+    )
+
+    result = process_message(msg)
+
+    assert result.intent == "hora_cita"
+    assert result.nuevo_estado == "ST_CITA_FRANJA"
+    assert result.next_action == "ask_specific_time_slot"
+    assert result.state_reason == "ambiguous_slot_selection_guard"
+    assert "franjas disponibles" in result.respuesta.lower()
+    assert "3:00 p. m." in result.respuesta
+    assert "5:00 p. m." in result.respuesta

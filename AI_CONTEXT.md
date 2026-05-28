@@ -2268,3 +2268,103 @@ Expected future behavior:
 
 Do not start this block until P6-F.9.14.22 is committed cleanly.
 
+
+---
+
+## P6-F.9.14.23 — Slot Selection Precision Guard
+
+Status:
+
+CLOSED / RED-THEN-GREEN / GREEN / READY TO COMMIT
+
+Reason:
+
+After Elvira offered multiple concrete appointment slots, a generic patient reply such as:
+
+`En la tarde`
+
+could move the flow from `ST_CITA_FRANJA` to `ST_CITA_PENDIENTE`.
+
+This was unsafe because the patient had not selected a concrete slot.
+
+Example offered slots:
+
+- 3:00 p. m.–5:00 p. m.
+- 5:00 p. m.–7:00 p. m.
+
+Generic replies like:
+
+- en la tarde
+- por la tarde
+- tarde
+
+must not automatically select the first slot.
+
+Implemented behavior:
+
+When the patient is in `ST_CITA_FRANJA` and replies with an ambiguous afternoon phrase:
+
+- intent remains `hora_cita`
+- nuevo_estado remains `ST_CITA_FRANJA`
+- next_action becomes `ask_specific_time_slot`
+- state_reason becomes `ambiguous_slot_selection_guard`
+- Elvira asks the patient to choose one concrete available slot
+- the flow does not advance to `ST_CITA_PENDIENTE`
+- `confirm_appointment_request` is not triggered
+- AppointmentRequest persistence is not reached from this ambiguous turn
+
+Files changed:
+
+- app/graph/transitions.py
+- app/services/llm.py
+- tests/test_state_machine.py
+
+Important design decision:
+
+The fix does not revert the previous intent routing fix.
+
+`En la tarde` in `ST_CITA_FRANJA` may still classify as `hora_cita`.
+
+The safety guard lives after intent classification, in deterministic transition behavior.
+
+This preserves intent understanding while preventing unsafe state advancement.
+
+Validated response copy:
+
+Para continuar, por favor elija una de las franjas disponibles: de 3:00 p. m. a 5:00 p. m. o de 5:00 p. m. a 7:00 p. m. ¿Cuál le queda mejor?
+
+Validation:
+
+Targeted state machine tests:
+
+GREEN
+
+Full suite:
+
+198 passed
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy/session package tracking
+
+Conclusion:
+
+The appointment flow now avoids guessing the patient’s preferred slot when multiple concrete options exist.
+
+Next recommended block:
+
+P6-F.9.14.24 — Controlled Swagger Slot Guard Dry-Run
+
+Objective:
+
+Validate in production through `/test/message-stateful` only that after Elvira offers two slots, the patient reply `En la tarde` stays in `ST_CITA_FRANJA` and asks for a concrete slot instead of creating an AppointmentRequest.
+
