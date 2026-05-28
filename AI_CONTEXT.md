@@ -2173,3 +2173,98 @@ Objective:
 Validate in production Swagger through `/test/message-stateful` only that `Quiero pedir una cita` returns the new initial appointment copy.
 
 Do not touch real `/webhook`, WhatsApp sending, Google Sheets, Telegram, n8n, Calendar, or doctor confirmation automation.
+
+---
+
+## P6-F.9.14.22 — Controlled Swagger Copy Dry-Run
+
+Status:
+
+CLOSED / GREEN / PRODUCTION COPY VALIDATED
+
+Objective:
+
+Validate in production through `/test/message-stateful` only that the initial appointment message:
+
+`Quiero pedir una cita`
+
+returns the polished initial appointment copy with the afternoon domiciliary care disclaimer.
+
+Production endpoint validated:
+
+POST /test/message-stateful
+
+Payload used:
+
+{
+  "telefono": "test-p6f91422a",
+  "mensaje": "Quiero pedir una cita",
+  "nombre": "Paciente Test Copy"
+}
+
+Production result:
+
+- estado_anterior = ST_INIT
+- estado_actual = ST_INIT
+- nuevo_estado = ST_CITA_FECHA
+- intent = cita
+- next_action = ask_preferred_date
+- delivery_status = sending_skipped
+- appointment_request_decision.should_persist = false
+- appointment_request_decision.reason = skipped_initial_cita_intent
+- appointment_request = null
+
+Validated response copy:
+
+Claro, con muchísimo gusto. Le cuento que las atenciones domiciliarias se manejan solamente en la tarde, normalmente en dos franjas: de 3:00 p. m. a 5:00 p. m. o de 5:00 p. m. a 7:00 p. m. ¿Para qué día le gustaría agendar su cita?
+
+Conclusion:
+
+The production copy is correct.
+
+Elvira now explains the general afternoon-only domiciliary care rule and usual time windows on the first appointment request, without confirming real date-specific availability.
+
+The system correctly does not create an AppointmentRequest at this stage because no date or concrete time window has been selected yet.
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy/session package tracking
+
+Next recommended block:
+
+P6-F.9.14.23 — Slot Selection Precision Guard
+
+Objective:
+
+Prevent ambiguous generic time-window replies from selecting a slot automatically when multiple candidate slots exist.
+
+Example future case:
+
+If Elvira has already offered:
+
+- 3:00 p. m.–5:00 p. m.
+- 5:00 p. m.–7:00 p. m.
+
+and the patient replies:
+
+`En la tarde`
+
+then the system should not automatically choose the first slot.
+
+Expected future behavior:
+
+- remain in ST_CITA_FRANJA
+- do not persist AppointmentRequest
+- ask the patient to choose one of the concrete offered slots
+
+Do not start this block until P6-F.9.14.22 is committed cleanly.
+
