@@ -2859,3 +2859,279 @@ Do not touch:
 - Calendar
 - doctor confirmation automation
 
+
+---
+
+## P6-F.9.14.26 — Controlled Swagger Concrete Slot Mapping Dry-Run
+
+Status:
+
+PAUSED / PARTIAL GREEN / PRODUCT CONTRACT UPDATED
+
+Production endpoint validated:
+
+POST /test/message-stateful
+
+Real POST /webhook was not touched.
+
+Real WhatsApp sending remained disabled.
+
+Validated Test A:
+
+Flow:
+
+1. `Para pedir una cita`
+2. `Para maniana es posible?`
+3. `se puede a las 5?`
+
+Result:
+
+- initial appointment copy correct
+- `maniana` resolved correctly to `2026-05-29`
+- visible slots returned:
+  - `3:00 p. m.–5:00 p. m.`
+  - `5:00 p. m.–7:00 p. m.`
+- final message `se puede a las 5?` mapped correctly to:
+  - `5:00 p. m.–7:00 p. m.`
+- AppointmentRequest was created
+- `appointment_request_decision.should_persist = true`
+- `appointment_request.franja_solicitada = 5:00 p. m.–7:00 p. m.`
+- `delivery_status = sending_skipped`
+
+Technical result:
+
+Test A technical mapping is GREEN.
+
+Reason for pause:
+
+During review, the appointment scheduling flow revealed product/operational complexity that should not be solved by code assumptions.
+
+The block was paused before running Test B and Test C.
+
+Decision:
+
+Do not continue coding appointment scheduling until the operational contract is validated and documented.
+
+---
+
+## Appointment Operational Contract v1.0 — Doctor Validation
+
+Document:
+
+Contrato_Operativo_Agendamiento_Respirarte_v1.0
+
+Status:
+
+DEFINITIVE FOR DOCTOR VALIDATION / BORRADOR PENDING DOCTOR FINAL APPROVAL
+
+Core principle:
+
+Elvira recoge.
+La doctora decide.
+El sistema registra.
+
+Architecture sealed:
+
+- FastAPI/PostgreSQL is the technical source of truth.
+- Google Sheets is the human-visible operational inbox for Dra. D'Aleman.
+- n8n is excluded from the core appointment scheduling flow.
+- Any doctor notification must be implemented as a controlled backend adapter.
+- Elvira must not confirm real availability.
+- Elvira must not approve or reject appointments.
+- Elvira must not promise an exact hour inside a franja.
+
+Contract workflow:
+
+1. Patient requests appointment via WhatsApp.
+2. Elvira collects preferred date and preferred time window/franja.
+3. FastAPI creates AppointmentRequest.
+4. Backend generates SOL- ID.
+5. PostgreSQL persists AppointmentRequest as source of truth.
+6. System adapter syncs request to Google Sheets with pending human-review status.
+7. System adapter notifies Dra. D'Aleman through validated channel.
+8. Elvira sends terminal message to patient.
+9. Dra. D'Aleman reviews in Sheets.
+10. Dra. D'Aleman approves, rejects, cancels, confirms, or proposes alternative.
+
+ADR sealed:
+
+n8n remains excluded from the core scheduling flow.
+
+The creation, identification, persistence, and transition of appointment requests belong exclusively to FastAPI/Python and PostgreSQL.
+
+---
+
+## Doctor Answers — Operational Decisions
+
+Dra. D'Aleman provided the following operational decisions:
+
+1. Expected patient response time:
+   - 30–60 minutes.
+
+2. Patient terminal message after request registration:
+   - “Hemos recibido su solicitud, pronto recibirá confirmación de la hora en que recibirá la atención.”
+
+3. Doctor notification channel:
+   - WhatsApp.
+
+4. Exact-hour requests:
+   - The patient must be told politely that care is handled by time window/franja.
+   - It is not possible to guarantee an exact hour inside the assigned block.
+   - The patient should be advised to keep the full time window available.
+
+5. Out-of-hours message:
+   - “Gracias por escribirnos. En este momento nuestro horario de atención ha finalizado, pero hemos recibido tu mensaje. Pronto nos pondremos en contacto para ayudarte con tu agendamiento.”
+
+Important wording decision:
+
+Do not hardcode only `3:00 p. m.–5:00 p. m.` in patient responses.
+
+The doctor's mention of 3–5 is treated as an example.
+
+The system must always use KB_Horarios as the source of truth for valid franjas.
+
+---
+
+## P6-F.9.14.27 — KB-Based Exact-Hour Franja Clarification Guard
+
+Status:
+
+SPEC CREATED / READY FOR TESTS
+
+Spec document:
+
+docs/P6-F.9.14.27_KB_BASED_EXACT_HOUR_FRANJA_CLARIFICATION_SPEC.md
+
+Reason:
+
+The previous out-of-slot guard blocked loose exact hours such as:
+
+- `se puede a las 4?`
+- `a las 6`
+
+After doctor validation, the product rule changed:
+
+If the exact hour falls inside a visible KB-backed franja, Elvira should not reject abruptly.
+
+Instead, Elvira should:
+
+1. explain that attention is handled by franjas, not guaranteed exact hours
+2. map the exact hour to the corresponding KB-backed franja
+3. ask the patient to confirm that franja
+4. persist only after patient confirmation
+
+New desired behavior:
+
+Example 1:
+
+Patient says:
+
+`se puede a las 4?`
+
+If KB slots include:
+
+`3:00 p. m.–5:00 p. m.`
+
+Expected:
+
+- stay in ST_CITA_FRANJA
+- do not persist yet
+- next_action = ask_confirm_exact_hour_as_slot
+- store pending franja in appointment_context
+- ask if patient wants to register that franja
+
+Example 2:
+
+Patient says:
+
+`se puede a las 6?`
+
+If KB slots include:
+
+`5:00 p. m.–7:00 p. m.`
+
+Expected:
+
+- stay in ST_CITA_FRANJA
+- do not persist yet
+- next_action = ask_confirm_exact_hour_as_slot
+- store pending franja in appointment_context
+- ask if patient wants to register that franja
+
+Example 3:
+
+Patient confirms after clarification:
+
+`sí`
+
+Expected:
+
+- use pending exact-hour franja from appointment_context
+- persist AppointmentRequest
+- move to ST_CITA_PENDIENTE
+- respond with doctor-approved terminal message
+- mention 30–60 minute expected confirmation window if operationally allowed
+
+Example 4:
+
+Patient asks for an exact hour outside all KB slots:
+
+`a las 2`
+
+Expected:
+
+- do not persist
+- stay in ST_CITA_FRANJA
+- show available KB-backed franjas
+- ask patient to choose one
+
+State machine decision:
+
+Do not create a new patient state yet.
+
+Keep:
+
+ST_CITA_FRANJA
+
+Use new next_action:
+
+ask_confirm_exact_hour_as_slot
+
+Suggested appointment_context fields:
+
+- pending_exact_hour_franja
+- pending_exact_hour_text
+- pending_exact_hour_requires_confirmation
+
+Safety boundaries:
+
+Do not touch yet:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets adapter
+- Doctor WhatsApp Notification Adapter
+- Telegram
+- n8n
+- Calendar
+- therapy/session package tracking
+
+Next starting point in new chat:
+
+P6-F.9.14.27 tests RED.
+
+First inspect:
+
+- app/services/appointment_request_runtime.py
+- app/services/appointment_context.py
+- app/graph/transitions.py
+- app/services/intent.py
+- app/services/llm.py
+- tests/test_state_machine.py
+- tests/test_appointment_request_runtime_decision.py
+- tests/test_stateful_appointment_context_carryover.py
+
+Then implement through SDD:
+
+SPEC → tests RED → implementation mínima → targeted tests → full pytest → docs update → commit.
+
