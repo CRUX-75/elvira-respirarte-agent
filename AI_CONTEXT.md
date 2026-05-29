@@ -3236,3 +3236,141 @@ Next Step
 
 Commit P6-F.9.14.27 changes.
 
+
+
+---
+
+## P6-F.9.14.28 — Response-layer Exact-Hour Franja Confirmation
+
+Status:
+
+CLOSED / GREEN / COMMITTED / CLEAN
+
+Commit:
+
+Add exact-hour franja confirmation response handling
+
+Validation:
+
+Full suite GREEN
+
+207 passed
+
+Reason:
+
+P6-F.9.14.27 introduced the runtime guard for exact-hour messages inside a visible KB-backed franja.
+
+When the patient says something like:
+
+- se puede a las 5?
+
+and the hour maps to a visible KB_Horarios franja, the runtime returns:
+
+- should_persist = False
+- reason = requires_exact_hour_franja_confirmation
+- franja_solicitada = corresponding KB-backed franja
+
+The missing part was patient-facing response handling.
+
+Implementation:
+
+File changed:
+
+- app/main.py
+
+A deterministic response override was added in `/test/message-stateful`.
+
+When:
+
+reason == "requires_exact_hour_franja_confirmation"
+
+the endpoint overrides `result.respuesta` with a controlled response that:
+
+- explains that attention is handled by time windows / franjas
+- explains that an exact hour cannot be guaranteed inside the block
+- proposes the corresponding KB-backed franja
+- asks the patient to explicitly confirm that franja
+- does not persist an AppointmentRequest yet
+
+Example response:
+
+Con gusto. Le cuento que la atención se maneja por franjas horarias y no es posible garantizar una hora exacta dentro del bloque. Para esa hora, la franja correspondiente sería de 5:00 p. m. a 7:00 p. m. ¿Desea que registremos su solicitud para esa franja?
+
+Important implementation detail:
+
+`logged_response` is now built after the response override.
+
+This ensures the endpoint response and the saved interaction log use the same patient-facing text.
+
+Test added:
+
+- tests/test_stateful_appointment_context_carryover.py
+
+Covered behavior:
+
+- `/test/message-stateful` returns the exact-hour franja clarification copy
+- `appointment_request_decision.should_persist` remains false
+- `appointment_request_decision.reason` is `requires_exact_hour_franja_confirmation`
+- `appointment_request_decision.franja_solicitada` uses the KB-backed franja
+- `appointment_request` remains null
+- AppointmentRequestService is not called
+- interaction log stores the overridden response text
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets adapter
+- Doctor WhatsApp Notification Adapter
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy/session package tracking
+
+Current conclusion:
+
+P6-F.9.14.28 closes the response-layer gap for exact-hour franja clarification.
+
+The stateful test endpoint can now explain the franja rule clearly and ask for explicit confirmation before persistence.
+
+Next recommended block:
+
+P6-F.9.14.29 — Controlled Swagger Exact-Hour Franja Confirmation Dry-Run
+
+Objective:
+
+Validate in production through `/test/message-stateful` only that:
+
+1. Patient starts appointment flow.
+2. Patient provides a valid date.
+3. Patient asks for an exact hour that maps to a KB-backed franja.
+4. Elvira does not persist an AppointmentRequest yet.
+5. Elvira explains the franja rule and asks for explicit confirmation.
+
+Suggested Swagger sequence:
+
+1. Quiero pedir una cita
+2. Para maniana
+3. se puede a las 5?
+
+Expected final result:
+
+- should_persist = false
+- reason = requires_exact_hour_franja_confirmation
+- franja_solicitada = 5:00 p. m.–7:00 p. m.
+- appointment_request = null
+- delivery_status = sending_skipped
+- response explains franja handling and asks for confirmation
+
+Do not touch:
+
+- real POST /webhook
+- WhatsApp sending
+- Google Sheets
+- Doctor WhatsApp adapter
+- Telegram
+- n8n
+- Calendar
