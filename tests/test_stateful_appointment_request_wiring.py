@@ -244,8 +244,8 @@ def test_stateful_endpoint_persists_ready_hora_cita_with_synthetic_source_intera
         nuevo_estado="ST_CITA_PENDIENTE",
         next_action="confirm_appointment_request",
         fecha_solicitada="2026-05-29",
-        slots_candidatos=["14:00-18:00"],
-        mensaje_original="A las 3",
+        slots_candidatos=["3:00 p. m.–5:00 p. m.", "5:00 p. m.–7:00 p. m."],
+        mensaje_original="la primera franja está bien",
         is_weekend=False,
         is_colombia_holiday=False,
         es_dia_disponible=True,
@@ -257,7 +257,7 @@ def test_stateful_endpoint_persists_ready_hora_cita_with_synthetic_source_intera
         json={
             "telefono": "573001112233",
             "nombre": "Paciente Test",
-            "mensaje": "A las 3",
+            "mensaje": "la primera franja está bien",
         },
     )
 
@@ -283,7 +283,7 @@ def test_stateful_endpoint_persists_ready_hora_cita_with_synthetic_source_intera
     assert calls["appointment_service_call"]["telefono"] == "573001112233"
     assert calls["appointment_service_call"]["nombre_paciente"] == "Paciente Test"
     assert calls["appointment_service_call"]["fecha_solicitada"] == "2026-05-29"
-    assert calls["appointment_service_call"]["franja_solicitada"] == "14:00-18:00"
+    assert calls["appointment_service_call"]["franja_solicitada"] == "3:00 p. m.–5:00 p. m."
     assert calls["appointment_service_call"]["source_interaction_id"] == body["whatsapp_message_id"]
 
     assert calls["save_interaction"]["whatsapp_message_id"] == body["whatsapp_message_id"]

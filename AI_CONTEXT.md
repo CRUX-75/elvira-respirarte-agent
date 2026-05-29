@@ -3135,3 +3135,104 @@ Then implement through SDD:
 
 SPEC → tests RED → implementation mínima → targeted tests → full pytest → docs update → commit.
 
+
+---
+
+## Checkpoint — P6-F.9.14.27 KB-Based Exact-Hour Franja Clarification Guard
+
+Status: GREEN / CLOSED
+
+### Context
+
+P6-F.9.14.26 quedó pausado como PARTIAL GREEN después de validar en producción que el sistema podía persistir correctamente una solicitud cuando el paciente decía una hora concreta como “se puede a las 5?”, mapeándola a la franja `5:00 p. m.–7:00 p. m.`.
+
+Después de esa validación técnica, Dra. D’Aleman definió una regla operativa más precisa:
+
+- Respirarte trabaja por franjas horarias.
+- No se debe garantizar una hora exacta dentro de la franja.
+- Si el paciente menciona una hora exacta que cae dentro de una franja visible de `KB_Horarios`, Elvira debe aclarar primero la franja correspondiente y pedir confirmación.
+- Solo después de que el paciente confirme la franja, el sistema debe persistir `AppointmentRequest`.
+
+### New Operational Rule
+
+If a patient says an exact loose hour inside a visible KB schedule slot, for example:
+
+- “se puede a las 3?”
+- “se puede a las 5?”
+- “a las 6”
+
+and that hour falls inside one of the visible KB slots, Elvira must not persist the appointment request immediately.
+
+Instead:
+
+1. Resolve the matching KB franja.
+2. Return a non-persistence decision.
+3. Use reason `requires_exact_hour_franja_confirmation`.
+4. Keep the matched `franja_solicitada` in the decision.
+5. Let the response layer clarify that care is handled by franjas, not guaranteed exact hours.
+6. Persist only when the patient explicitly confirms/selects the franja.
+
+### Runtime Changes
+
+Implemented in:
+
+- `app/services/appointment_request_runtime.py`
+
+Added helper:
+
+- `is_exact_hour_without_explicit_franja_confirmation(message)`
+
+Behavior:
+
+- Loose exact-hour messages such as “a las 3”, “a las 5”, “se puede a las 5?” trigger clarification.
+- Explicit franja selections such as “la primera franja”, “el segundo horario”, “la franja de 5 a 7 está bien” still allow persistence.
+- Unsupported loose hours outside visible KB slots continue to avoid persistence.
+
+### Tests Added / Updated
+
+Added:
+
+- `tests/test_kb_based_exact_hour_franja_clarification_guard.py`
+
+Updated:
+
+- `tests/test_appointment_request_runtime_decision.py`
+- `tests/test_stateful_appointment_context_carryover.py`
+- `tests/test_stateful_appointment_request_wiring.py`
+
+### Validated Test Results
+
+Focused suite:
+
+```bash
+pytest tests/test_appointment_request_runtime_decision.py tests/test_kb_based_exact_hour_franja_clarification_guard.py tests/test_stateful_appointment_request_wiring.py -q
+
+Result:
+
+28 passed
+
+Full suite:
+
+pytest -q
+
+Result:
+
+206 passed
+Architectural Decision Preserved
+
+The operational contract remains:
+
+Elvira recoge.
+La doctora decide.
+El sistema registra.
+
+Architecture remains sealed:
+
+FastAPI/PostgreSQL = source of truth.
+Google Sheets = visible operational tray.
+n8n remains outside the core.
+Doctor WhatsApp notification remains for a later backend adapter phase.
+Next Step
+
+Commit P6-F.9.14.27 changes.
+

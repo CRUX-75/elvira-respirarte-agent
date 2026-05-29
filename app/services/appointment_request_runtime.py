@@ -35,6 +35,49 @@ def _normalize_slot_message(message: str | None) -> str:
     return normalized
 
 
+def is_exact_hour_without_explicit_franja_confirmation(message: str | None) -> bool:
+    """Return True when patient mentions a loose exact hour, not a full KB franja.
+
+    P6-F.9.14.27:
+    A loose exact hour inside a KB slot must not create an AppointmentRequest yet.
+    The assistant must clarify that care is handled by franjas and ask for confirmation.
+    """
+
+    normalized = _normalize_slot_message(message)
+
+    if not normalized:
+        return False
+
+    explicit_franja_markers = (
+        "franja",
+        "bloque",
+        "de 3 a 5",
+        "3 a 5",
+        "de 5 a 7",
+        "5 a 7",
+        "primera",
+        "segunda",
+        "primer horario",
+        "segundo horario",
+        "primer turno",
+        "segundo turno",
+    )
+
+    if any(marker in normalized for marker in explicit_franja_markers):
+        return False
+
+    exact_hour_patterns = (
+        r"\ba las\s+\d{1,2}\b",
+        r"\ba la\s+\d{1,2}\b",
+        r"\b\d{1,2}\s*(am|pm)\b",
+        r"\b\d{1,2}\s*(a m|p m)\b",
+        r"\ba las\s+(tres|cinco)\b",
+        r"\ba la\s+(una)\b",
+    )
+
+    return any(re.search(pattern, normalized) for pattern in exact_hour_patterns)
+
+
 def resolve_requested_slot_from_message(
     message: str | None,
     slots: list[str],
@@ -236,6 +279,22 @@ def decide_appointment_request_persistence(
         slots,
     )
     hora_solicitada_texto = state.mensaje_original or None
+
+    if (
+        franja_solicitada is not None
+        and is_exact_hour_without_explicit_franja_confirmation(state.mensaje_original)
+    ):
+        return AppointmentPersistenceDecision(
+            should_persist=False,
+            reason="requires_exact_hour_franja_confirmation",
+            telefono=normalized_phone,
+            nombre_paciente=nombre,
+            intent_origen=state.intent,
+            fecha_solicitada=state.fecha_solicitada,
+            franja_solicitada=franja_solicitada,
+            hora_solicitada_texto=hora_solicitada_texto,
+            source_interaction_id=source_interaction_id,
+        )
 
     if franja_solicitada is None:
         return AppointmentPersistenceDecision(

@@ -231,7 +231,7 @@ def test_allows_hora_cita_ready_for_human_review():
                 "3:00 p. m.–5:00 p. m.",
                 "5:00 p. m.–7:00 p. m.",
             ],
-            mensaje_original="A las 3",
+            mensaje_original="la franja de 3 a 5 está bien",
         ),
         telefono="573001112233",
         nombre="Paciente Test",
@@ -247,7 +247,7 @@ def test_allows_hora_cita_ready_for_human_review():
     assert decision.estado_solicitud == "pendiente_confirmacion"
     assert decision.fecha_solicitada == "2026-05-29"
     assert decision.franja_solicitada == "3:00 p. m.–5:00 p. m."
-    assert decision.hora_solicitada_texto == "A las 3"
+    assert decision.hora_solicitada_texto == "la franja de 3 a 5 está bien"
     assert decision.source_interaction_id == "wamid.test-013"
 
 
@@ -262,7 +262,7 @@ def test_allows_hora_cita_without_nombre():
                 "3:00 p. m.–5:00 p. m.",
                 "5:00 p. m.–7:00 p. m.",
             ],
-            mensaje_original="A las 5",
+            mensaje_original="la franja de 5 a 7 está bien",
         ),
         telefono="573001112233",
         nombre=None,
@@ -312,7 +312,7 @@ def test_skips_wrong_state_or_action():
     assert decision.reason == "skipped_wrong_state_or_action"
 
 
-def test_p6f91425_maps_concrete_three_oclock_to_first_slot():
+def test_p6f91425_concrete_three_oclock_requires_franja_confirmation():
     decision = decide_appointment_request_persistence(
         intent="hora_cita",
         nuevo_estado="ST_CITA_PENDIENTE",
@@ -329,11 +329,12 @@ def test_p6f91425_maps_concrete_three_oclock_to_first_slot():
         mensaje_original="se puede a las 3?",
     )
 
-    assert decision.should_persist is True
+    assert decision.should_persist is False
+    assert decision.reason == "requires_exact_hour_franja_confirmation"
     assert decision.franja_solicitada == "3:00 p. m.–5:00 p. m."
 
 
-def test_p6f91425_maps_concrete_five_oclock_to_second_slot():
+def test_p6f91425_concrete_five_oclock_requires_franja_confirmation():
     decision = decide_appointment_request_persistence(
         intent="hora_cita",
         nuevo_estado="ST_CITA_PENDIENTE",
@@ -350,7 +351,8 @@ def test_p6f91425_maps_concrete_five_oclock_to_second_slot():
         mensaje_original="se puede a las 5?",
     )
 
-    assert decision.should_persist is True
+    assert decision.should_persist is False
+    assert decision.reason == "requires_exact_hour_franja_confirmation"
     assert decision.franja_solicitada == "5:00 p. m.–7:00 p. m."
 
 
@@ -438,7 +440,7 @@ def test_p6f91425_blocks_unsupported_loose_hour_and_does_not_fallback_to_first_s
     assert decision.franja_solicitada is None
 
 
-def test_p6f91425_maps_concrete_three_oclock_to_first_slot():
+def test_p6f91425_concrete_three_oclock_requires_franja_confirmation():
     decision = decide_appointment_request_persistence(
         state=make_state(
             intent="hora_cita",
@@ -456,11 +458,12 @@ def test_p6f91425_maps_concrete_three_oclock_to_first_slot():
         source_interaction_id="wamid.test-p6f91425-001",
     )
 
-    assert decision.should_persist is True
+    assert decision.should_persist is False
+    assert decision.reason == "requires_exact_hour_franja_confirmation"
     assert decision.franja_solicitada == "3:00 p. m.–5:00 p. m."
 
 
-def test_p6f91425_maps_concrete_five_oclock_to_second_slot():
+def test_p6f91425_concrete_five_oclock_requires_franja_confirmation():
     decision = decide_appointment_request_persistence(
         state=make_state(
             intent="hora_cita",
@@ -478,7 +481,8 @@ def test_p6f91425_maps_concrete_five_oclock_to_second_slot():
         source_interaction_id="wamid.test-p6f91425-002",
     )
 
-    assert decision.should_persist is True
+    assert decision.should_persist is False
+    assert decision.reason == "requires_exact_hour_franja_confirmation"
     assert decision.franja_solicitada == "5:00 p. m.–7:00 p. m."
 
 
@@ -570,7 +574,7 @@ def test_p6f91425_blocks_unsupported_loose_hour_and_does_not_fallback_to_first_s
     assert decision.franja_solicitada is None
 
 
-def test_p6f91425_maps_concrete_three_oclock_to_first_slot():
+def test_p6f91425_concrete_three_oclock_requires_franja_confirmation():
     decision = decide_appointment_request_persistence(
         state=make_state(
             intent="hora_cita",
@@ -588,11 +592,12 @@ def test_p6f91425_maps_concrete_three_oclock_to_first_slot():
         source_interaction_id="wamid.test-p6f91425-001",
     )
 
-    assert decision.should_persist is True
+    assert decision.should_persist is False
+    assert decision.reason == "requires_exact_hour_franja_confirmation"
     assert decision.franja_solicitada == "3:00 p. m.–5:00 p. m."
 
 
-def test_p6f91425_maps_concrete_five_oclock_to_second_slot():
+def test_p6f91425_concrete_five_oclock_requires_franja_confirmation():
     decision = decide_appointment_request_persistence(
         state=make_state(
             intent="hora_cita",
@@ -610,7 +615,8 @@ def test_p6f91425_maps_concrete_five_oclock_to_second_slot():
         source_interaction_id="wamid.test-p6f91425-002",
     )
 
-    assert decision.should_persist is True
+    assert decision.should_persist is False
+    assert decision.reason == "requires_exact_hour_franja_confirmation"
     assert decision.franja_solicitada == "5:00 p. m.–7:00 p. m."
 
 
