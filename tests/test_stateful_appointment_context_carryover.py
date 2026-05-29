@@ -250,3 +250,72 @@ def test_stateful_endpoint_applies_context_before_hora_cita_persistence(monkeypa
     assert calls["clear_patient_appointment_context"] == {
         "telefono": "573001112233",
     }
+
+
+def test_stateful_endpoint_returns_exact_hour_franja_confirmation_copy(monkeypatch):
+    fake_result = FakeElviraResult(
+        intent="hora_cita",
+        nuevo_estado="ST_CITA_PENDIENTE",
+        next_action="confirm_appointment_request",
+        fecha_solicitada=None,
+        slots_candidatos=[],
+        mensaje_original="se puede a las 5?",
+    )
+
+    patient = {
+        "id": "patient-001",
+        "telefono": "573001112233",
+        "nombre": "Paciente Test",
+        "estado_actual": "ST_CITA_FRANJA",
+        "opt_out": False,
+        "appointment_context": {
+            "fecha_solicitada": "2026-05-29",
+            "fecha_solicitada_texto": "viernes 29 de mayo",
+            "slots_candidatos": [
+                "3:00 p. m.–5:00 p. m.",
+                "5:00 p. m.–7:00 p. m.",
+            ],
+            "es_dia_disponible": True,
+            "is_weekend": False,
+            "is_colombia_holiday": False,
+            "colombia_holiday_name": None,
+        },
+    }
+
+    calls = _patch_stateful_dependencies(
+        monkeypatch,
+        fake_result=fake_result,
+        patient=patient,
+    )
+
+    response = client.post(
+        "/test/message-stateful",
+        json={
+            "telefono": "573001112233",
+            "nombre": "Paciente Test",
+            "mensaje": "se puede a las 5?",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["appointment_request_decision"]["should_persist"] is False
+    assert (
+        body["appointment_request_decision"]["reason"]
+        == "requires_exact_hour_franja_confirmation"
+    )
+    assert (
+        body["appointment_request_decision"]["franja_solicitada"]
+        == "5:00 p. m.–7:00 p. m."
+    )
+    assert body["appointment_request"] is None
+
+    assert "se maneja por franjas horarias" in body["respuesta"]
+    assert "no es posible garantizar una hora exacta" in body["respuesta"]
+    assert "5:00 p. m. a 7:00 p. m." in body["respuesta"]
+    assert "¿Desea que registremos su solicitud para esa franja?" in body["respuesta"]
+
+    assert calls["appointment_service_call"] is None
+    assert calls["clear_patient_appointment_context"] is None
+    assert "5:00 p. m. a 7:00 p. m." in calls["save_interaction"]["respuesta_elvira"]

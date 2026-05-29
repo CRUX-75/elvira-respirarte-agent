@@ -406,6 +406,24 @@ def test_message(message: IncomingMessage):
     return result.model_dump()
 
 
+
+def _build_exact_hour_franja_confirmation_response(franja: str | None) -> str:
+    if not franja:
+        return (
+            "Con gusto. Le cuento que la atención se maneja por franjas horarias "
+            "y no es posible garantizar una hora exacta dentro del bloque. "
+            "¿Desea que registremos su solicitud para una de las franjas disponibles?"
+        )
+
+    readable_franja = franja.replace("–", " a ")
+
+    return (
+        "Con gusto. Le cuento que la atención se maneja por franjas horarias "
+        "y no es posible garantizar una hora exacta dentro del bloque. "
+        f"Para esa hora, la franja correspondiente sería de {readable_franja}. "
+        "¿Desea que registremos su solicitud para esa franja?"
+    )
+
 @app.post("/test/message-stateful")
 def test_message_stateful(message: IncomingMessage):
     """
@@ -448,7 +466,6 @@ def test_message_stateful(message: IncomingMessage):
     whatsapp_message_id = f"test-stateful-{uuid4()}"
     whatsapp_timestamp = None
     delivery_status = "sending_skipped"
-    logged_response = f"[TEST_STATEFUL_WHATSAPP_SENDING_DISABLED] {result.respuesta}"
 
     result = apply_appointment_context_to_state(
         result,
@@ -462,6 +479,16 @@ def test_message_stateful(message: IncomingMessage):
         source_interaction_id=whatsapp_message_id,
     )
 
+
+    if (
+        appointment_request_decision.reason
+        == "requires_exact_hour_franja_confirmation"
+    ):
+        result.respuesta = _build_exact_hour_franja_confirmation_response(
+            appointment_request_decision.franja_solicitada
+        )
+
+    logged_response = f"[TEST_STATEFUL_WHATSAPP_SENDING_DISABLED] {result.respuesta}"
     appointment_request_metadata = None
     appointment_request_persisted = False
 
