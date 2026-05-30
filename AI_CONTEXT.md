@@ -3605,3 +3605,101 @@ Expected final result:
 - response does not contain `queda registrada`
 - `delivery_status = sending_skipped`
 
+
+---
+
+## P6-F.9.14.33 — Controlled Swagger Stateful Carryover Guard Dry-Run
+
+Status:
+
+CLOSED / GREEN / PRODUCTION VALIDATED
+
+Production endpoint validated:
+
+POST /test/message-stateful
+
+Real POST /webhook was not touched.
+
+Real WhatsApp sending remained disabled.
+
+Validated sequence:
+
+1. `Quiero pedir una cita`
+2. `Para maniana`
+3. `se puede a las 5?`
+4. Additional sanity check: `ahh, no atienden fines de semana?`
+
+Production context:
+
+At validation time, Colombia current date was:
+
+- `fecha_actual_colombia = 2026-05-30`
+
+Therefore:
+
+- `maniana` resolved to `domingo 31 de mayo`
+- `fecha_solicitada = 2026-05-31`
+- `is_weekend = true`
+- `es_dia_disponible = false`
+- `slots_candidatos = []`
+
+Final result for `se puede a las 5?`:
+
+- `nuevo_estado = ST_CITA_FECHA`
+- `next_action = ask_preferred_date`
+- `state_reason = unavailable_date_guard`
+- `persisted_state = ST_CITA_FECHA`
+- `appointment_request_decision.should_persist = false`
+- `appointment_request_decision.reason = skipped_weekend`
+- `appointment_request = null`
+- `delivery_status = sending_skipped`
+
+Validated response:
+
+`Domingo 31 de mayo no tenemos atención domiciliaria disponible. ¿Le gustaría indicarme otro día entre semana para revisar las franjas disponibles?`
+
+Important validation:
+
+The endpoint no longer returns fake registration copy.
+
+Confirmed NOT present:
+
+- no `ST_CITA_PENDIENTE`
+- no `confirm_appointment_request`
+- no `queda registrada`
+- no AppointmentRequest creation
+
+Additional sanity check:
+
+Patient asked:
+
+`ahh, no atienden fines de semana?`
+
+Result:
+
+- `intent = horarios`
+- `next_action = answer_schedule`
+- `persisted_state = ST_CITA_FECHA`
+- `appointment_request = null`
+
+This confirms that Elvira can answer a schedule clarification while remaining safely inside the appointment-date flow.
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy/session package tracking
+
+Conclusion:
+
+The stateful carryover guard is production-validated.
+
+Unavailable date context now wins over later hour-selection messages in `/test/message-stateful`.
+
