@@ -424,6 +424,39 @@ def _build_exact_hour_franja_confirmation_response(franja: str | None) -> str:
         "¿Desea que registremos su solicitud para esa franja?"
     )
 
+def _force_unavailable_date_guard_response(result):
+    """Force safe appointment state/copy when carried date context is unavailable."""
+    if not getattr(result, "fecha_solicitada", None):
+        return result
+
+    is_unavailable = (
+        getattr(result, "is_weekend", False) is True
+        or getattr(result, "is_colombia_holiday", False) is True
+        or getattr(result, "es_dia_disponible", None) is False
+        or not getattr(result, "slots_candidatos", None)
+    )
+
+    is_attempting_confirmation = (
+        getattr(result, "nuevo_estado", None) == "ST_CITA_PENDIENTE"
+        or getattr(result, "next_action", None) == "confirm_appointment_request"
+    )
+
+    if not (is_unavailable and is_attempting_confirmation):
+        return result
+
+    result.nuevo_estado = "ST_CITA_FECHA"
+    result.next_action = "ask_preferred_date"
+    result.state_reason = "unavailable_date_guard"
+
+    date_text = getattr(result, "fecha_solicitada_texto", None) or "ese día"
+    result.respuesta = (
+        f"{date_text.capitalize()} no tenemos atención domiciliaria disponible. "
+        "¿Le gustaría indicarme otro día entre semana para revisar las franjas disponibles?"
+    )
+
+    return result
+
+
 @app.post("/test/message-stateful")
 def test_message_stateful(message: IncomingMessage):
     """
@@ -479,6 +512,12 @@ def test_message_stateful(message: IncomingMessage):
         source_interaction_id=whatsapp_message_id,
     )
 
+    if appointment_request_decision.reason in {
+        "skipped_weekend",
+        "skipped_colombia_holiday",
+        "skipped_unavailable_date",
+    }:
+        result = _force_unavailable_date_guard_response(result)
 
     if (
         appointment_request_decision.reason

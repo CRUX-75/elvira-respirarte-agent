@@ -3494,3 +3494,114 @@ Expected final result:
 - response asks for another valid date
 - `delivery_status = sending_skipped`
 
+
+---
+
+## P6-F.9.14.32 — Stateful Carryover Before Confirmation Guard
+
+Status:
+
+CLOSED / GREEN
+
+Reason:
+
+Production Swagger dry-run in P6-F.9.14.31 showed that `/test/message-stateful` could still return unsafe confirmation copy after an unavailable date context was carried over.
+
+Observed unsafe behavior:
+
+1. Patient requested an appointment.
+2. Patient said `Para maniana`.
+3. The date resolved to Sunday 2026-05-31:
+   - `is_weekend = true`
+   - `es_dia_disponible = false`
+   - `slots_candidatos = []`
+4. Elvira correctly told the patient that no consultations are available that day.
+5. Patient then said `se puede a las 5?`.
+
+Before the fix, the endpoint returned:
+
+- `nuevo_estado = ST_CITA_PENDIENTE`
+- `next_action = confirm_appointment_request`
+- response implied the request was registered
+- `appointment_request_decision.should_persist = false`
+- `appointment_request_decision.reason = skipped_weekend`
+- `appointment_request = null`
+
+Diagnosis:
+
+The persistence decision layer correctly blocked AppointmentRequest creation, but the response/state layer had already advanced incorrectly.
+
+Fix:
+
+Added endpoint-level safety helper in:
+
+- `app/main.py`
+
+New helper:
+
+- `_force_unavailable_date_guard_response(result)`
+
+Behavior:
+
+After appointment context carryover and after `decide_appointment_request_persistence(...)`, if the decision reason is:
+
+- `skipped_weekend`
+- `skipped_colombia_holiday`
+- `skipped_unavailable_date`
+
+then the endpoint forces safe state/copy before `logged_response`, `save_interaction`, and `update_patient_state`.
+
+Safe result:
+
+- `nuevo_estado = ST_CITA_FECHA`
+- `next_action = ask_preferred_date`
+- `state_reason = unavailable_date_guard`
+- response asks for another valid weekday/date
+- no fake registration copy
+- no AppointmentRequest created
+
+Scope:
+
+Only `/test/message-stateful`.
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy/session package tracking
+
+Validation:
+
+Targeted tests GREEN.
+
+Full suite GREEN.
+
+Next recommended block:
+
+P6-F.9.14.33 — Controlled Swagger Stateful Carryover Guard Dry-Run
+
+Objective:
+
+Validate in production through `/test/message-stateful` only that this sequence no longer returns fake registration copy:
+
+1. `Quiero pedir una cita`
+2. `Para maniana`
+3. `se puede a las 5?`
+
+Expected final result:
+
+- `nuevo_estado = ST_CITA_FECHA`
+- `next_action = ask_preferred_date`
+- `state_reason = unavailable_date_guard`
+- `persisted_state = ST_CITA_FECHA`
+- `appointment_request = null`
+- response does not contain `queda registrada`
+- `delivery_status = sending_skipped`
+
