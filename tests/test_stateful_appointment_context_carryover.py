@@ -311,6 +311,13 @@ def test_stateful_endpoint_returns_exact_hour_franja_confirmation_copy(monkeypat
     )
     assert body["appointment_request"] is None
 
+    assert body["nuevo_estado"] == "ST_CITA_FRANJA"
+    assert body["persisted_state"] == "ST_CITA_FRANJA"
+    assert body["next_action"] == "ask_confirm_exact_hour_as_slot"
+    assert calls["save_interaction"]["nuevo_estado"] == "ST_CITA_FRANJA"
+    assert calls["save_interaction"]["next_action"] == "ask_confirm_exact_hour_as_slot"
+    assert calls["update_patient_state"]["nuevo_estado"] == "ST_CITA_FRANJA"
+
     assert "se maneja por franjas horarias" in body["respuesta"]
     assert "no es posible garantizar una hora exacta" in body["respuesta"]
     assert "5:00 p. m. a 7:00 p. m." in body["respuesta"]

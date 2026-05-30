@@ -424,6 +424,13 @@ def _build_exact_hour_franja_confirmation_response(franja: str | None) -> str:
         "¿Desea que registremos su solicitud para esa franja?"
     )
 
+def _force_exact_hour_franja_confirmation_state_guard_response(result):
+    result.nuevo_estado = "ST_CITA_FRANJA"
+    result.next_action = "ask_confirm_exact_hour_as_slot"
+    result.state_reason = "requires_exact_hour_franja_confirmation"
+    return result
+
+
 def _force_unavailable_date_guard_response(result):
     """Force safe appointment state/copy when carried date context is unavailable."""
     if not getattr(result, "fecha_solicitada", None):
@@ -523,6 +530,7 @@ def test_message_stateful(message: IncomingMessage):
         appointment_request_decision.reason
         == "requires_exact_hour_franja_confirmation"
     ):
+        result = _force_exact_hour_franja_confirmation_state_guard_response(result)
         result.respuesta = _build_exact_hour_franja_confirmation_response(
             appointment_request_decision.franja_solicitada
         )

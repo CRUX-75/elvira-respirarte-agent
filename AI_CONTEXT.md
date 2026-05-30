@@ -3703,3 +3703,140 @@ The stateful carryover guard is production-validated.
 
 Unavailable date context now wins over later hour-selection messages in `/test/message-stateful`.
 
+
+---
+
+## P6-F.9.14.35 — Exact-Hour Franja Confirmation State Guard
+
+Status:
+
+CLOSED / RED-THEN-GREEN / GREEN
+
+Reason:
+
+The controlled Swagger dry-run P6-F.9.14.34 validated that exact-hour franja mapping and AppointmentRequest persistence blocking worked correctly, but revealed a state advancement bug.
+
+Observed production dry-run behavior before fix:
+
+- Patient asked: `se puede a las 5?`
+- appointment_request_decision.should_persist = false
+- appointment_request_decision.reason = requires_exact_hour_franja_confirmation
+- appointment_request_decision.franja_solicitada = 5:00 p. m.–7:00 p. m.
+- appointment_request = null
+
+But the endpoint still persisted:
+
+- nuevo_estado = ST_CITA_PENDIENTE
+- next_action = confirm_appointment_request
+- persisted_state = ST_CITA_PENDIENTE
+
+This was unsafe because the patient had not explicitly confirmed that the proposed franja should be registered.
+
+Files changed:
+
+- app/main.py
+- tests/test_stateful_appointment_context_carryover.py
+- docs/P6-F.9.14.35_EXACT_HOUR_FRANJA_CONFIRMATION_STATE_GUARD_SPEC.md
+
+Implementation:
+
+Added helper in app/main.py:
+
+- _force_exact_hour_franja_confirmation_state_guard_response(result)
+
+Runtime behavior:
+
+When:
+
+appointment_request_decision.reason == "requires_exact_hour_franja_confirmation"
+
+the endpoint now forces before save_interaction() and update_patient_state():
+
+- result.nuevo_estado = ST_CITA_FRANJA
+- result.next_action = ask_confirm_exact_hour_as_slot
+- result.state_reason = requires_exact_hour_franja_confirmation
+
+The response still explains:
+
+- care is handled by time window/franja
+- exact hour inside the block cannot be guaranteed
+- the matching franja is proposed
+- explicit confirmation is required before registering the request
+
+Validation:
+
+Targeted test:
+
+pytest tests/test_stateful_appointment_context_carryover.py::test_stateful_endpoint_returns_exact_hour_franja_confirmation_copy -q
+
+Result:
+
+1 passed
+
+Related endpoint tests:
+
+pytest tests/test_stateful_appointment_context_carryover.py tests/test_stateful_appointment_request_wiring.py -q
+
+Result:
+
+7 passed
+
+Full suite:
+
+pytest -q
+
+Result:
+
+208 passed
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy/session package tracking
+
+Conclusion:
+
+The exact-hour franja confirmation guard now prevents premature state advancement to ST_CITA_PENDIENTE.
+
+The patient remains in ST_CITA_FRANJA until they explicitly confirm the proposed franja.
+
+Next recommended block:
+
+P6-F.9.14.36 — Controlled Swagger Exact-Hour State Guard Dry-Run
+
+Objective:
+
+Validate in production through /test/message-stateful only that:
+
+1. Quiero pedir una cita
+2. Para el lunes
+3. se puede a las 5?
+
+now returns:
+
+- appointment_request_decision.should_persist = false
+- appointment_request_decision.reason = requires_exact_hour_franja_confirmation
+- appointment_request_decision.franja_solicitada = 5:00 p. m.–7:00 p. m.
+- appointment_request = null
+- nuevo_estado = ST_CITA_FRANJA
+- next_action = ask_confirm_exact_hour_as_slot
+- persisted_state = ST_CITA_FRANJA
+- delivery_status = sending_skipped
+
+Do not touch:
+
+- real POST /webhook
+- WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
