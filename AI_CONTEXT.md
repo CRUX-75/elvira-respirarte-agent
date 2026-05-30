@@ -3840,3 +3840,92 @@ Do not touch:
 - n8n
 - Calendar
 - doctor confirmation automation
+
+---
+
+## P6-F.9.14.36 — Controlled Swagger Exact-Hour State Guard Dry-Run
+
+Status:
+
+CLOSED / GREEN / PRODUCTION VALIDATED
+
+Production endpoint validated:
+
+POST /test/message-stateful
+
+Real POST /webhook was not touched.
+
+Real WhatsApp sending remained disabled.
+
+Google Sheets, Telegram, n8n, Calendar, doctor confirmation automation, and therapy/session package tracking were not touched.
+
+Validated production sequence:
+
+1. `Quiero pedir una cita`
+2. `Para el lunes`
+3. `se puede a las 5?`
+
+Final result for `se puede a las 5?`:
+
+- estado_anterior = ST_CITA_FRANJA
+- estado_actual = ST_CITA_FRANJA
+- nuevo_estado = ST_CITA_FRANJA
+- intent = hora_cita
+- next_action = ask_confirm_exact_hour_as_slot
+- state_reason = requires_exact_hour_franja_confirmation
+- persisted_state = ST_CITA_FRANJA
+- appointment_request_decision.should_persist = false
+- appointment_request_decision.reason = requires_exact_hour_franja_confirmation
+- appointment_request_decision.fecha_solicitada = 2026-06-01
+- appointment_request_decision.franja_solicitada = 5:00 p. m.–7:00 p. m.
+- appointment_request_decision.hora_solicitada_texto = se puede a las 5?
+- appointment_request = null
+- delivery_status = sending_skipped
+
+Validated response behavior:
+
+Elvira explains that care is handled by time windows/franjas, not guaranteed exact hours, proposes the matching franja, and asks for explicit confirmation before registering the request.
+
+Conclusion:
+
+P6-F.9.14.35 fix is validated in production dry-run.
+
+The system no longer advances prematurely to ST_CITA_PENDIENTE when an exact-hour request requires franja confirmation.
+
+Minor copy polish found:
+
+The response currently contains a double period after the franja:
+
+`5:00 p. m. a 7:00 p. m..`
+
+This is non-blocking and can be corrected in a later copy polish microblock.
+
+Next recommended block:
+
+P6-F.9.14.37 — Explicit Confirmation After Exact-Hour Franja
+
+Objective:
+
+Validate and, if needed, implement the next-turn behavior after Elvira asks:
+
+`¿Desea que registremos su solicitud para esa franja?`
+
+Expected future flow:
+
+1. Patient asks: `se puede a las 5?`
+2. Elvira stays in ST_CITA_FRANJA and asks confirmation for 5:00 p. m.–7:00 p. m.
+3. Patient replies: `sí`
+4. System should use the pending exact-hour franja context
+5. System should then persist AppointmentRequest
+6. System should move to ST_CITA_PENDIENTE
+7. System should respond with the doctor-approved terminal message
+
+Do not touch:
+
+- real POST /webhook
+- WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
