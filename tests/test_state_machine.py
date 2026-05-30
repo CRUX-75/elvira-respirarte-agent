@@ -447,3 +447,28 @@ def test_p6f91423_generic_afternoon_reply_with_multiple_slots_stays_in_slot_sele
     assert "franjas disponibles" in result.respuesta.lower()
     assert "3:00 p. m." in result.respuesta
     assert "5:00 p. m." in result.respuesta
+
+
+def test_p6f91430_hora_cita_on_weekend_does_not_advance_to_pending():
+    from app.graph.state import ElviraState
+    from app.graph.transitions import apply_state_transition
+
+    state = ElviraState(
+        telefono="test-p6f91430",
+        mensaje_original="se puede a las 5?",
+        sanitized_input="se puede a las 5?",
+        estado_actual="ST_CITA_FRANJA",
+        intent="hora_cita",
+        fecha_solicitada="2026-05-30",
+        fecha_solicitada_texto="sábado 30 de mayo",
+        es_dia_disponible=False,
+        slots_candidatos=[],
+        is_weekend=True,
+        is_colombia_holiday=False,
+    )
+
+    result = apply_state_transition(state)
+
+    assert result.nuevo_estado == "ST_CITA_FECHA"
+    assert result.next_action == "ask_preferred_date"
+    assert result.state_reason == "unavailable_date_guard"

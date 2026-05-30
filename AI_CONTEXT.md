@@ -3374,3 +3374,123 @@ Do not touch:
 - Telegram
 - n8n
 - Calendar
+
+---
+
+## P6-F.9.14.30 — Weekend/Unavailable Date State Regression Guard
+
+Status:
+
+CLOSED / RED-THEN-GREEN / GREEN
+
+Reason:
+
+Production Swagger dry-run in P6-F.9.14.29 revealed a dangerous inconsistency.
+
+Scenario:
+
+1. Patient requested an appointment.
+2. Patient said `Para maniana`.
+3. `maniana` resolved to Saturday 2026-05-30.
+4. The system correctly detected:
+   - `is_weekend = true`
+   - `es_dia_disponible = false`
+   - `slots_candidatos = []`
+5. Patient then said `se puede a las 5?`.
+
+Observed unsafe behavior before fix:
+
+- `nuevo_estado = ST_CITA_PENDIENTE`
+- `next_action = confirm_appointment_request`
+- response implied the request was registered
+- `appointment_request_decision.should_persist = false`
+- `appointment_request_decision.reason = skipped_weekend`
+- `appointment_request = null`
+
+The decision layer blocked persistence correctly, but the state/response layer had already advanced incorrectly.
+
+Fix:
+
+Added deterministic unavailable appointment context guard in:
+
+- `app/graph/transitions.py`
+
+New helper:
+
+- `_has_unavailable_appointment_context(state)`
+
+Behavior:
+
+If the patient is in `ST_CITA_FRANJA`, gives a `hora_cita`, and there is an already resolved unavailable date context, the state machine now blocks the transition to appointment confirmation.
+
+Blocked conditions apply only when `fecha_solicitada` exists and one of these is true:
+
+- `is_weekend is True`
+- `is_colombia_holiday is True`
+- `es_dia_disponible is False`
+- `slots_candidatos` is empty
+
+Safe result:
+
+- `nuevo_estado = ST_CITA_FECHA`
+- `next_action = ask_preferred_date`
+- `state_reason = unavailable_date_guard`
+
+Important calibration:
+
+The guard does not trigger when `fecha_solicitada` is missing.
+
+This avoids breaking legacy or generic appointment-time tests where availability context has not been resolved yet.
+
+Tests:
+
+Added regression test in:
+
+- `tests/test_state_machine.py`
+
+Validation:
+
+- `pytest tests/test_state_machine.py -q` → 20 passed
+- `pytest tests/test_stateful_appointment_context_carryover.py -q` → 3 passed
+- `pytest tests/test_appointment_request_runtime_decision.py -q` → 21 passed
+- `pytest -q` → 208 passed
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy/session package tracking
+
+Conclusion:
+
+Unavailable date context now wins over later hour selection.
+
+The state machine no longer allows Saturday/unavailable-date flows to reach `ST_CITA_PENDIENTE` or `confirm_appointment_request`.
+
+Next recommended block:
+
+P6-F.9.14.31 — Controlled Swagger Unavailable-Date Regression Dry-Run
+
+Objective:
+
+Validate in production through `/test/message-stateful` only that this sequence no longer produces fake registration copy:
+
+1. `Quiero pedir una cita`
+2. `Para maniana`
+3. `se puede a las 5?`
+
+Expected final result:
+
+- no `ST_CITA_PENDIENTE`
+- no `confirm_appointment_request`
+- no AppointmentRequest created
+- response asks for another valid date
+- `delivery_status = sending_skipped`
+

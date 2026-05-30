@@ -8,6 +8,25 @@ _AMBIGUOUS_SLOT_SELECTION_MESSAGES = {
 }
 
 
+def _has_unavailable_appointment_context(state: ElviraState) -> bool:
+    if not state.fecha_solicitada:
+        return False
+
+    if state.is_weekend is True:
+        return True
+
+    if state.is_colombia_holiday is True:
+        return True
+
+    if state.es_dia_disponible is False:
+        return True
+
+    if not state.slots_candidatos:
+        return True
+
+    return False
+
+
 def _is_ambiguous_slot_selection(message: str | None) -> bool:
     normalized = (message or "").strip().lower()
     return normalized in _AMBIGUOUS_SLOT_SELECTION_MESSAGES
@@ -54,6 +73,12 @@ def apply_state_transition(state: ElviraState) -> ElviraState:
 
     # HORA CITA — paciente dio hora o selección de franja
     if intent == "hora_cita":
+        if previous_state == "ST_CITA_FRANJA" and _has_unavailable_appointment_context(state):
+            state.nuevo_estado = "ST_CITA_FECHA"
+            state.next_action = "ask_preferred_date"
+            state.state_reason = "unavailable_date_guard"
+            return state
+
         if (
             previous_state == "ST_CITA_FRANJA"
             and _is_ambiguous_slot_selection(state.mensaje_original)
