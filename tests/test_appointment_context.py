@@ -145,3 +145,124 @@ def test_should_not_clear_appointment_context_without_persistence_or_opt_out():
     state = SimpleNamespace(opt_out=False)
 
     assert should_clear_appointment_context(state, persisted=False) is False
+
+
+def test_capture_pending_exact_hour_confirmation_context():
+    class State:
+        intent = "hora_cita"
+        nuevo_estado = "ST_CITA_FRANJA"
+        next_action = "ask_confirm_exact_hour_as_slot"
+        fecha_solicitada = "2026-06-01"
+        fecha_solicitada_texto = "lunes 1 de junio"
+        slots_candidatos = [
+            "3:00 p. m.–5:00 p. m.",
+            "5:00 p. m.–7:00 p. m.",
+        ]
+        es_dia_disponible = True
+        is_weekend = False
+        is_colombia_holiday = False
+        colombia_holiday_name = None
+        mensaje_original = "se puede a las 5?"
+
+    class Decision:
+        reason = "requires_exact_hour_franja_confirmation"
+        franja_solicitada = "5:00 p. m.–7:00 p. m."
+
+    from app.services.appointment_context import (
+        capture_pending_exact_hour_confirmation_context,
+    )
+
+    context = capture_pending_exact_hour_confirmation_context(
+        State(),
+        Decision(),
+    )
+
+    assert context == {
+        "fecha_solicitada": "2026-06-01",
+        "fecha_solicitada_texto": "lunes 1 de junio",
+        "slots_candidatos": [
+            "3:00 p. m.–5:00 p. m.",
+            "5:00 p. m.–7:00 p. m.",
+        ],
+        "es_dia_disponible": True,
+        "is_weekend": False,
+        "is_colombia_holiday": False,
+        "colombia_holiday_name": None,
+        "pending_exact_hour_franja": "5:00 p. m.–7:00 p. m.",
+        "pending_exact_hour_text": "se puede a las 5?",
+        "pending_exact_hour_requires_confirmation": True,
+    }
+
+
+def test_apply_pending_exact_hour_confirmation_to_affirmative_state():
+    class State:
+        intent = "general"
+        nuevo_estado = "ST_CITA_FRANJA"
+        next_action = "answer_general"
+        mensaje_original = "si"
+        fecha_solicitada = None
+        fecha_solicitada_texto = None
+        slots_candidatos = []
+        es_dia_disponible = False
+        is_weekend = False
+        is_colombia_holiday = False
+        colombia_holiday_name = None
+
+    context = {
+        "fecha_solicitada": "2026-06-01",
+        "fecha_solicitada_texto": "lunes 1 de junio",
+        "slots_candidatos": [
+            "3:00 p. m.–5:00 p. m.",
+            "5:00 p. m.–7:00 p. m.",
+        ],
+        "es_dia_disponible": True,
+        "is_weekend": False,
+        "is_colombia_holiday": False,
+        "colombia_holiday_name": None,
+        "pending_exact_hour_franja": "5:00 p. m.–7:00 p. m.",
+        "pending_exact_hour_text": "se puede a las 5?",
+        "pending_exact_hour_requires_confirmation": True,
+    }
+
+    from app.services.appointment_context import (
+        apply_pending_exact_hour_confirmation_to_state,
+    )
+
+    state = apply_pending_exact_hour_confirmation_to_state(State(), context)
+
+    assert state.intent == "hora_cita"
+    assert state.nuevo_estado == "ST_CITA_PENDIENTE"
+    assert state.next_action == "confirm_appointment_request"
+    assert state.fecha_solicitada == "2026-06-01"
+    assert state.fecha_solicitada_texto == "lunes 1 de junio"
+    assert state.slots_candidatos == [
+        "3:00 p. m.–5:00 p. m.",
+        "5:00 p. m.–7:00 p. m.",
+    ]
+    assert state.franja_solicitada == "5:00 p. m.–7:00 p. m."
+    assert state.state_reason == "confirmed_pending_exact_hour_franja"
+
+
+def test_apply_pending_exact_hour_confirmation_ignores_non_affirmative_message():
+    class State:
+        intent = "general"
+        nuevo_estado = "ST_CITA_FRANJA"
+        next_action = "answer_general"
+        mensaje_original = "no"
+        fecha_solicitada = None
+
+    context = {
+        "fecha_solicitada": "2026-06-01",
+        "pending_exact_hour_franja": "5:00 p. m.–7:00 p. m.",
+        "pending_exact_hour_requires_confirmation": True,
+    }
+
+    from app.services.appointment_context import (
+        apply_pending_exact_hour_confirmation_to_state,
+    )
+
+    state = apply_pending_exact_hour_confirmation_to_state(State(), context)
+
+    assert state.intent == "general"
+    assert state.nuevo_estado == "ST_CITA_FRANJA"
+    assert state.next_action == "answer_general"

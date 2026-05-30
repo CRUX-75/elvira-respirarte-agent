@@ -26,7 +26,9 @@ from app.repositories.postgres_appointment_request_repository import (
 )
 from app.services.appointment_context import (
     apply_appointment_context_to_state,
+    apply_pending_exact_hour_confirmation_to_state,
     capture_appointment_context_from_state,
+    capture_pending_exact_hour_confirmation_context,
     should_clear_appointment_context,
 )
 from app.services.appointment_request_runtime import (
@@ -511,6 +513,10 @@ def test_message_stateful(message: IncomingMessage):
         result,
         patient.get("appointment_context"),
     )
+    result = apply_pending_exact_hour_confirmation_to_state(
+        result,
+        patient.get("appointment_context"),
+    )
 
     appointment_request_decision = decide_appointment_request_persistence(
         state=result,
@@ -592,7 +598,13 @@ def test_message_stateful(message: IncomingMessage):
 
     update_patient_last_message(patient_id=str(patient["id"]))
 
-    captured_appointment_context = capture_appointment_context_from_state(result)
+    captured_appointment_context = (
+        capture_pending_exact_hour_confirmation_context(
+            result,
+            appointment_request_decision,
+        )
+        or capture_appointment_context_from_state(result)
+    )
     if captured_appointment_context:
         update_patient_appointment_context(
             telefono=telefono,

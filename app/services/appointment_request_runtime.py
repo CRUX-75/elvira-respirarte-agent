@@ -274,10 +274,12 @@ def decide_appointment_request_persistence(
         )
 
     slots = list(state.slots_candidatos or [])
-    franja_solicitada = resolve_requested_slot_from_message(
-        state.mensaje_original,
-        slots,
-    )
+    franja_solicitada = getattr(state, "franja_solicitada", None)
+    if not franja_solicitada:
+        franja_solicitada = resolve_requested_slot_from_message(
+            state.mensaje_original,
+            slots,
+        )
     hora_solicitada_texto = state.mensaje_original or None
 
     if (

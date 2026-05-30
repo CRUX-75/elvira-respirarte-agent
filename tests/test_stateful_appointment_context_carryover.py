@@ -238,6 +238,7 @@ def test_stateful_endpoint_applies_context_before_hora_cita_persistence(monkeypa
     assert response.status_code == 200
     body = response.json()
 
+    print(body)
     assert body["appointment_request_decision"]["should_persist"] is True
     assert body["appointment_request"]["fecha_solicitada"] == "2026-05-29"
 
@@ -326,3 +327,82 @@ def test_stateful_endpoint_returns_exact_hour_franja_confirmation_copy(monkeypat
     assert calls["appointment_service_call"] is None
     assert calls["clear_patient_appointment_context"] is None
     assert "5:00 p. m. a 7:00 p. m." in calls["save_interaction"]["respuesta_elvira"]
+
+
+def test_stateful_endpoint_persists_after_pending_exact_hour_franja_confirmation(monkeypatch):
+    fake_result = FakeElviraResult(
+        intent="general",
+        nuevo_estado="ST_CITA_FRANJA",
+        next_action="answer_general",
+        fecha_solicitada=None,
+        slots_candidatos=[],
+        mensaje_original="si",
+    )
+
+    patient = {
+        "id": "patient-001",
+        "telefono": "573001112233",
+        "nombre": "Paciente Test",
+        "estado_actual": "ST_CITA_FRANJA",
+        "opt_out": False,
+        "appointment_context": {
+            "fecha_solicitada": "2026-06-01",
+            "fecha_solicitada_texto": "lunes 1 de junio",
+            "slots_candidatos": [
+                "3:00 p. m.–5:00 p. m.",
+                "5:00 p. m.–7:00 p. m.",
+            ],
+            "es_dia_disponible": True,
+            "is_weekend": False,
+            "is_colombia_holiday": False,
+            "colombia_holiday_name": None,
+            "pending_exact_hour_franja": "5:00 p. m.–7:00 p. m.",
+            "pending_exact_hour_text": "se puede a las 5?",
+            "pending_exact_hour_requires_confirmation": True,
+        },
+    }
+
+    calls = _patch_stateful_dependencies(
+        monkeypatch,
+        fake_result=fake_result,
+        patient=patient,
+    )
+
+    response = client.post(
+        "/test/message-stateful",
+        json={
+            "telefono": "573001112233",
+            "nombre": "Paciente Test",
+            "mensaje": "si",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["intent"] == "hora_cita"
+    assert body["nuevo_estado"] == "ST_CITA_PENDIENTE"
+    assert body["next_action"] == "confirm_appointment_request"
+    assert body["persisted_state"] == "ST_CITA_PENDIENTE"
+
+    assert body["appointment_request_decision"]["should_persist"] is True
+    assert (
+        body["appointment_request_decision"]["reason"]
+        == "allowed_hora_cita_ready_for_human_review"
+    )
+    assert body["appointment_request_decision"]["fecha_solicitada"] == "2026-06-01"
+    assert (
+        body["appointment_request_decision"]["franja_solicitada"]
+        == "5:00 p. m.–7:00 p. m."
+    )
+
+    assert body["appointment_request"] is not None
+    assert body["appointment_request"]["fecha_solicitada"] == "2026-06-01"
+    assert body["appointment_request"]["franja_solicitada"] == "5:00 p. m.–7:00 p. m."
+
+    assert calls["appointment_service_call"]["fecha_solicitada"] == "2026-06-01"
+    assert calls["appointment_service_call"]["franja_solicitada"] == "5:00 p. m.–7:00 p. m."
+
+    assert calls["clear_patient_appointment_context"] == {
+        "telefono": "573001112233",
+    }

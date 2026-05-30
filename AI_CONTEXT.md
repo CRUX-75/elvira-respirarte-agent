@@ -3929,3 +3929,176 @@ Do not touch:
 - n8n
 - Calendar
 - doctor confirmation automation
+
+---
+
+## P6-F.9.14.38 — Pending Exact-Hour Franja Confirmation Context
+
+Status:
+
+CLOSED / RED-THEN-GREEN / GREEN
+
+Reason:
+
+P6-F.9.14.37 showed that after Elvira asked the patient to confirm a franja derived from an exact-hour request, the next patient reply `si` was classified as general.
+
+Observed bug:
+
+1. Patient asked: `se puede a las 5?`
+2. Runtime correctly returned:
+   - nuevo_estado = ST_CITA_FRANJA
+   - next_action = ask_confirm_exact_hour_as_slot
+   - appointment_request_decision.reason = requires_exact_hour_franja_confirmation
+   - appointment_request_decision.franja_solicitada = 5:00 p. m.–7:00 p. m.
+   - appointment_request = null
+3. Patient replied: `si`
+4. Runtime incorrectly returned:
+   - intent = general
+   - next_action = answer_general
+   - appointment_request_decision.reason = skipped_non_appointment_intent
+   - appointment_request = null
+
+Root cause:
+
+The system did not persist pending exact-hour confirmation context.
+
+The existing appointment_context only stored date and slot context, but not:
+
+- pending_exact_hour_franja
+- pending_exact_hour_text
+- pending_exact_hour_requires_confirmation
+
+Files changed:
+
+- app/main.py
+- app/services/appointment_context.py
+- app/services/appointment_request_runtime.py
+- tests/test_appointment_context.py
+- tests/test_stateful_appointment_context_carryover.py
+- docs/P6-F.9.14.38_PENDING_EXACT_HOUR_FRANJA_CONFIRMATION_CONTEXT_SPEC.md
+
+Implemented helpers:
+
+In app/services/appointment_context.py:
+
+- capture_pending_exact_hour_confirmation_context(state, decision)
+- apply_pending_exact_hour_confirmation_to_state(state, context)
+
+Behavior added:
+
+When appointment_request_decision.reason is:
+
+requires_exact_hour_franja_confirmation
+
+the runtime now captures appointment_context with:
+
+- fecha_solicitada
+- fecha_solicitada_texto
+- slots_candidatos
+- availability flags
+- pending_exact_hour_franja
+- pending_exact_hour_text
+- pending_exact_hour_requires_confirmation = true
+
+When the patient later replies affirmatively, for example:
+
+- si
+- sí
+- claro
+- de acuerdo
+- listo
+- está bien
+- esta bien
+- correcto
+- ok
+- okay
+- vale
+
+and appointment_context.pending_exact_hour_requires_confirmation is true, the runtime now forces:
+
+- intent = hora_cita
+- nuevo_estado = ST_CITA_PENDIENTE
+- next_action = confirm_appointment_request
+- franja_solicitada = pending_exact_hour_franja
+- state_reason = confirmed_pending_exact_hour_franja
+
+Decision function update:
+
+app/services/appointment_request_runtime.py now respects state.franja_solicitada when it has already been set by pending exact-hour confirmation context.
+
+This prevents the decision function from trying to resolve the franja from the literal confirmation message `si`.
+
+Validation:
+
+Targeted helper tests:
+
+pytest tests/test_appointment_context.py -q
+
+Endpoint/carryover tests:
+
+pytest tests/test_stateful_appointment_context_carryover.py -q
+
+Full suite:
+
+pytest -q
+
+Result:
+
+212 passed
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy/session package tracking
+
+Conclusion:
+
+The exact-hour confirmation flow is now complete locally.
+
+Elvira can ask the patient to confirm a franja derived from an exact-hour question, persist that pending franja context, and create the AppointmentRequest only after the patient explicitly confirms.
+
+Next recommended block:
+
+P6-F.9.14.39 — Controlled Swagger Explicit Confirmation Dry-Run
+
+Objective:
+
+Validate in production through /test/message-stateful only:
+
+1. Quiero pedir una cita
+2. Para el lunes
+3. se puede a las 5?
+4. si
+
+Expected final result:
+
+- intent = hora_cita
+- nuevo_estado = ST_CITA_PENDIENTE
+- next_action = confirm_appointment_request
+- appointment_request_decision.should_persist = true
+- appointment_request_decision.reason = allowed_hora_cita_ready_for_human_review
+- appointment_request_decision.fecha_solicitada = 2026-06-01
+- appointment_request_decision.franja_solicitada = 5:00 p. m.–7:00 p. m.
+- appointment_request != null
+- appointment_request.estado_solicitud = pendiente_confirmacion
+- appointment_request.franja_solicitada = 5:00 p. m.–7:00 p. m.
+- persisted_state = ST_CITA_PENDIENTE
+- delivery_status = sending_skipped
+
+Do not touch:
+
+- real POST /webhook
+- WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
