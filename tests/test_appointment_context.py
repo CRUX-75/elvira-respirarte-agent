@@ -266,3 +266,46 @@ def test_apply_pending_exact_hour_confirmation_ignores_non_affirmative_message()
     assert state.intent == "general"
     assert state.nuevo_estado == "ST_CITA_FRANJA"
     assert state.next_action == "answer_general"
+
+
+def test_apply_pending_exact_hour_confirmation_works_with_real_elvira_state():
+    from app.graph.state import ElviraState
+    from app.services.appointment_context import (
+        apply_pending_exact_hour_confirmation_to_state,
+    )
+
+    state = ElviraState(
+        telefono="573001112233",
+        nombre="Paciente Test",
+        mensaje_original="si",
+        sanitized_input="si",
+        estado_actual="ST_CITA_FRANJA",
+        nuevo_estado="ST_CITA_FRANJA",
+        intent="general",
+        next_action="answer_general",
+    )
+
+    context = {
+        "fecha_solicitada": "2026-06-01",
+        "fecha_solicitada_texto": "lunes 1 de junio",
+        "slots_candidatos": [
+            "3:00 p. m.–5:00 p. m.",
+            "5:00 p. m.–7:00 p. m.",
+        ],
+        "es_dia_disponible": True,
+        "is_weekend": False,
+        "is_colombia_holiday": False,
+        "colombia_holiday_name": None,
+        "pending_exact_hour_franja": "5:00 p. m.–7:00 p. m.",
+        "pending_exact_hour_text": "se puede a las 5?",
+        "pending_exact_hour_requires_confirmation": True,
+    }
+
+    result = apply_pending_exact_hour_confirmation_to_state(state, context)
+
+    assert result.intent == "hora_cita"
+    assert result.nuevo_estado == "ST_CITA_PENDIENTE"
+    assert result.next_action == "confirm_appointment_request"
+    assert result.fecha_solicitada == "2026-06-01"
+    assert result.franja_solicitada == "5:00 p. m.–7:00 p. m."
+    assert result.state_reason == "confirmed_pending_exact_hour_franja"

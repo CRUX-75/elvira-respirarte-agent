@@ -4102,3 +4102,132 @@ Do not touch:
 - n8n
 - Calendar
 - doctor confirmation automation
+
+---
+
+## P6-F.9.14.40 — Add franja_solicitada to ElviraState
+
+Status:
+
+CLOSED / GREEN / PRODUCTION BUG ROOT CAUSE FIXED LOCALLY
+
+Reason:
+
+P6-F.9.14.39 production Swagger dry-run found a 500 error on the fourth message:
+
+`si`
+
+after the flow:
+
+1. Quiero pedir una cita
+2. Para el lunes
+3. se puede a las 3?
+4. si
+
+Production traceback showed:
+
+ValueError: "ElviraState" object has no field "franja_solicitada"
+
+Root cause:
+
+The pending exact-hour confirmation context flow set:
+
+state.franja_solicitada = pending_franja
+
+This worked in local endpoint tests because FakeElviraResult accepted dynamic attributes.
+
+But the real production ElviraState is a Pydantic BaseModel and did not declare the field:
+
+franja_solicitada
+
+Therefore production raised a 500 error.
+
+Files changed:
+
+- app/graph/state.py
+- tests/test_appointment_context.py
+
+Fix:
+
+Added to ElviraState:
+
+franja_solicitada: Optional[str] = None
+
+The field is part of deterministic appointment context and is used when the patient confirms a pending exact-hour franja.
+
+Test added:
+
+test_apply_pending_exact_hour_confirmation_works_with_real_elvira_state
+
+Purpose:
+
+Ensure apply_pending_exact_hour_confirmation_to_state works with the real ElviraState Pydantic model, not only FakeElviraResult.
+
+Validation:
+
+pytest tests/test_appointment_context.py -q
+
+GREEN
+
+pytest tests/test_stateful_appointment_context_carryover.py tests/test_appointment_request_runtime_decision.py -q
+
+GREEN
+
+pytest -q
+
+GREEN
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy/session package tracking
+
+Conclusion:
+
+The production 500 root cause is fixed locally.
+
+Next recommended block:
+
+P6-F.9.14.41 — Controlled Swagger Explicit Confirmation Re-Test
+
+Objective:
+
+Redeploy and re-test through /test/message-stateful only:
+
+1. Quiero pedir una cita
+2. Para el lunes
+3. se puede a las 3?
+4. si
+
+Expected final result:
+
+- intent = hora_cita
+- nuevo_estado = ST_CITA_PENDIENTE
+- next_action = confirm_appointment_request
+- appointment_request_decision.should_persist = true
+- appointment_request_decision.reason = allowed_hora_cita_ready_for_human_review
+- appointment_request_decision.fecha_solicitada = 2026-06-01
+- appointment_request_decision.franja_solicitada = 3:00 p. m.–5:00 p. m.
+- appointment_request != null
+- appointment_request.estado_solicitud = pendiente_confirmacion
+- appointment_request.franja_solicitada = 3:00 p. m.–5:00 p. m.
+- persisted_state = ST_CITA_PENDIENTE
+- delivery_status = sending_skipped
+
+Do not touch:
+
+- real POST /webhook
+- WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation

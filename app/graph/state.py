@@ -49,6 +49,7 @@ class ElviraState(BaseModel):
     fecha_actual_colombia: Optional[str] = None
     fecha_solicitada: Optional[str] = None
     fecha_solicitada_texto: Optional[str] = None
+    franja_solicitada: Optional[str] = None
     dia_semana_solicitado: Optional[str] = None
     es_dia_disponible: bool = False
     slots_candidatos: list[str] = Field(default_factory=list)
