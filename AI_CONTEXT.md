@@ -4728,3 +4728,107 @@ Do not touch:
 - n8n
 - Calendar
 - doctor confirmation automation
+
+---
+
+## P6-F.9.14.43 — Controlled Swagger Confirmed Pending Franja Response Re-Test
+
+Status:
+
+CLOSED / GREEN / PRODUCTION VALIDATED
+
+Production endpoint validated:
+
+POST /test/message-stateful
+
+Real POST /webhook was not touched.
+
+Real WhatsApp sending remained disabled.
+
+Google Sheets, Telegram, n8n, Calendar, doctor confirmation automation, and therapy/session package tracking were not touched.
+
+Validated production sequence:
+
+1. `Quiero pedir una cita`
+2. `para maniana`
+3. `se puede a las 3?`
+4. `si`
+
+Production current date:
+
+fecha_actual_colombia = 2026-06-01
+
+Final result for `si`:
+
+- intent = hora_cita
+- nuevo_estado = ST_CITA_PENDIENTE
+- next_action = confirm_appointment_request
+- state_reason = confirmed_pending_exact_hour_franja
+- fecha_solicitada = 2026-06-02
+- fecha_solicitada_texto = martes 2 de junio
+- franja_solicitada = 3:00 p. m.–5:00 p. m.
+- persisted_state = ST_CITA_PENDIENTE
+- appointment_request_decision.should_persist = true
+- appointment_request_decision.reason = allowed_hora_cita_ready_for_human_review
+- appointment_request_decision.estado_solicitud = pendiente_confirmacion
+- appointment_request_decision.fecha_solicitada = 2026-06-02
+- appointment_request_decision.franja_solicitada = 3:00 p. m.–5:00 p. m.
+- appointment_request was created successfully
+- appointment_request.estado_solicitud = pendiente_confirmacion
+- appointment_request.fecha_solicitada = 2026-06-02
+- appointment_request.franja_solicitada = 3:00 p. m.–5:00 p. m.
+- delivery_status = sending_skipped
+
+Validated final response:
+
+`Hemos recibido su solicitud, pronto recibirá confirmación de la hora en que recibirá la atención.`
+
+Conclusion:
+
+The pending exact-hour franja confirmation flow is now production validated through the controlled stateful Swagger endpoint.
+
+The system now correctly handles:
+
+1. exact-hour patient question inside a valid KB-backed franja
+2. franja clarification instead of immediate persistence
+3. explicit patient confirmation
+4. AppointmentRequest creation only after confirmation
+5. correct pending human-review status
+6. correct terminal patient response
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy/session package tracking
+
+Known remaining bugs / next candidates:
+
+P6-F.9.14.44 — Unavailable Date State Guard for fecha_cita Turns
+
+Reason:
+
+When `para el lunes` was tested on 2026-06-01, the resolver correctly mapped it to lunes 8 de junio and detected Corpus Christi as a holiday.
+
+The response correctly told the patient that there is no service that day.
+
+However, state incorrectly advanced to:
+
+- nuevo_estado = ST_CITA_FRANJA
+- next_action = ask_preferred_time
+- persisted_state = ST_CITA_FRANJA
+
+Expected:
+
+- nuevo_estado = ST_CITA_FECHA
+- next_action = ask_preferred_date
+- persisted_state = ST_CITA_FECHA
+
+This should be handled next, separately.
