@@ -446,3 +446,218 @@ WhatsApp template sending
 Google Sheets sync
 n8n orchestration
 
+
+---
+
+## P6-F.9.16.3 — Backend Action Validation Contract
+
+## Purpose
+
+Define the backend validation contract for doctor actions received through the human review command surface.
+
+This sub-block defines what FastAPI must validate before applying any AppointmentRequest lifecycle transition.
+
+No endpoint or implementation is created in this sub-block.
+
+## Core Rule
+
+Doctor actions are requests, not trusted commands.
+
+A doctor action must pass backend validation before it can change an AppointmentRequest.
+
+## Validation Ownership
+
+FastAPI owns all validation.
+
+Telegram only transports the action.
+
+n8n, Google Sheets, or any external tool must not validate or apply doctor decisions.
+
+## Required Validation Steps
+
+When a doctor action reaches FastAPI, the backend must validate:
+
+1. Action payload structure
+2. Token or signature validity
+3. Actor identity
+4. Actor authorization
+5. AppointmentRequest existence
+6. AppointmentRequest current status
+7. Action allowed for the current status
+8. Action-specific payload requirements
+9. Lifecycle transition validity
+10. Idempotency
+11. Audit record creation
+
+## Valid Initial Actions
+
+Allowed actions:
+
+- confirm
+- propose_reschedule
+- cancel
+
+Unknown actions must be rejected.
+
+## Valid Review Source State
+
+Initial doctor review actions are only valid when:
+
+```text
+estado_solicitud = pendiente_confirmacion
+Action Transition Matrix
+Action	Required Current State	Resulting State
+confirm	pendiente_confirmacion	confirmada
+propose_reschedule	pendiente_confirmacion	pendiente_confirmacion
+cancel	pendiente_confirmacion	cancelada
+Terminal State Protection
+
+Doctor actions must be rejected when the AppointmentRequest is already in a terminal state.
+
+Terminal states:
+
+cancelada
+cerrada
+Confirm Action Requirements
+
+The confirm action must validate:
+
+AppointmentRequest exists
+current status is pendiente_confirmacion
+requested date exists
+requested slot exists
+actor is authorized
+action token is valid
+idempotency check passes
+
+Initial confirm may use the existing requested date and slot:
+
+fecha_solicitada
+franja_solicitada
+
+Future confirm may allow explicit confirmed date and slot:
+
+fecha_confirmada
+franja_confirmada
+Propose Reschedule Action Requirements
+
+The propose_reschedule action must validate:
+
+AppointmentRequest exists
+current status is pendiente_confirmacion
+actor is authorized
+action token is valid
+idempotency check passes
+proposed date is provided
+proposed slot is provided
+optional reason is valid text
+
+Important invariant:
+
+The same id_solicitud must be preserved.
+
+A reschedule proposal must not create a new AppointmentRequest.
+
+Cancel Action Requirements
+
+The cancel action must validate:
+
+AppointmentRequest exists
+current status is pendiente_confirmacion
+actor is authorized
+action token is valid
+idempotency check passes
+optional cancellation reason is valid text
+Idempotency Contract
+
+Each doctor action must include or resolve to an idempotency key.
+
+The idempotency key must prevent duplicate processing caused by:
+
+repeated Telegram clicks
+Telegram retries
+network retries
+user double-tapping buttons
+webhook replay
+
+If the same idempotency key is received again, the backend must not apply the lifecycle transition twice.
+
+The backend should return a safe duplicate response such as:
+
+Esta acción ya fue procesada o ya no está disponible.
+Authorization Contract
+
+Only approved doctor/admin actors may execute doctor review actions.
+
+Initial authorized actor source:
+
+Telegram user ID allowlist or internal doctor actor mapping
+
+Unauthorized actors must be rejected without exposing sensitive request details.
+
+Token / Signature Contract
+
+Every action must be protected by a signed token or compact token reference.
+
+The backend must validate:
+
+token exists or signature is valid
+token has not expired
+token belongs to the requested action
+token belongs to the requested AppointmentRequest
+token has not already been consumed, if using one-time tokens
+actor is allowed to use the token
+Audit Contract
+
+A DoctorDecision record must be created for every accepted doctor action.
+
+For rejected actions, a future security/audit log may be added.
+
+DoctorDecision must include:
+
+id_decision
+id_solicitud
+action
+actor_type
+actor_id
+actor_display_name
+decision_source
+decision_payload
+previous_estado_solicitud
+resulting_estado_solicitud
+idempotency_key
+created_at
+Failure Handling
+
+The backend must safely reject:
+
+malformed callback payloads
+unknown actions
+unknown AppointmentRequest IDs
+unauthorized actors
+expired tokens
+invalid signatures
+duplicated actions
+actions for terminal requests
+invalid lifecycle transitions
+missing required action payload fields
+Safe Error Response Principle
+
+Error responses must be short and safe.
+
+They should not expose internal IDs, stack traces, token details, or database information.
+
+Recommended user-facing responses:
+
+Esta acción no está disponible o ya fue procesada.
+No fue posible procesar esta acción.
+Out of Scope For This Sub-Block
+Endpoint implementation
+Telegram webhook implementation
+DoctorDecision database implementation
+Token/signature implementation
+WhatsApp template sending
+Google Sheets sync
+n8n orchestration
+Calendar integration
+
