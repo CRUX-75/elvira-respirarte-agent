@@ -72,6 +72,22 @@ def node_resolve_date_context(state: ElviraState, now=None) -> ElviraState:
             state.next_action = "ask_preferred_date"
             state.state_reason = "missing_fecha_solicitada_guard"
 
+        if (
+            state.intent == "fecha_cita"
+            and state.nuevo_estado == "ST_CITA_FRANJA"
+            and state.fecha_solicitada
+            and (
+                state.is_weekend is True
+                or state.is_colombia_holiday is True
+                or state.es_dia_disponible is False
+                or not state.slots_candidatos
+            )
+        ):
+            state.nuevo_estado = "ST_CITA_FECHA"
+            state.estado_actual = "ST_CITA_FECHA"
+            state.next_action = "ask_preferred_date"
+            state.state_reason = "unavailable_date_guard"
+
     except Exception as exc:
         # Date resolution failure must not block the conversational core.
         logger.warning("Date context resolution skipped: %s", exc)

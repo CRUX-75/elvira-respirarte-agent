@@ -119,6 +119,37 @@ def generate_llm_response(state: ElviraState) -> ElviraState:
     """
 
     if state.next_action == "ask_preferred_date":
+        if state.state_reason == "unavailable_date_guard":
+            date_reference = _build_requested_date_reference(state)
+
+            if state.is_weekend:
+                state.respuesta = (
+                    f"Se refiere a {date_reference}. "
+                    "Ese día no se atienden consultas. "
+                    "¿Le gustaría indicarme otro día entre semana?"
+                )
+                return state
+
+            if state.is_colombia_holiday:
+                holiday_detail = (
+                    f" porque corresponde al festivo de {state.colombia_holiday_name}"
+                    if state.colombia_holiday_name
+                    else ""
+                )
+                state.respuesta = (
+                    f"Se refiere a {date_reference}. "
+                    f"Ese día no se atienden consultas{holiday_detail}. "
+                    "¿Le gustaría indicarme otro día entre semana?"
+                )
+                return state
+
+            state.respuesta = (
+                f"Se refiere a {date_reference}. "
+                "Ese día no se atienden consultas. "
+                "¿Le gustaría indicarme otro día entre semana?"
+            )
+            return state
+
         state.respuesta = (
             "Claro, con muchísimo gusto. "
             "Le cuento que las atenciones domiciliarias se manejan solamente en la tarde, "

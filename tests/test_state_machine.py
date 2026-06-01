@@ -173,8 +173,9 @@ def test_p6f8_sunday_request_is_blocked_in_full_flow(monkeypatch):
     result = process_message(msg)
 
     assert result.intent == "fecha_cita"
-    assert result.nuevo_estado == "ST_CITA_FRANJA"
-    assert result.next_action == "ask_preferred_time"
+    assert result.nuevo_estado == "ST_CITA_FECHA"
+    assert result.next_action == "ask_preferred_date"
+    assert result.state_reason == "unavailable_date_guard"
 
     assert result.fecha_solicitada == "2026-05-17"
     assert result.fecha_solicitada_texto == "domingo 17 de mayo"
@@ -208,8 +209,9 @@ def test_p6f8_colombian_holiday_request_is_blocked_in_full_flow(monkeypatch):
     result = process_message(msg)
 
     assert result.intent == "fecha_cita"
-    assert result.nuevo_estado == "ST_CITA_FRANJA"
-    assert result.next_action == "ask_preferred_time"
+    assert result.nuevo_estado == "ST_CITA_FECHA"
+    assert result.next_action == "ask_preferred_date"
+    assert result.state_reason == "unavailable_date_guard"
 
     assert result.fecha_solicitada == "2026-05-18"
     assert result.fecha_solicitada_texto == "lunes 18 de mayo"
@@ -244,8 +246,9 @@ def test_p6f8_sunday_word_inside_appointment_date_state_is_treated_as_date(monke
     result = process_message(msg)
 
     assert result.intent == "fecha_cita"
-    assert result.nuevo_estado == "ST_CITA_FRANJA"
-    assert result.next_action == "ask_preferred_time"
+    assert result.nuevo_estado == "ST_CITA_FECHA"
+    assert result.next_action == "ask_preferred_date"
+    assert result.state_reason == "unavailable_date_guard"
 
     assert result.fecha_solicitada == "2026-05-17"
     assert result.fecha_solicitada_texto == "domingo 17 de mayo"
@@ -472,3 +475,43 @@ def test_p6f91430_hora_cita_on_weekend_does_not_advance_to_pending():
     assert result.nuevo_estado == "ST_CITA_FECHA"
     assert result.next_action == "ask_preferred_date"
     assert result.state_reason == "unavailable_date_guard"
+
+
+def test_p6f91444_unavailable_holiday_date_stays_in_date_state():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from app.graph.state import ElviraState
+    from app.graph.nodes import (
+        node_sanitize_input,
+        node_classify_intent,
+        node_transition_state,
+        node_resolve_date_context,
+    )
+
+    state = ElviraState(
+        telefono="test-p6f91444",
+        mensaje_original="para el lunes",
+        sanitized_input="",
+        estado_actual="ST_CITA_FECHA",
+    )
+
+    state = node_sanitize_input(state)
+    state = node_classify_intent(state)
+    state = node_transition_state(state)
+    state = node_resolve_date_context(
+        state,
+        now=datetime(2026, 6, 1, 10, 0, tzinfo=ZoneInfo("America/Bogota")),
+    )
+
+    assert state.intent == "fecha_cita"
+    assert state.fecha_solicitada == "2026-06-08"
+    assert state.is_colombia_holiday is True
+    assert state.colombia_holiday_name == "Corpus Christi"
+    assert state.es_dia_disponible is False
+    assert state.slots_candidatos == []
+
+    assert state.nuevo_estado == "ST_CITA_FECHA"
+    assert state.estado_actual == "ST_CITA_FECHA"
+    assert state.next_action == "ask_preferred_date"
+    assert state.state_reason == "unavailable_date_guard"
