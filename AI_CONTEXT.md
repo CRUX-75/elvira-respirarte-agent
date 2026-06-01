@@ -4231,3 +4231,500 @@ Do not touch:
 - n8n
 - Calendar
 - doctor confirmation automation
+
+---
+
+## P6-F.9.14.41 — Controlled Swagger Explicit Confirmation Re-Test
+
+Status:
+
+PARTIAL GREEN / RESPONSE CONTAMINATION BUG FOUND
+
+Production endpoint validated:
+
+POST /test/message-stateful
+
+Real POST /webhook was not touched.
+
+Real WhatsApp sending remained disabled.
+
+Google Sheets, Telegram, n8n, Calendar, doctor confirmation automation, and therapy/session package tracking were not touched.
+
+Validated clean production sequence:
+
+1. `Quiero pedir una cita`
+2. `para maniana`
+3. `se puede a las 3?`
+4. `si`
+
+Production current date:
+
+fecha_actual_colombia = 2026-06-01
+
+Validated behavior:
+
+Step 1:
+
+- initial appointment copy correct
+- nuevo_estado = ST_CITA_FECHA
+- persisted_state = ST_CITA_FECHA
+- appointment_request = null
+
+Step 2:
+
+- `para maniana` resolved correctly to martes 2 de junio
+- fecha_solicitada = 2026-06-02
+- fecha_solicitada_texto = martes 2 de junio
+- slots_candidatos:
+  - 3:00 p. m.–5:00 p. m.
+  - 5:00 p. m.–7:00 p. m.
+- nuevo_estado = ST_CITA_FRANJA
+- persisted_state = ST_CITA_FRANJA
+- appointment_request = null
+
+Step 3:
+
+- `se puede a las 3?` triggered exact-hour franja clarification
+- appointment_request_decision.should_persist = false
+- appointment_request_decision.reason = requires_exact_hour_franja_confirmation
+- appointment_request_decision.franja_solicitada = 3:00 p. m.–5:00 p. m.
+- nuevo_estado = ST_CITA_FRANJA
+- next_action = ask_confirm_exact_hour_as_slot
+- persisted_state = ST_CITA_FRANJA
+- appointment_request = null
+
+Step 4:
+
+- `si` was correctly interpreted as confirmation of the pending exact-hour franja
+- intent = hora_cita
+- nuevo_estado = ST_CITA_PENDIENTE
+- next_action = confirm_appointment_request
+- state_reason = confirmed_pending_exact_hour_franja
+- franja_solicitada = 3:00 p. m.–5:00 p. m.
+- appointment_request_decision.should_persist = true
+- appointment_request_decision.reason = allowed_hora_cita_ready_for_human_review
+- appointment_request_decision.fecha_solicitada = 2026-06-02
+- appointment_request_decision.franja_solicitada = 3:00 p. m.–5:00 p. m.
+- AppointmentRequest was created successfully
+- appointment_request.estado_solicitud = pendiente_confirmacion
+- appointment_request.fecha_solicitada = 2026-06-02
+- appointment_request.franja_solicitada = 3:00 p. m.–5:00 p. m.
+- persisted_state = ST_CITA_PENDIENTE
+- delivery_status = sending_skipped
+
+Important validation:
+
+The previous production 500 caused by missing ElviraState.franja_solicitada is fixed.
+
+Root cause of that previous 500 was:
+
+ValueError: "ElviraState" object has no field "franja_solicitada"
+
+This was fixed in P6-F.9.14.40 by adding:
+
+franja_solicitada: Optional[str] = None
+
+to app/graph/state.py and adding a real ElviraState regression test.
+
+New bug found:
+
+The final response for `si` is wrong.
+
+Observed response:
+
+`Hola, qué gusto saludarle. ¿En qué le podemos ayudar hoy en Respirarte?`
+
+Expected response:
+
+Doctor-approved terminal appointment request message:
+
+`Hemos recibido su solicitud, pronto recibirá confirmación de la hora en que recibirá la atención.`
+
+Diagnosis:
+
+The deterministic state and persistence are now correct, but the response is contaminated.
+
+Likely flow:
+
+1. process_message initially treats `si` as general and generates a generic greeting.
+2. apply_pending_exact_hour_confirmation_to_state(...) later corrects intent/state deterministically.
+3. decide_appointment_request_persistence(...) allows AppointmentRequest persistence.
+4. AppointmentRequest is created correctly.
+5. result.respuesta remains the old generic response from before the deterministic correction.
+
+Conclusion:
+
+The logic and persistence are correct, but the response layer must be guarded after deterministic pending-franja confirmation.
+
+Next recommended block:
+
+P6-F.9.14.42 — Confirmed Pending Franja Response Guard
+
+Objective:
+
+When:
+
+- state_reason = confirmed_pending_exact_hour_franja
+- appointment_request_decision.should_persist = true
+- appointment_request is created or ready for persistence
+
+then override result.respuesta before save_interaction() and response return with:
+
+`Hemos recibido su solicitud, pronto recibirá confirmación de la hora en que recibirá la atención.`
+
+Acceptance criteria:
+
+The same controlled /test/message-stateful flow:
+
+1. Quiero pedir una cita
+2. para maniana
+3. se puede a las 3?
+4. si
+
+must end with:
+
+- appointment_request_decision.should_persist = true
+- appointment_request != null
+- persisted_state = ST_CITA_PENDIENTE
+- respuesta = Hemos recibido su solicitud, pronto recibirá confirmación de la hora en que recibirá la atención.
+
+Do not touch:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+
+Additional bug to address later:
+
+P6-F.9.14.43 candidate — Date Re-selection and Unavailable Date State Guard
+
+Reason:
+
+Earlier test with `para el lunes` on 2026-06-01 resolved to lunes 8 de junio, Corpus Christi.
+
+Elvira detected the holiday correctly in the response, but state incorrectly advanced to ST_CITA_FRANJA / ask_preferred_time.
+
+Expected unavailable-date behavior:
+
+- remain in ST_CITA_FECHA
+- next_action = ask_preferred_date
+- persisted_state = ST_CITA_FECHA
+
+This should be handled after P6-F.9.14.42.
+
+---
+
+## P6-F.9.14.41 — Controlled Swagger Explicit Confirmation Re-Test
+
+Status:
+
+PARTIAL GREEN / RESPONSE CONTAMINATION BUG FOUND
+
+Production endpoint validated:
+
+POST /test/message-stateful
+
+Real POST /webhook was not touched.
+
+Real WhatsApp sending remained disabled.
+
+Google Sheets, Telegram, n8n, Calendar, doctor confirmation automation, and therapy/session package tracking were not touched.
+
+Validated clean production sequence:
+
+1. `Quiero pedir una cita`
+2. `para maniana`
+3. `se puede a las 3?`
+4. `si`
+
+Production current date:
+
+fecha_actual_colombia = 2026-06-01
+
+Validated behavior:
+
+Step 1:
+
+- initial appointment copy correct
+- nuevo_estado = ST_CITA_FECHA
+- persisted_state = ST_CITA_FECHA
+- appointment_request = null
+
+Step 2:
+
+- `para maniana` resolved correctly to martes 2 de junio
+- fecha_solicitada = 2026-06-02
+- fecha_solicitada_texto = martes 2 de junio
+- slots_candidatos:
+  - 3:00 p. m.–5:00 p. m.
+  - 5:00 p. m.–7:00 p. m.
+- nuevo_estado = ST_CITA_FRANJA
+- persisted_state = ST_CITA_FRANJA
+- appointment_request = null
+
+Step 3:
+
+- `se puede a las 3?` triggered exact-hour franja clarification
+- appointment_request_decision.should_persist = false
+- appointment_request_decision.reason = requires_exact_hour_franja_confirmation
+- appointment_request_decision.franja_solicitada = 3:00 p. m.–5:00 p. m.
+- nuevo_estado = ST_CITA_FRANJA
+- next_action = ask_confirm_exact_hour_as_slot
+- persisted_state = ST_CITA_FRANJA
+- appointment_request = null
+
+Step 4:
+
+- `si` was correctly interpreted as confirmation of the pending exact-hour franja
+- intent = hora_cita
+- nuevo_estado = ST_CITA_PENDIENTE
+- next_action = confirm_appointment_request
+- state_reason = confirmed_pending_exact_hour_franja
+- franja_solicitada = 3:00 p. m.–5:00 p. m.
+- appointment_request_decision.should_persist = true
+- appointment_request_decision.reason = allowed_hora_cita_ready_for_human_review
+- appointment_request_decision.fecha_solicitada = 2026-06-02
+- appointment_request_decision.franja_solicitada = 3:00 p. m.–5:00 p. m.
+- AppointmentRequest was created successfully
+- appointment_request.estado_solicitud = pendiente_confirmacion
+- appointment_request.fecha_solicitada = 2026-06-02
+- appointment_request.franja_solicitada = 3:00 p. m.–5:00 p. m.
+- persisted_state = ST_CITA_PENDIENTE
+- delivery_status = sending_skipped
+
+Important validation:
+
+The previous production 500 caused by missing ElviraState.franja_solicitada is fixed.
+
+Root cause of that previous 500 was:
+
+ValueError: "ElviraState" object has no field "franja_solicitada"
+
+This was fixed in P6-F.9.14.40 by adding:
+
+franja_solicitada: Optional[str] = None
+
+to app/graph/state.py and adding a real ElviraState regression test.
+
+New bug found:
+
+The final response for `si` is wrong.
+
+Observed response:
+
+`Hola, qué gusto saludarle. ¿En qué le podemos ayudar hoy en Respirarte?`
+
+Expected response:
+
+Doctor-approved terminal appointment request message:
+
+`Hemos recibido su solicitud, pronto recibirá confirmación de la hora en que recibirá la atención.`
+
+Diagnosis:
+
+The deterministic state and persistence are now correct, but the response is contaminated.
+
+Likely flow:
+
+1. process_message initially treats `si` as general and generates a generic greeting.
+2. apply_pending_exact_hour_confirmation_to_state(...) later corrects intent/state deterministically.
+3. decide_appointment_request_persistence(...) allows AppointmentRequest persistence.
+4. AppointmentRequest is created correctly.
+5. result.respuesta remains the old generic response from before the deterministic correction.
+
+Conclusion:
+
+The logic and persistence are correct, but the response layer must be guarded after deterministic pending-franja confirmation.
+
+Next recommended block:
+
+P6-F.9.14.42 — Confirmed Pending Franja Response Guard
+
+Objective:
+
+When:
+
+- state_reason = confirmed_pending_exact_hour_franja
+- appointment_request_decision.should_persist = true
+- appointment_request is created or ready for persistence
+
+then override result.respuesta before save_interaction() and response return with:
+
+`Hemos recibido su solicitud, pronto recibirá confirmación de la hora en que recibirá la atención.`
+
+Acceptance criteria:
+
+The same controlled /test/message-stateful flow:
+
+1. Quiero pedir una cita
+2. para maniana
+3. se puede a las 3?
+4. si
+
+must end with:
+
+- appointment_request_decision.should_persist = true
+- appointment_request != null
+- persisted_state = ST_CITA_PENDIENTE
+- respuesta = Hemos recibido su solicitud, pronto recibirá confirmación de la hora en que recibirá la atención.
+
+Do not touch:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+
+Additional bug to address later:
+
+P6-F.9.14.43 candidate — Date Re-selection and Unavailable Date State Guard
+
+Reason:
+
+Earlier test with `para el lunes` on 2026-06-01 resolved to lunes 8 de junio, Corpus Christi.
+
+Elvira detected the holiday correctly in the response, but state incorrectly advanced to ST_CITA_FRANJA / ask_preferred_time.
+
+Expected unavailable-date behavior:
+
+- remain in ST_CITA_FECHA
+- next_action = ask_preferred_date
+- persisted_state = ST_CITA_FECHA
+
+This should be handled after P6-F.9.14.42.
+
+---
+
+## P6-F.9.14.42 — Confirmed Pending Franja Response Guard
+
+Status:
+
+CLOSED / RED-THEN-GREEN / GREEN
+
+Reason:
+
+P6-F.9.14.41 validated that explicit confirmation after an exact-hour franja clarification worked technically, but the response layer was contaminated.
+
+Observed production behavior:
+
+After the flow:
+
+1. `Quiero pedir una cita`
+2. `para maniana`
+3. `se puede a las 3?`
+4. `si`
+
+the runtime correctly produced:
+
+- intent = hora_cita
+- nuevo_estado = ST_CITA_PENDIENTE
+- next_action = confirm_appointment_request
+- state_reason = confirmed_pending_exact_hour_franja
+- appointment_request_decision.should_persist = true
+- appointment_request was created
+- franja_solicitada = 3:00 p. m.–5:00 p. m.
+- persisted_state = ST_CITA_PENDIENTE
+
+But the final response was wrong:
+
+`Hola, qué gusto saludarle. ¿En qué le podemos ayudar hoy en Respirarte?`
+
+Root cause:
+
+The LLM/general response was generated before deterministic pending-franja confirmation correction.
+
+After apply_pending_exact_hour_confirmation_to_state(...) corrected the state and AppointmentRequest persistence succeeded, result.respuesta still contained the old generic greeting.
+
+Files changed:
+
+- app/main.py
+- tests/test_stateful_appointment_context_carryover.py
+- docs/P6-F.9.14.42_CONFIRMED_PENDING_FRANJA_RESPONSE_GUARD_SPEC.md
+
+Fix:
+
+In /test/message-stateful, when:
+
+- appointment_request_decision.should_persist is True
+- result.state_reason == confirmed_pending_exact_hour_franja
+
+the runtime now overrides result.respuesta before logged_response, save_interaction(), and response return.
+
+Forced response:
+
+`Hemos recibido su solicitud, pronto recibirá confirmación de la hora en que recibirá la atención.`
+
+Validation:
+
+Targeted test:
+
+pytest tests/test_stateful_appointment_context_carryover.py::test_stateful_endpoint_persists_after_pending_exact_hour_franja_confirmation -q
+
+GREEN
+
+Related tests:
+
+pytest tests/test_stateful_appointment_context_carryover.py tests/test_appointment_context.py -q
+
+GREEN
+
+Full suite:
+
+pytest -q
+
+GREEN
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy/session package tracking
+
+Conclusion:
+
+The explicit pending exact-hour franja confirmation flow is now correct locally across state, persistence, and response layer.
+
+Next recommended block:
+
+P6-F.9.14.43 — Controlled Swagger Confirmed Pending Franja Response Re-Test
+
+Objective:
+
+Redeploy and validate in production through /test/message-stateful only:
+
+1. Quiero pedir una cita
+2. para maniana
+3. se puede a las 3?
+4. si
+
+Expected final result:
+
+- appointment_request_decision.should_persist = true
+- appointment_request != null
+- persisted_state = ST_CITA_PENDIENTE
+- franja_solicitada = 3:00 p. m.–5:00 p. m.
+- respuesta = Hemos recibido su solicitud, pronto recibirá confirmación de la hora en que recibirá la atención.
+
+Do not touch:
+
+- real POST /webhook
+- WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation

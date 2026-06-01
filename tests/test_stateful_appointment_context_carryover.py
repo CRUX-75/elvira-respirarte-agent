@@ -400,6 +400,12 @@ def test_stateful_endpoint_persists_after_pending_exact_hour_franja_confirmation
     assert body["appointment_request"]["fecha_solicitada"] == "2026-06-01"
     assert body["appointment_request"]["franja_solicitada"] == "5:00 p. m.–7:00 p. m."
 
+    assert (
+        body["respuesta"]
+        == "Hemos recibido su solicitud, pronto recibirá confirmación de la hora en que recibirá la atención."
+    )
+    assert "Hola, qué gusto saludarle" not in body["respuesta"]
+
     assert calls["appointment_service_call"]["fecha_solicitada"] == "2026-06-01"
     assert calls["appointment_service_call"]["franja_solicitada"] == "5:00 p. m.–7:00 p. m."
 

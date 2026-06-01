@@ -541,7 +541,6 @@ def test_message_stateful(message: IncomingMessage):
             appointment_request_decision.franja_solicitada
         )
 
-    logged_response = f"[TEST_STATEFUL_WHATSAPP_SENDING_DISABLED] {result.respuesta}"
     appointment_request_metadata = None
     appointment_request_persisted = False
 
@@ -569,6 +568,18 @@ def test_message_stateful(message: IncomingMessage):
             "fecha_solicitada": appointment_request.fecha_solicitada,
             "franja_solicitada": appointment_request.franja_solicitada,
         }
+
+    if (
+        appointment_request_decision.should_persist
+        and getattr(result, "state_reason", None)
+        == "confirmed_pending_exact_hour_franja"
+    ):
+        result.respuesta = (
+            "Hemos recibido su solicitud, pronto recibirá confirmación "
+            "de la hora en que recibirá la atención."
+        )
+
+    logged_response = f"[TEST_STATEFUL_WHATSAPP_SENDING_DISABLED] {result.respuesta}"
 
     save_interaction(
         patient_id=str(patient["id"]),
