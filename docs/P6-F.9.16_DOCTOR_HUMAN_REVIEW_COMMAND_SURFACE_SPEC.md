@@ -660,3 +660,120 @@ Google Sheets sync
 n8n orchestration
 Calendar integration
 
+
+---
+
+## P6-F.9.16.4 — Endpoint Strategy Decision
+
+## Purpose
+
+Decide the endpoint strategy for doctor actions received from Telegram.
+
+This sub-block defines the architectural direction only.
+
+No endpoint implementation is created in this sub-block.
+
+## Decision
+
+Use one Telegram-facing webhook endpoint:
+
+```text
+POST /telegram/webhook
+
+Telegram must not call multiple business-action endpoints directly.
+
+The Telegram webhook receives callback updates and delegates all business handling to internal backend services.
+
+Rejected Alternative
+
+Do not expose separate Telegram-facing endpoints such as:
+
+POST /internal/doctor-actions/appointment-request/{id}/confirm
+POST /internal/doctor-actions/appointment-request/{id}/reschedule-offer
+POST /internal/doctor-actions/appointment-request/{id}/cancel
+
+These action-specific operations may exist internally as service methods, but they should not be the public Telegram integration surface.
+
+Rationale
+
+A single Telegram webhook is preferred because:
+
+Telegram naturally delivers updates through a webhook model.
+It keeps the public integration surface small.
+It centralizes callback parsing and security validation.
+It avoids exposing action-specific URLs.
+It allows compact callback payloads.
+It keeps Telegram as a transport/command surface only.
+It preserves FastAPI as the owner of validation and lifecycle transitions.
+Internal Service Direction
+
+The public webhook should delegate to internal services such as:
+
+TelegramCallbackParser
+DoctorActionTokenService
+DoctorActionValidationService
+DoctorDecisionService
+AppointmentRequestService
+DoctorDecisionRepository
+
+Possible future internal method names:
+
+process_doctor_callback(update_payload)
+validate_doctor_action(action_request)
+apply_doctor_decision(validated_action)
+record_doctor_decision(decision)
+Public Endpoint Responsibility
+
+POST /telegram/webhook should only:
+
+Receive Telegram updates.
+Identify whether the update contains a callback query.
+Extract callback data.
+Delegate processing to the doctor review service layer.
+Return a Telegram-safe response.
+
+It must not directly own:
+
+AppointmentRequest lifecycle rules
+DoctorDecision persistence logic
+token/signature validation internals
+WhatsApp patient communication
+Google Sheets sync
+n8n orchestration
+Security Boundary
+
+The webhook must treat all incoming Telegram updates as untrusted input.
+
+The backend must validate:
+
+payload shape
+callback data structure
+token or signature
+actor authorization
+AppointmentRequest state
+action idempotency
+lifecycle transition
+Future Test Strategy
+
+When implementation starts, tests should cover:
+
+callback without callback_query is ignored safely
+malformed callback_data is rejected safely
+unknown action is rejected
+unauthorized actor is rejected
+expired/invalid token is rejected
+duplicate callback is idempotent
+confirm action transitions request to confirmada
+cancel action transitions request to cancelada
+propose_reschedule preserves id_solicitud
+DoctorDecision is recorded for accepted actions
+Out of Scope For This Sub-Block
+Telegram webhook implementation
+Telegram bot setup
+token/signature implementation
+DoctorDecision database table
+WhatsApp template sending
+Google Sheets sync
+n8n orchestration
+Calendar integration
+
