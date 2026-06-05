@@ -4993,3 +4993,117 @@ Validate in production through `/test/message-stateful` only that:
 
 Do not touch real `/webhook`, real WhatsApp sending, Google Sheets, Telegram, n8n, Calendar, or doctor confirmation automation.
 
+
+---
+
+## P6-F.9.14.29 — Controlled Swagger Exact-Hour Franja Confirmation Dry-Run
+
+Status:
+
+CLOSED / GREEN / PRODUCTION DRY-RUN VALIDATED
+
+Production endpoint validated:
+
+POST /test/message-stateful
+
+Real POST /webhook was not touched.
+Real WhatsApp sending remained disabled.
+Google Sheets, Telegram, n8n, Calendar, and doctor confirmation automation were not touched.
+
+Validated sequence:
+
+1. Patient started appointment request:
+
+`Quiero pedir una cita`
+
+Result:
+
+- nuevo_estado = ST_CITA_FECHA
+- intent = cita
+- next_action = ask_preferred_date
+- appointment_request = null
+- delivery_status = sending_skipped
+
+2. Patient selected valid date:
+
+`para el martes`
+
+Result:
+
+- nuevo_estado = ST_CITA_FRANJA
+- intent = fecha_cita
+- next_action = ask_preferred_time
+- fecha_solicitada = 2026-06-09
+- fecha_solicitada_texto = martes 9 de junio
+- slots_candidatos:
+  - 3:00 p. m.–5:00 p. m.
+  - 5:00 p. m.–7:00 p. m.
+- appointment_request = null
+
+3. Patient asked for exact hour inside valid franja:
+
+`se puede a las 5?`
+
+Result:
+
+- estado_anterior = ST_CITA_FRANJA
+- nuevo_estado = ST_CITA_FRANJA
+- intent = hora_cita
+- next_action = ask_confirm_exact_hour_as_slot
+- state_reason = requires_exact_hour_franja_confirmation
+- fecha_solicitada = 2026-06-09
+- franja_solicitada in decision = 5:00 p. m.–7:00 p. m.
+- hora_solicitada_texto = se puede a las 5?
+- appointment_request_decision.should_persist = false
+- appointment_request_decision.reason = requires_exact_hour_franja_confirmation
+- appointment_request = null
+
+4. Patient confirmed explicitly:
+
+`sí`
+
+Result:
+
+- nuevo_estado = ST_CITA_PENDIENTE
+- intent = hora_cita
+- next_action = confirm_appointment_request
+- state_reason = confirmed_pending_exact_hour_franja
+- appointment_request_decision.should_persist = true
+- appointment_request_decision.reason = allowed_hora_cita_ready_for_human_review
+- appointment_request.estado_solicitud = pendiente_confirmacion
+- appointment_request.fecha_solicitada = 2026-06-09
+- appointment_request.franja_solicitada = 5:00 p. m.–7:00 p. m.
+- delivery_status = sending_skipped
+
+Created AppointmentRequest:
+
+- id_solicitud = SOL-20260605-041942-986633-1429
+- estado_solicitud = pendiente_confirmacion
+- fecha_solicitada = 2026-06-09
+- franja_solicitada = 5:00 p. m.–7:00 p. m.
+
+Conclusion:
+
+The exact-hour franja confirmation flow is production-validated through /test/message-stateful.
+
+Elvira correctly maps an exact hour inside a KB-backed franja, asks for explicit confirmation, avoids premature persistence, and only creates AppointmentRequest after patient confirmation.
+
+Minor future polish candidate:
+
+Avoid duplicated punctuation in the franja confirmation response:
+
+`5:00 p. m. a 7:00 p. m..`
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy/session package tracking
+
