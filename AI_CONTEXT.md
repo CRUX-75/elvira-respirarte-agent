@@ -4832,3 +4832,164 @@ Expected:
 - persisted_state = ST_CITA_FECHA
 
 This should be handled next, separately.
+
+---
+
+## P6-F.9.14.28 — Exact-Hour Franja Confirmation Response Polish
+
+Status:
+
+CLOSED / RESPONSE-LAYER POLISH / GREEN / READY FOR NEXT CHAT
+
+Reason:
+
+After P6-F.9.14.27, the backend already detected the case where a patient asks for an exact hour inside a valid KB-backed franja, for example:
+
+- `se puede a las 4?`
+- `se puede a las 6?`
+- `se puede a las 5?`
+
+The decision layer correctly returned:
+
+- should_persist = false
+- reason = requires_exact_hour_franja_confirmation
+- franja_solicitada = matched KB-backed franja
+
+P6-F.9.14.28 polished the patient-facing response for this case.
+
+Architecture preserved:
+
+- FastAPI remains the runtime authority.
+- PostgreSQL remains the source of truth.
+- The state machine keeps the patient inside ST_CITA_FRANJA.
+- AppointmentRequest is not persisted yet.
+- The patient must explicitly confirm the proposed franja before persistence.
+- No n8n, Telegram, Google Sheets, real WhatsApp sending, or real /webhook changes were made.
+
+Runtime behavior:
+
+When AppointmentRequest decision reason is:
+
+requires_exact_hour_franja_confirmation
+
+the `/test/message-stateful` layer now forces:
+
+- nuevo_estado = ST_CITA_FRANJA
+- next_action = ask_confirm_exact_hour_as_slot
+- state_reason = requires_exact_hour_franja_confirmation
+- appointment_request = null
+
+Response copy direction:
+
+Elvira now explains formally and clearly that domiciliary care is handled by time windows / franjas, not guaranteed exact hours.
+
+Approved response shape:
+
+"Claro. Le cuento que las atenciones domiciliarias se manejan por franjas, no por una hora exacta garantizada. Para la hora que me indica, puedo registrar como preferencia la franja de 5:00 p. m. a 7:00 p. m. ¿Desea que registre esa franja?"
+
+Important safety rules:
+
+Elvira must not say:
+
+- su cita quedó confirmada
+- disponibilidad confirmada
+- la doctora la atenderá a esa hora
+- hora garantizada
+
+Elvira may say:
+
+- puedo registrar esa franja como preferencia
+- ¿Desea que registre esa franja?
+- la solicitud se registrará only after confirmation
+
+Files touched:
+
+- app/main.py
+- tests/test_stateful_appointment_context_carryover.py
+
+Related mini-fix:
+
+`test_fecha_cita_flow` in tests/test_state_machine.py was made deterministic.
+
+Reason:
+
+The old test used `Mañana en la tarde`, but on the current run tomorrow resolved to Saturday 2026-06-06, so the system correctly blocked the flow with:
+
+- nuevo_estado = ST_CITA_FECHA
+- next_action = ask_preferred_date
+- state_reason = unavailable_date_guard
+- is_weekend = true
+- es_dia_disponible = false
+
+The test now uses a valid weekday flow such as:
+
+`Para el viernes en la tarde`
+
+and additionally protects:
+
+- fecha_solicitada is not None
+- es_dia_disponible is True
+- is_weekend is False
+- is_colombia_holiday is False
+- slots_candidatos exists
+
+Validation:
+
+Full test suite GREEN.
+
+Latest known test count in this phase:
+
+214 passed
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy/session package tracking
+
+Conclusion:
+
+P6-F.9.14.28 closes the response-layer gap for exact-hour requests inside valid KB-backed franjas.
+
+The appointment flow now behaves safely:
+
+1. Patient asks for an exact hour.
+2. Backend maps it to a KB-backed franja.
+3. System does not persist yet.
+4. Elvira explains that care is managed by franjas.
+5. Elvira asks for explicit confirmation.
+6. Only a later confirmation turn may persist AppointmentRequest.
+
+Next recommended block:
+
+P6-F.9.14.29 — Controlled Swagger Exact-Hour Franja Confirmation Dry-Run
+
+Objective:
+
+Validate in production through `/test/message-stateful` only that:
+
+1. After Elvira offers KB-backed slots, patient says:
+   `se puede a las 5?`
+
+2. System responds with:
+   - nuevo_estado = ST_CITA_FRANJA
+   - next_action = ask_confirm_exact_hour_as_slot
+   - appointment_request_decision.reason = requires_exact_hour_franja_confirmation
+   - appointment_request = null
+   - response explains franja/no exact hour guarantee
+   - response asks for explicit confirmation
+
+3. Patient then says:
+   `sí`
+
+4. System persists AppointmentRequest with the pending franja.
+
+Do not touch real `/webhook`, real WhatsApp sending, Google Sheets, Telegram, n8n, Calendar, or doctor confirmation automation.
+
