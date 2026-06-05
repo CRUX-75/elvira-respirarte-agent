@@ -10,9 +10,9 @@ This file is not public-facing documentation. It is a working context file.
 
 ---
 
-## Repository
+## Current Working Status
 
-Project:
+Current repository:
 
 elvira-respirarte-agent
 
@@ -22,19 +22,43 @@ github.com/CRUX-75/elvira-respirarte-agent
 
 Current working branch:
 
-p6-f-9-10-appointment-request-service-tests
+main
 
-Current status:
+Current phase:
 
-P6-F.9.12 — AppointmentRequest Persistence Preparation is CLOSED / GREEN / MERGE-READY.
+P6-F.9.18 — Production Activation Context Reconciliation
 
-Latest validation baseline:
+Current operational objective:
 
-149 passed
+Prepare Elvira for controlled production activation with the official Respirarte Colombian WhatsApp number.
 
-Working tree:
+Latest confirmed local validation:
 
-clean
+214 passed
+
+Current safety baseline:
+
+- FastAPI app is production-deployed.
+- PostgreSQL production database is operational.
+- Knowledge Base runtime is enabled.
+- LangSmith production tracing is active.
+- `/test/message-stateful` has been used as the safe production dry-run surface.
+- AppointmentRequest persistence works after explicit patient confirmation.
+- Elvira does not confirm appointments automatically.
+- Elvira only registers appointment requests for human review by Dra. D'Aleman.
+- Real `/webhook` activation/review is still pending.
+- Real WhatsApp sending remains disabled.
+- `WHATSAPP_SENDING_ENABLED=false` remains the production safety default.
+- Google Sheets, Telegram, n8n, and Calendar are out of scope for the initial controlled MVP launch.
+- Minor duplicated punctuation in one production response was accepted as non-blocking.
+
+Current next production-preparation block:
+
+P6-F.9.19 — Production Activation Checklist
+
+Important current rule:
+
+Do not touch real `/webhook` or enable real WhatsApp sending until the production activation checklist and webhook readiness review are completed.
 
 ---
 
@@ -68,8 +92,8 @@ This repository uses app/.
 - OpenAI for response wording only
 - LangSmith for tracing
 - WhatsApp Cloud API
-- Google Sheets only as human-visible operational inbox when needed
-- n8n only as auxiliary workflow layer when needed
+- Google Sheets only as future human-visible operational inbox when needed
+- n8n only as future auxiliary workflow layer when needed
 
 ---
 
@@ -99,7 +123,7 @@ n8n may be used only for auxiliary workflows such as notifications, but not for:
 
 ## Appointment Request Architecture Decision
 
-Solicitudes_Cita must not be treated as a Google Sheets-first object.
+Solicitudes_Cita / AppointmentRequest must not be treated as a Google Sheets-first object.
 
 Correct direction:
 
@@ -107,15 +131,24 @@ AppointmentRequest internal model
 → AppointmentRequestService
 → AppointmentRequestRepository
 → PostgreSQL source of truth
-→ future Google Sheets adapter / human inbox
-→ future Telegram notification, optional
+→ future Google Sheets adapter / human inbox, optional
+→ future doctor notification adapter, optional
 
-Google Sheets is only the visible operational inbox for the doctor.
+Google Sheets is only a possible visible operational inbox for the doctor.
 
 The source of truth for appointment request rules must remain in Python/PostgreSQL.
 
 ---
 
+## Historical Context Notice
+
+Older sections below are preserved for traceability.
+
+If an older section says the project is in P6-F.9.12, P6-F.8, uses branch `p6-f-9-10-appointment-request-service-tests`, or has a test baseline such as 149/76 tests, treat that as historical context only.
+
+The current source of truth is the "Current Working Status" section above.
+
+---
 ## Current Milestone
 
 Closed block:
