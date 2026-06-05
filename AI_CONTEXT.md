@@ -5107,3 +5107,55 @@ Still not touched:
 - doctor confirmation automation
 - therapy/session package tracking
 
+
+---
+
+## P6-F.9.14.30 — Minor Copy Polish: Exact-Hour Franja Response Punctuation
+
+Status:
+
+CLOSED / GREEN / COMMITTED
+
+Reason:
+
+Production dry-run P6-F.9.14.29 validated the exact-hour franja confirmation flow, but found a minor copy issue:
+
+`5:00 p. m. a 7:00 p. m..`
+
+The duplicated punctuation came from appending a sentence period after a formatted franja that already ends with `p. m.`.
+
+Change:
+
+Adjusted the exact-hour franja confirmation response copy to avoid duplicated punctuation after formatted franja text.
+
+Expected response shape now:
+
+`Para la hora que me indica, puedo registrar como preferencia la franja de 5:00 p. m. a 7:00 p. m. ¿Desea que registre esa franja?`
+
+Validation:
+
+Targeted tests GREEN.
+Full suite GREEN.
+
+Scope:
+
+Copy-only polish.
+
+No runtime logic was changed.
+No persistence logic was changed.
+No AppointmentRequest decision logic was changed.
+No state transition logic was changed.
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy/session package tracking
+
