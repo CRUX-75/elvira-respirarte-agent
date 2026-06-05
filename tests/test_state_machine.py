@@ -24,11 +24,20 @@ def test_cita_flow():
     )
 
 def test_fecha_cita_flow():
-    msg = IncomingMessage(telefono="573001112233", mensaje="Mañana en la tarde", estado_actual="ST_CITA_FECHA")
+    msg = IncomingMessage(
+        telefono="573001112233",
+        mensaje="Para el viernes en la tarde",
+        estado_actual="ST_CITA_FECHA",
+    )
     result = process_message(msg)
     assert result.intent == "fecha_cita"
     assert result.nuevo_estado == "ST_CITA_FRANJA"
     assert result.next_action == "ask_preferred_time"
+    assert result.fecha_solicitada is not None
+    assert result.es_dia_disponible is True
+    assert result.is_weekend is False
+    assert result.is_colombia_holiday is False
+    assert result.slots_candidatos
 
 def test_optout_flow():
     msg = IncomingMessage(telefono="573001112233", mensaje="No quiero recibir más mensajes")
