@@ -412,18 +412,18 @@ def test_message(message: IncomingMessage):
 def _build_exact_hour_franja_confirmation_response(franja: str | None) -> str:
     if not franja:
         return (
-            "Con gusto. Le cuento que la atención se maneja por franjas horarias "
-            "y no es posible garantizar una hora exacta dentro del bloque. "
-            "¿Desea que registremos su solicitud para una de las franjas disponibles?"
+            "Claro. Le cuento que las atenciones domiciliarias se manejan por franjas, "
+            "no por una hora exacta garantizada. "
+            "¿Desea que registre una de las franjas disponibles como preferencia?"
         )
 
     readable_franja = franja.replace("–", " a ")
 
     return (
-        "Con gusto. Le cuento que la atención se maneja por franjas horarias "
-        "y no es posible garantizar una hora exacta dentro del bloque. "
-        f"Para esa hora, la franja correspondiente sería de {readable_franja}. "
-        "¿Desea que registremos su solicitud para esa franja?"
+        "Claro. Le cuento que las atenciones domiciliarias se manejan por franjas, "
+        "no por una hora exacta garantizada. "
+        f"Para la hora que me indica, puedo registrar como preferencia la franja de {readable_franja}. "
+        "¿Desea que registre esa franja?"
     )
 
 def _force_exact_hour_franja_confirmation_state_guard_response(result):
