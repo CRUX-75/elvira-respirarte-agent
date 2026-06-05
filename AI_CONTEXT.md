@@ -5159,3 +5159,105 @@ Still not touched:
 - doctor confirmation automation
 - therapy/session package tracking
 
+
+---
+
+## P6-F.9.14.31 — Controlled Swagger Copy Polish Dry-Run
+
+Status:
+
+CLOSED / FUNCTIONAL GREEN / MINOR COPY PUNCTUATION PENDING
+
+Production endpoint validated:
+
+POST /test/message-stateful
+
+Validated sequence:
+
+1. Patient started appointment request:
+
+`Quiero pedir una cita`
+
+Result:
+
+- nuevo_estado = ST_CITA_FECHA
+- intent = cita
+- next_action = ask_preferred_date
+- appointment_request = null
+- delivery_status = sending_skipped
+
+2. Patient selected valid date:
+
+`para el martes`
+
+Result:
+
+- nuevo_estado = ST_CITA_FRANJA
+- intent = fecha_cita
+- next_action = ask_preferred_time
+- fecha_solicitada = 2026-06-09
+- fecha_solicitada_texto = martes 9 de junio
+- slots_candidatos:
+  - 3:00 p. m.–5:00 p. m.
+  - 5:00 p. m.–7:00 p. m.
+- appointment_request = null
+
+3. Patient asked for exact hour inside valid franja:
+
+`se puede a las 5?`
+
+Result:
+
+- estado_anterior = ST_CITA_FRANJA
+- nuevo_estado = ST_CITA_FRANJA
+- intent = hora_cita
+- next_action = ask_confirm_exact_hour_as_slot
+- state_reason = requires_exact_hour_franja_confirmation
+- appointment_request_decision.should_persist = false
+- appointment_request_decision.reason = requires_exact_hour_franja_confirmation
+- appointment_request_decision.franja_solicitada = 5:00 p. m.–7:00 p. m.
+- appointment_request = null
+- delivery_status = sending_skipped
+
+Functional conclusion:
+
+The exact-hour franja confirmation behavior remains correct and production-safe.
+
+Elvira correctly maps `se puede a las 5?` to the KB-backed franja `5:00 p. m.–7:00 p. m.`, keeps the patient in `ST_CITA_FRANJA`, does not persist AppointmentRequest prematurely, and asks for explicit confirmation.
+
+Pending non-blocking copy polish:
+
+Production still shows duplicated punctuation in the response:
+
+`5:00 p. m. a 7:00 p. m.. ¿Desea que registre esa franja?`
+
+This is accepted as a minor non-blocking copy issue.
+
+It does not affect:
+
+- intent routing
+- state transition
+- AppointmentRequest persistence safety
+- franja mapping
+- WhatsApp delivery safety
+- doctor confirmation boundaries
+
+Decision:
+
+Do not block production activation for this punctuation issue.
+
+Carry this as a minor copy polish candidate for a later cleanup or redeploy verification.
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- real POST /webhook
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy/session package tracking
+
