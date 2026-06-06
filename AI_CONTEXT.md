@@ -5510,3 +5510,97 @@ No Google Sheets / Telegram / n8n / Calendar.
 
 Fix the bug, prove it with tests, redeploy, and validate the complete flow through /webhook.
 
+
+---
+
+## Working Methodology Update — Sprint-Based Execution
+
+Status:
+
+ACTIVE RULE
+
+Decision:
+
+Stop documenting every microphase.
+
+The previous microphase-heavy workflow created too much overhead, slowed down execution, and made the project feel unnecessarily bureaucratic.
+
+New working model:
+
+Work by larger phases and focused sprints.
+
+A sprint should group a coherent technical objective, such as:
+
+- fixing one complete appointment-flow bug
+- validating one complete webhook flow
+- preparing one production activation step
+- closing one deployable capability
+
+Documentation rule:
+
+Do not create long documentation for every microstep.
+
+Document only after a sprint or meaningful phase is completed.
+
+Documentation should be concise and should include:
+
+- what was changed
+- what files were touched
+- what tests passed
+- what production/dry-run validation was completed
+- what remains blocked or pending
+- whether `WHATSAPP_SENDING_ENABLED` stayed false
+
+SDD remains active, but with less ceremony.
+
+Required validation for conversational flows:
+
+A flow is not accepted unless it is tested through its real effect.
+
+For appointment flows, the success criterion is not only that Elvira answers correctly.
+
+The success criterion is:
+
+```txt
+appointment_request != null
+and appointment_requests contains the correct row in PostgreSQL
+
+For critical conversational flows, acceptance requires:
+
+focused automated tests
+/test/message-stateful full-flow validation when relevant
+real /webhook Meta-shaped payload full-flow validation
+fresh phone per complete flow
+fresh wamid per turn
+DB evidence for the expected final effect
+
+Testing rule:
+
+1 complete flow = 1 fresh phone
+1 turn = 1 fresh wamid
+if a flow fails midway = abandon that phone
+
+Current priority:
+
+Do not expand scope.
+
+Next sprint:
+
+P6-F.9.23 — Exact-Hour Franja Confirmation Persistence Bugfix
+
+Sprint goal:
+
+Fix the bug where Elvira says the appointment request was registered after:
+
+Sí, registre esa franja
+
+but appointment_request remains null.
+
+No production sending activation is allowed until this bug is fixed and the complete flow passes through real /webhook.
+
+Permanent safety rule:
+
+WHATSAPP_SENDING_ENABLED=false
+
+must remain active until an explicitly approved controlled sending activation sprint.
+
