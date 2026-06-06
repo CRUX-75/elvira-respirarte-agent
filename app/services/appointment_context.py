@@ -205,7 +205,10 @@ def apply_pending_exact_hour_confirmation_to_state(
     if not pending_franja:
         return state
 
-    if getattr(state, "nuevo_estado", None) != "ST_CITA_FRANJA":
+    if getattr(state, "nuevo_estado", None) not in {
+        "ST_CITA_FRANJA",
+        "ST_CITA_PENDIENTE",
+    }:
         return state
 
     if not _is_affirmative_confirmation(getattr(state, "mensaje_original", None)):

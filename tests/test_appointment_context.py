@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 from app.services.appointment_context import (
     apply_appointment_context_to_state,
+    apply_pending_exact_hour_confirmation_to_state,
     capture_appointment_context_from_state,
     should_clear_appointment_context,
 )
@@ -309,3 +310,45 @@ def test_apply_pending_exact_hour_confirmation_works_with_real_elvira_state():
     assert result.fecha_solicitada == "2026-06-01"
     assert result.franja_solicitada == "5:00 p. m.–7:00 p. m."
     assert result.state_reason == "confirmed_pending_exact_hour_franja"
+
+
+def test_apply_pending_exact_hour_confirmation_when_state_already_pending():
+    class State:
+        intent = "hora_cita"
+        nuevo_estado = "ST_CITA_PENDIENTE"
+        next_action = "confirm_appointment_request"
+        mensaje_original = "Sí, registre esa franja"
+        fecha_solicitada = None
+        fecha_solicitada_texto = None
+        slots_candidatos = []
+        es_dia_disponible = None
+        is_weekend = None
+        is_colombia_holiday = None
+        colombia_holiday_name = None
+        franja_solicitada = None
+        state_reason = None
+
+    context = {
+        "fecha_solicitada": "2026-06-09",
+        "fecha_solicitada_texto": "martes 9 de junio",
+        "slots_candidatos": [
+            "3:00 p. m.–5:00 p. m.",
+            "5:00 p. m.–7:00 p. m.",
+        ],
+        "es_dia_disponible": True,
+        "is_weekend": False,
+        "is_colombia_holiday": False,
+        "colombia_holiday_name": None,
+        "pending_exact_hour_franja": "3:00 p. m.–5:00 p. m.",
+        "pending_exact_hour_text": "A las 3",
+        "pending_exact_hour_requires_confirmation": True,
+    }
+
+    state = apply_pending_exact_hour_confirmation_to_state(State(), context)
+
+    assert state.intent == "hora_cita"
+    assert state.nuevo_estado == "ST_CITA_PENDIENTE"
+    assert state.next_action == "confirm_appointment_request"
+    assert state.state_reason == "confirmed_pending_exact_hour_franja"
+    assert state.fecha_solicitada == "2026-06-09"
+    assert state.franja_solicitada == "3:00 p. m.–5:00 p. m."
