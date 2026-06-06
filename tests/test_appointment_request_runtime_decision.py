@@ -12,6 +12,8 @@ def make_state(
     fecha_solicitada: str | None = None,
     slots_candidatos: list[str] | None = None,
     mensaje_original: str = "Hola",
+    state_reason: str | None = None,
+    franja_solicitada: str | None = None,
     is_weekend: bool = False,
     is_colombia_holiday: bool = False,
     es_dia_disponible: bool | None = True,
@@ -28,6 +30,8 @@ def make_state(
         respuesta="Respuesta de prueba",
         fecha_solicitada=fecha_solicitada,
         slots_candidatos=slots_candidatos or [],
+        state_reason=state_reason,
+        franja_solicitada=franja_solicitada,
         is_weekend=is_weekend,
         is_colombia_holiday=is_colombia_holiday,
         es_dia_disponible=es_dia_disponible,
@@ -706,3 +710,32 @@ def test_p6f91425_blocks_unsupported_loose_hour_and_does_not_fallback_to_first_s
     assert decision.should_persist is False
     assert decision.reason == "skipped_unsupported_slot_selection"
     assert decision.franja_solicitada is None
+
+
+def test_persists_confirmed_pending_exact_hour_franja_from_state_context():
+    decision = decide_appointment_request_persistence(
+        state=make_state(
+            intent="hora_cita",
+            nuevo_estado="ST_CITA_PENDIENTE",
+            next_action="confirm_appointment_request",
+            fecha_solicitada="2026-06-09",
+            slots_candidatos=[
+                "3:00 p. m.–5:00 p. m.",
+                "5:00 p. m.–7:00 p. m.",
+            ],
+            mensaje_original="Sí, registre esa franja",
+            state_reason="confirmed_pending_exact_hour_franja",
+            franja_solicitada="3:00 p. m.–5:00 p. m.",
+        ),
+        telefono="573001112233",
+        nombre="Paciente Test",
+        source_interaction_id="wamid.test-confirmed-exact-hour-franja",
+    )
+
+    assert decision.should_persist is True
+    assert decision.reason == "allowed_hora_cita_ready_for_human_review"
+    assert decision.estado_solicitud == "pendiente_confirmacion"
+    assert decision.fecha_solicitada == "2026-06-09"
+    assert decision.franja_solicitada == "3:00 p. m.–5:00 p. m."
+    assert decision.hora_solicitada_texto == "Sí, registre esa franja"
+    assert decision.source_interaction_id == "wamid.test-confirmed-exact-hour-franja"
