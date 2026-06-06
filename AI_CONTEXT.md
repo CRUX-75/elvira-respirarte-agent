@@ -5604,3 +5604,205 @@ WHATSAPP_SENDING_ENABLED=false
 
 must remain active until an explicitly approved controlled sending activation sprint.
 
+
+---
+
+## P6-F.9.23 — Exact-Hour Franja Confirmation Persistence Bugfix
+
+Status:
+
+CLOSED / GREEN / COMMITTED / DEPLOYED / WEBHOOK DRY-RUN PASSED / DB VERIFIED
+
+Bug fixed:
+
+The pre-production webhook flow failed after the patient confirmed a pending exact-hour franja.
+
+Validated flow:
+
+1. Quiero pedir una cita
+2. El martes en la tarde
+3. A las 3
+4. Sí, registre esa franja
+
+Previous incorrect behavior:
+
+- Elvira replied as if the request had been registered.
+- `appointment_request` remained null.
+- `appointment_request_decision_reason = skipped_unsupported_slot_selection`.
+
+Root cause:
+
+The pending exact-hour franja context was not applied when the confirmation turn already reached:
+
+- `nuevo_estado = ST_CITA_PENDIENTE`
+- `next_action = confirm_appointment_request`
+
+The system then tried to resolve the slot again from:
+
+`Sí, registre esa franja`
+
+and failed because the message did not contain 3, 5, primera, segunda, or another concrete slot marker.
+
+Fix implemented:
+
+`apply_pending_exact_hour_confirmation_to_state(...)` now also applies pending exact-hour franja context when the state is already:
+
+- `ST_CITA_FRANJA`
+- `ST_CITA_PENDIENTE`
+
+Changed files:
+
+- app/services/appointment_context.py
+- tests/test_appointment_context.py
+- tests/test_appointment_request_runtime_decision.py
+
+Validation completed:
+
+Local automated tests:
+
+- `pytest tests/test_appointment_context.py tests/test_appointment_request_runtime_decision.py -q`
+- `pytest tests/test_webhook_persistence.py -q`
+- `pytest -q`
+
+Latest confirmed result:
+
+- 216 passed
+
+Production readiness check:
+
+- `/ready` returned `status = ready`
+- `whatsapp_sending_enabled = false`
+- `real_whatsapp_sending_allowed = false`
+
+Production webhook dry-run:
+
+Endpoint:
+
+- POST `/webhook`
+
+Payload type:
+
+- Meta-shaped WhatsApp payload
+
+Final webhook result:
+
+- `status = sending_skipped`
+- `intent = hora_cita`
+- `nuevo_estado = ST_CITA_PENDIENTE`
+- `appointment_request_decision_reason = allowed_hora_cita_ready_for_human_review`
+- `appointment_request != null`
+- `estado_solicitud = pendiente_confirmacion`
+- `fecha_solicitada = 2026-06-09`
+- `franja_solicitada = 3:00 p. m.–5:00 p. m.`
+- `source_interaction_id = wamid.p6f923.923.004`
+
+Production PostgreSQL verification:
+
+Table:
+
+- `appointment_requests`
+
+Verified row:
+
+- `id_solicitud = SOL-20260606-051808-954344-0923`
+- `telefono = 573009230923`
+- `estado_solicitud = pendiente_confirmacion`
+- `fecha_solicitada = 2026-06-09`
+- `franja_solicitada = 3:00 p. m.–5:00 p. m.`
+- `source_interaction_id = wamid.p6f923.923.004`
+
+Conclusion:
+
+The exact-hour franja confirmation bug is fixed.
+
+Elvira now only says the request was received when `appointment_request != null` and the corresponding row exists in PostgreSQL.
+
+---
+
+## Working Methodology Update — Sprint-Based SDD With E2E Acceptance
+
+Status:
+
+ACTIVE RULE
+
+Decision:
+
+Stop documenting every microphase.
+
+The project will continue using SDD, but with less ceremony and stronger E2E acceptance.
+
+Previous workflow to avoid:
+
+microphase → document → test → commit → document → microphase → more documentation
+
+Current workflow:
+
+sprint / concrete phase → implementation + tests + E2E validation → concise final documentation
+
+Documentation rule:
+
+Do not create long documentation for every microstep.
+
+Document only after a sprint or meaningful phase is completed.
+
+Sprint documentation must be concise and include:
+
+- what was changed
+- what files were touched
+- what tests passed
+- what production or dry-run validation was completed
+- what remains blocked or pending
+- whether `WHATSAPP_SENDING_ENABLED` stayed false
+
+Conversational acceptance rule:
+
+No conversational flow is accepted unless it is tested through its real expected effect.
+
+For appointment flows, the success criterion is not only that Elvira answers correctly.
+
+The success criterion is:
+
+```txt
+appointment_request != null
+and appointment_requests contains the correct row in PostgreSQL
+
+For critical conversational flows, acceptance requires:
+
+focused automated tests
+/test/message-stateful full-flow validation when relevant
+real /webhook Meta-shaped payload full-flow validation
+fresh phone per complete flow
+fresh wamid per turn
+DB evidence for the expected final effect
+
+Testing rule:
+
+1 complete flow = 1 fresh phone
+1 turn = 1 fresh wamid
+if a flow fails midway = abandon that phone
+
+Permanent safety rule:
+
+WHATSAPP_SENDING_ENABLED=false
+
+must remain active until an explicitly approved controlled sending activation sprint.
+
+Current next sprint:
+
+P6-F.9.24 — Production MVP Activation SDD
+
+Goal:
+
+Prepare the controlled MVP production activation roadmap after P6-F.9.23 closed successfully.
+
+Do not expand scope.
+
+Still out of scope unless explicitly started:
+
+Google Sheets sync
+Telegram notification
+n8n workflows
+Calendar integration
+doctor confirmation automation
+therapy sessions module
+
