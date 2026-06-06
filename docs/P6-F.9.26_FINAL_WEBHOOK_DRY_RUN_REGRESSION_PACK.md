@@ -547,3 +547,396 @@ P6-F.9.27 — Controlled Sending Activation Execution Checklist
 Goal:
 
 Prepare the exact execution checklist for enabling real WhatsApp sending only for one controlled internal test phone, after the final dry-run regression pack is green.
+
+---
+
+## Execution Result — Production Webhook Dry-Run Regression Pack
+
+Status:
+
+CLOSED / GREEN / APPROVED / REAL SENDING DISABLED
+
+Execution surface:
+
+- Production `POST /webhook`
+- Meta-shaped payloads through Swagger
+- `WHATSAPP_SENDING_ENABLED=false`
+- real WhatsApp sending disabled
+
+Production readiness result:
+
+- `status = ready`
+- `environment = production`
+- `app_version = 0.2.1`
+- `whatsapp_sending_enabled = false`
+- `real_whatsapp_sending_allowed = false`
+- `kb_runtime_enabled = true`
+- database configured
+- LangSmith tracing enabled
+- LangSmith project = `elvira-respirarte-prod`
+- OpenAI configured
+- WhatsApp configured
+- `hard_failures = []`
+
+## Flow 0 — Readiness Check
+
+Status:
+
+APPROVED
+
+Result:
+
+- production app ready
+- real sending disabled
+- no hard failures
+
+## Flow 1 — Basic Greeting
+
+Status:
+
+APPROVED
+
+Phone:
+
+~~~txt
+test-p6f926-greeting-001
+~~~
+
+WAMID:
+
+~~~txt
+wamid.p6f926.greeting.001
+~~~
+
+Result:
+
+- `status = sending_skipped`
+- `intent = general`
+- `estado_anterior = ST_INIT`
+- `nuevo_estado = ST_GENERAL`
+- `appointment_request_decision_reason = skipped_non_appointment_intent`
+- `appointment_request = null`
+- `whatsapp_sending_enabled = false`
+- `patient_id = 4ec56437-0c49-4e73-849d-29119e98ff23`
+
+Conclusion:
+
+Basic Meta-shaped greeting was accepted safely without appointment side effects.
+
+## Flow 2 — Appointment Happy Path With Exact-Hour Franja Confirmation
+
+Status:
+
+APPROVED
+
+Phone:
+
+~~~txt
+test-p6f926-happy-001
+~~~
+
+Important correction:
+
+The production happy path with patient message `A las 3` requires explicit franja confirmation.
+
+Therefore, the accepted flow has four turns, not three.
+
+### Turn 1
+
+Message:
+
+~~~txt
+Quiero pedir una cita
+~~~
+
+WAMID:
+
+~~~txt
+wamid.p6f926.happy.001
+~~~
+
+Result:
+
+- `status = sending_skipped`
+- `intent = cita`
+- `estado_anterior = ST_INIT`
+- `nuevo_estado = ST_CITA_FECHA`
+- `appointment_request_decision_reason = skipped_initial_cita_intent`
+- `appointment_request = null`
+- initial appointment copy correct
+- `whatsapp_sending_enabled = false`
+
+### Turn 2
+
+Message:
+
+~~~txt
+El martes en la tarde
+~~~
+
+WAMID:
+
+~~~txt
+wamid.p6f926.happy.002
+~~~
+
+Result:
+
+- `status = sending_skipped`
+- `intent = fecha_cita`
+- `estado_anterior = ST_CITA_FECHA`
+- `nuevo_estado = ST_CITA_FRANJA`
+- `appointment_request_decision_reason = skipped_fecha_cita_waiting_for_time`
+- `appointment_request = null`
+- date resolved as martes 9 de junio
+- valid franjas offered:
+  - 3:00 p. m.–5:00 p. m.
+  - 5:00 p. m.–7:00 p. m.
+- `whatsapp_sending_enabled = false`
+
+### Turn 3
+
+Message:
+
+~~~txt
+A las 3
+~~~
+
+WAMID:
+
+~~~txt
+wamid.p6f926.happy.003
+~~~
+
+Result:
+
+- `status = sending_skipped`
+- `intent = hora_cita`
+- `estado_anterior = ST_CITA_FRANJA`
+- `nuevo_estado = ST_CITA_FRANJA`
+- `appointment_request_decision_reason = requires_exact_hour_franja_confirmation`
+- `appointment_request = null`
+- Elvira explains that domiciliary care is handled by franjas, not guaranteed exact hours
+- Elvira asks confirmation to register 3:00 p. m.–5:00 p. m.
+- `whatsapp_sending_enabled = false`
+
+### Turn 4
+
+Message:
+
+~~~txt
+Sí, registre esa franja
+~~~
+
+WAMID:
+
+~~~txt
+wamid.p6f926.happy.004
+~~~
+
+Result:
+
+- `status = sending_skipped`
+- `intent = hora_cita`
+- `estado_anterior = ST_CITA_FRANJA`
+- `nuevo_estado = ST_CITA_PENDIENTE`
+- `appointment_request_decision_reason = allowed_hora_cita_ready_for_human_review`
+- `appointment_request != null`
+- `estado_solicitud = pendiente_confirmacion`
+- `fecha_solicitada = 2026-06-09`
+- `franja_solicitada = 3:00 p. m.–5:00 p. m.`
+- `source_interaction_id = wamid.p6f926.happy.004`
+- `patient_id = 93e56153-968d-4826-9b49-fe6f61523762`
+- `whatsapp_sending_enabled = false`
+
+Conclusion:
+
+Appointment request registration is accepted because the patient-facing confirmation response is backed by `appointment_request != null`.
+
+## Flow 4 — Ambiguous Slot Guard
+
+Status:
+
+APPROVED
+
+Phone:
+
+~~~txt
+test-p6f926-ambiguous-001
+~~~
+
+### Turn 1
+
+Message:
+
+~~~txt
+Quiero pedir una cita
+~~~
+
+WAMID:
+
+~~~txt
+wamid.p6f926.ambiguous.001
+~~~
+
+Result:
+
+- `status = sending_skipped`
+- `intent = cita`
+- `nuevo_estado = ST_CITA_FECHA`
+- `appointment_request = null`
+
+### Turn 2
+
+Message:
+
+~~~txt
+El martes en la tarde
+~~~
+
+WAMID:
+
+~~~txt
+wamid.p6f926.ambiguous.002
+~~~
+
+Result:
+
+- `status = sending_skipped`
+- `intent = fecha_cita`
+- `nuevo_estado = ST_CITA_FRANJA`
+- `appointment_request = null`
+- valid franjas offered
+
+### Turn 3
+
+Message:
+
+~~~txt
+En la tarde
+~~~
+
+WAMID:
+
+~~~txt
+wamid.p6f926.ambiguous.003
+~~~
+
+Result:
+
+- `status = sending_skipped`
+- `intent = hora_cita`
+- `estado_anterior = ST_CITA_FRANJA`
+- `nuevo_estado = ST_CITA_FRANJA`
+- `appointment_request_decision_reason = skipped_wrong_state_or_action`
+- `appointment_request = null`
+- Elvira asks patient to choose one concrete available franja
+- `whatsapp_sending_enabled = false`
+
+Conclusion:
+
+Ambiguous generic time-window reply did not create AppointmentRequest and did not advance to `ST_CITA_PENDIENTE`.
+
+## Flow 5 — Duplicate WAMID Deduplication
+
+Status:
+
+APPROVED
+
+Duplicated WAMID:
+
+~~~txt
+wamid.p6f926.ambiguous.003
+~~~
+
+Result on repeated payload:
+
+- `status = ignored`
+- `reason = duplicate_message`
+- `whatsapp_message_id = wamid.p6f926.ambiguous.003`
+
+Conclusion:
+
+Duplicate Meta message was ignored and did not create duplicate operational effects.
+
+## Flow 6 — Opt-Out Safety Check
+
+Status:
+
+APPROVED
+
+Phone:
+
+~~~txt
+test-p6f926-optout-001
+~~~
+
+WAMID:
+
+~~~txt
+wamid.p6f926.optout.001
+~~~
+
+Message:
+
+~~~txt
+No quiero recibir más mensajes
+~~~
+
+Result:
+
+- `status = sending_skipped`
+- `intent = optout`
+- `estado_anterior = ST_INIT`
+- `nuevo_estado = ST_OPTOUT`
+- `appointment_request_decision_reason = skipped_non_appointment_intent`
+- `appointment_request = null`
+- `patient_id = 2fbe45f5-3cb8-4e23-828f-5f51ffb9a298`
+- `whatsapp_sending_enabled = false`
+
+Conclusion:
+
+Opt-out is handled safely, without creating AppointmentRequest and without real sending.
+
+## Final Regression Result
+
+P6-F.9.26 production `/webhook` dry-run regression pack is accepted.
+
+Approved flows:
+
+- readiness check
+- basic greeting
+- appointment registration with exact-hour franja confirmation
+- ambiguous slot guard
+- duplicate `wamid` deduplication
+- opt-out safety
+
+Final safety result:
+
+- real WhatsApp sending remained disabled
+- `WHATSAPP_SENDING_ENABLED=false`
+- every response returned `sending_skipped` or `ignored` for duplicate payload
+- no real WhatsApp message was sent
+- no uncontrolled side effects were observed
+
+## Follow-Up Documentation Note
+
+The original planned happy path described `A las 3` as a final direct selection.
+
+Runtime correctly treats `A las 3` as an exact-hour request and requires explicit confirmation of the franja.
+
+This is not a bug.
+
+It is aligned with the doctor-validated operational contract:
+
+- Elvira collects preferred franjas
+- Elvira does not guarantee exact hours
+- AppointmentRequest is created only after explicit patient confirmation when the patient gives an exact hour
+
+## Next Sprint
+
+P6-F.9.27 — Controlled Sending Activation Execution Checklist
+
+Goal:
+
+Prepare the exact execution checklist for enabling real WhatsApp sending only for one controlled internal test phone, after the final dry-run regression pack is green.
