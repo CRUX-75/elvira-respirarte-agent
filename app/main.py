@@ -232,6 +232,18 @@ async def receive_webhook(payload: WhatsAppPayload):
 
         result = traced_process_message(process_message, message)
 
+        (
+            result,
+            appointment_request_decision,
+            appointment_request_metadata,
+        ) = _apply_appointment_request_runtime(
+            result=result,
+            patient=patient,
+            telefono=telefono,
+            nombre=nombre,
+            source_interaction_id=whatsapp_message_id,
+        )
+
         if settings.whatsapp_sending_enabled:
             try:
                 await send_whatsapp_message(
@@ -371,6 +383,8 @@ async def receive_webhook(payload: WhatsAppPayload):
             "whatsapp_message_id": whatsapp_message_id,
             "whatsapp_timestamp": whatsapp_timestamp,
             "patient_id": str(patient["id"]),
+            "appointment_request_decision_reason": appointment_request_decision.reason,
+            "appointment_request": appointment_request_metadata,
         }
 
     except Exception as e:
@@ -464,6 +478,115 @@ def _force_unavailable_date_guard_response(result):
     )
 
     return result
+
+
+
+def _apply_appointment_request_runtime(
+    *,
+    result,
+    patient: dict,
+    telefono: str,
+    nombre: str | None,
+    source_interaction_id: str | None,
+):
+    """
+    Apply AppointmentRequest runtime logic shared by /webhook and /test/message-stateful.
+
+    This helper does not send WhatsApp messages.
+    It only:
+    - applies appointment context carryover
+    - evaluates AppointmentRequest persistence decision
+    - persists AppointmentRequest when deterministic rules allow it
+    - captures or clears appointment context
+    - adjusts safe patient-facing copy for guarded appointment states
+    """
+    result = apply_appointment_context_to_state(
+        result,
+        patient.get("appointment_context"),
+    )
+    result = apply_pending_exact_hour_confirmation_to_state(
+        result,
+        patient.get("appointment_context"),
+    )
+
+    appointment_request_decision = decide_appointment_request_persistence(
+        state=result,
+        telefono=telefono,
+        nombre=nombre,
+        source_interaction_id=source_interaction_id,
+    )
+
+    if appointment_request_decision.reason in {
+        "skipped_weekend",
+        "skipped_colombia_holiday",
+        "skipped_unavailable_date",
+    }:
+        result = _force_unavailable_date_guard_response(result)
+
+    if (
+        appointment_request_decision.reason
+        == "requires_exact_hour_franja_confirmation"
+    ):
+        result = _force_exact_hour_franja_confirmation_state_guard_response(result)
+        result.respuesta = _build_exact_hour_franja_confirmation_response(
+            appointment_request_decision.franja_solicitada
+        )
+
+    appointment_request_metadata = None
+    appointment_request_persisted = False
+
+    if appointment_request_decision.should_persist:
+        appointment_repository = PostgresAppointmentRequestRepository(engine)
+        appointment_service = AppointmentRequestService(
+            repository=appointment_repository,
+        )
+        appointment_request = appointment_service.create_or_reuse_active_request(
+            telefono=appointment_request_decision.telefono or telefono,
+            nombre_paciente=appointment_request_decision.nombre_paciente or nombre or "",
+            servicio_solicitado=appointment_request_decision.servicio_solicitado or "",
+            direccion_domicilio=appointment_request_decision.direccion_domicilio or "",
+            fecha_solicitada=appointment_request_decision.fecha_solicitada,
+            franja_solicitada=appointment_request_decision.franja_solicitada,
+            source_interaction_id=appointment_request_decision.source_interaction_id,
+            fuente=appointment_request_decision.canal_origen,
+            estado_solicitud=appointment_request_decision.estado_solicitud or "nueva",
+        )
+        appointment_request_persisted = True
+        appointment_request_metadata = {
+            "id_solicitud": appointment_request.id_solicitud,
+            "estado_solicitud": appointment_request.estado_solicitud,
+            "source_interaction_id": appointment_request.source_interaction_id,
+            "fecha_solicitada": appointment_request.fecha_solicitada,
+            "franja_solicitada": appointment_request.franja_solicitada,
+        }
+
+    if (
+        appointment_request_decision.should_persist
+        and getattr(result, "state_reason", None)
+        == "confirmed_pending_exact_hour_franja"
+    ):
+        result.respuesta = (
+            "Hemos recibido su solicitud, pronto recibirá confirmación "
+            "de la hora en que recibirá la atención."
+        )
+
+    captured_appointment_context = (
+        capture_pending_exact_hour_confirmation_context(
+            result,
+            appointment_request_decision,
+        )
+        or capture_appointment_context_from_state(result)
+    )
+    if captured_appointment_context:
+        update_patient_appointment_context(
+            telefono=telefono,
+            appointment_context=captured_appointment_context,
+        )
+
+    if should_clear_appointment_context(result, persisted=appointment_request_persisted):
+        clear_patient_appointment_context(telefono=telefono)
+
+    return result, appointment_request_decision, appointment_request_metadata
 
 
 @app.post("/test/message-stateful")

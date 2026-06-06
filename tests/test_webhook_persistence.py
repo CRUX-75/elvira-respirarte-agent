@@ -611,3 +611,117 @@ def test_webhook_persistence_error_returns_safe_response_without_marking_process
     assert calls["update_patient_state"] is False
     assert calls["update_patient_last_message"] is False
     assert calls["mark_message_processed"] is False
+
+def test_webhook_runs_appointment_request_runtime_decision(monkeypatch):
+    _patch_common(monkeypatch)
+
+    calls = {
+        "decision_called": False,
+        "save_interaction": None,
+        "update_patient_state": None,
+        "mark_message_processed": None,
+    }
+
+    monkeypatch.setattr(main, "is_message_processed", lambda whatsapp_message_id: False)
+
+    monkeypatch.setattr(
+        main,
+        "get_or_create_patient_by_phone",
+        lambda telefono, nombre=None: {
+            "id": "patient-webhook-appointment-001",
+            "telefono": telefono,
+            "nombre": nombre,
+            "estado_actual": "ST_CITA_FRANJA",
+            "opt_out": False,
+            "appointment_context": {
+                "fecha_solicitada": "2026-05-29",
+                "fecha_solicitada_texto": "viernes 29 de mayo",
+                "slots_candidatos": [
+                    "3:00 p. m.–5:00 p. m.",
+                    "5:00 p. m.–7:00 p. m.",
+                ],
+                "es_dia_disponible": True,
+                "is_weekend": False,
+                "is_colombia_holiday": False,
+                "colombia_holiday_name": None,
+            },
+        },
+    )
+
+    monkeypatch.setattr(
+        main,
+        "traced_process_message",
+        lambda fn, message: SimpleNamespace(
+            intent="hora_cita",
+            respuesta="Hemos recibido su solicitud, pronto recibirá confirmación.",
+            nuevo_estado="ST_CITA_PENDIENTE",
+            next_action="confirm_appointment_request",
+            state_reason="slot_selected",
+            router_version="intent-v1",
+            state_machine_version="sm-v1",
+            kb_used=True,
+            escalation_required=False,
+            fecha_solicitada="2026-05-29",
+            fecha_solicitada_texto="viernes 29 de mayo",
+            slots_candidatos=[
+                "3:00 p. m.–5:00 p. m.",
+                "5:00 p. m.–7:00 p. m.",
+            ],
+            franja_solicitada="3:00 p. m.–5:00 p. m.",
+            es_dia_disponible=True,
+            is_weekend=False,
+            is_colombia_holiday=False,
+            colombia_holiday_name=None,
+            opt_out=None,
+        ),
+    )
+
+    def fake_decide_appointment_request_persistence(**kwargs):
+        calls["decision_called"] = True
+        assert kwargs["telefono"] == "4917655660163"
+        assert kwargs["nombre"] == "Nabit Mikan"
+        assert kwargs["source_interaction_id"] == "wamid-webhook-appointment-001"
+        assert kwargs["state"].intent == "hora_cita"
+        return SimpleNamespace(
+            should_persist=False,
+            reason="skipped_test_decision",
+            telefono="4917655660163",
+            nombre_paciente="Nabit Mikan",
+            servicio_solicitado="",
+            direccion_domicilio="",
+            fecha_solicitada="2026-05-29",
+            franja_solicitada="3:00 p. m.–5:00 p. m.",
+            source_interaction_id="wamid-webhook-appointment-001",
+            canal_origen="whatsapp",
+            estado_solicitud="pendiente_confirmacion",
+        )
+
+    monkeypatch.setattr(
+        main,
+        "decide_appointment_request_persistence",
+        fake_decide_appointment_request_persistence,
+    )
+
+    monkeypatch.setattr(main, "save_interaction", lambda **kwargs: calls.update(save_interaction=kwargs))
+    monkeypatch.setattr(main, "update_patient_state", lambda **kwargs: calls.update(update_patient_state=kwargs))
+    monkeypatch.setattr(main, "update_patient_last_message", lambda **kwargs: None)
+    monkeypatch.setattr(main, "mark_message_processed", lambda **kwargs: calls.update(mark_message_processed=kwargs))
+    monkeypatch.setattr(main, "update_patient_appointment_context", lambda **kwargs: None)
+    monkeypatch.setattr(main, "clear_patient_appointment_context", lambda **kwargs: None)
+
+    payload = FakeWhatsAppPayload(
+        mensaje="A las 3",
+        whatsapp_message_id="wamid-webhook-appointment-001",
+    )
+
+    response = asyncio.run(main.receive_webhook(payload))
+
+    assert response["status"] == "sending_skipped"
+    assert response["intent"] == "hora_cita"
+    assert response["nuevo_estado"] == "ST_CITA_PENDIENTE"
+    assert calls["decision_called"] is True
+    assert calls["save_interaction"]["delivery_status"] == "sending_skipped"
+    assert calls["mark_message_processed"] == {
+        "whatsapp_message_id": "wamid-webhook-appointment-001",
+        "telefono": "4917655660163",
+    }
