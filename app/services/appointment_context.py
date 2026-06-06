@@ -92,10 +92,59 @@ def _normalize_confirmation_message(message: str | None) -> str:
 
 
 def _is_affirmative_confirmation(message: str | None) -> bool:
-    """Return True when the patient confirms a pending franja."""
+    """Return True when the patient confirms a pending franja.
+
+    Patients often confirm naturally with phrases such as:
+    "Sí, registre esa franja" or "Sí claro".
+    The confirmation must not depend only on exact one-word matches.
+    """
 
     normalized = _normalize_confirmation_message(message)
-    return normalized in AFFIRMATIVE_CONFIRMATION_MESSAGES
+
+    if not normalized:
+        return False
+
+    if normalized in AFFIRMATIVE_CONFIRMATION_MESSAGES:
+        return True
+
+    affirmative_prefixes = (
+        "si ",
+        "sí ",
+        "si,",
+        "sí,",
+        "claro ",
+        "claro,",
+        "correcto ",
+        "correcto,",
+        "listo ",
+        "listo,",
+        "ok ",
+        "ok,",
+        "okay ",
+        "okay,",
+        "vale ",
+        "vale,",
+        "de acuerdo ",
+        "de acuerdo,",
+        "esta bien ",
+        "está bien ",
+    )
+
+    if normalized.startswith(affirmative_prefixes):
+        return True
+
+    affirmative_phrases = (
+        "registre esa franja",
+        "registrar esa franja",
+        "regístrela",
+        "registrela",
+        "esa franja esta bien",
+        "esa franja está bien",
+        "me sirve esa franja",
+        "confirmo esa franja",
+    )
+
+    return any(phrase in normalized for phrase in affirmative_phrases)
 
 
 def capture_pending_exact_hour_confirmation_context(
