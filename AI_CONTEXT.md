@@ -5294,3 +5294,219 @@ Still not touched:
 - doctor confirmation automation
 - therapy/session package tracking
 
+
+---
+
+## P6-F.9.22 — Real Webhook Payload Dry-Run
+
+Status:
+
+PARTIAL / REAL BUG FOUND / DO NOT ACTIVATE SENDING
+
+Current production safety:
+
+- `WHATSAPP_SENDING_ENABLED=false`
+- `real_whatsapp_sending_allowed=false`
+- Real WhatsApp sending has NOT been activated.
+- Real `/webhook` can receive Meta-shaped payloads in controlled dry-run.
+- No Google Sheets, Telegram, n8n, or Calendar integration is active or required for this block.
+
+What was completed:
+
+- P6-F.9.21 was closed cleanly.
+- AppointmentRequest runtime logic was wired into real `POST /webhook`.
+- `/webhook` now calls AppointmentRequest runtime decision logic.
+- Tests were green after wiring.
+- Working tree was clean after commit.
+
+Controlled `/webhook` dry-run result:
+
+A Meta-shaped payload flow was tested directly against:
+
+```txt
+POST https://elvira.genflowautomation.com/webhook
+
+Using:
+
+WHATSAPP_SENDING_ENABLED=false
+
+The following turns worked correctly:
+
+Quiero pedir una cita
+status = sending_skipped
+intent = cita
+nuevo_estado = ST_CITA_FECHA
+appointment_request = null
+appointment_request_decision_reason = skipped_initial_cita_intent
+El martes en la tarde
+status = sending_skipped
+intent = fecha_cita
+nuevo_estado = ST_CITA_FRANJA
+Elvira offered afternoon franjas.
+appointment_request = null
+appointment_request_decision_reason = skipped_fecha_cita_waiting_for_time
+A las 3
+status = sending_skipped
+intent = hora_cita
+nuevo_estado = ST_CITA_FRANJA
+Elvira correctly explained that domiciliary care is handled by franjas, not guaranteed exact hours.
+appointment_request = null
+appointment_request_decision_reason = requires_exact_hour_franja_confirmation
+
+Critical bug found on turn 4:
+
+Input:
+
+Sí, registre esa franja
+
+Observed result:
+
+status = sending_skipped
+intent = hora_cita
+nuevo_estado = ST_CITA_PENDIENTE
+appointment_request_decision_reason = skipped_unsupported_slot_selection
+appointment_request = null
+
+But response said:
+
+Perfecto, queda registrada su solicitud para esa franja. La Dra. D'Aleman le confirmará la cita.
+
+This is unsafe.
+
+Reason:
+
+Elvira tells the patient the request was registered, but no AppointmentRequest was created.
+
+Production implication:
+
+Do NOT activate real WhatsApp sending.
+
+This bug must be fixed before any controlled sending activation.
+
+P6-F.9.23 — Exact-Hour Franja Confirmation Persistence Bugfix
+
+Status:
+
+NEXT / SINGLE-FOCUS BUGFIX ONLY
+
+Goal:
+
+Fix the exact-hour franja confirmation flow so that after:
+
+A las 3
+
+Elvira asks for explicit franja confirmation, and after:
+
+Sí, registre esa franja
+
+the system persists an AppointmentRequest using the previously stored pending franja.
+
+Expected correct result on the confirmation turn:
+
+status = sending_skipped
+intent = hora_cita
+nuevo_estado = ST_CITA_PENDIENTE
+appointment_request != null
+appointment_request.estado_solicitud = pendiente_confirmacion
+appointment_request.franja_solicitada = 3:00 p. m.–5:00 p. m.
+
+Root-cause hypothesis:
+
+The state likely reaches:
+
+state_reason = confirmed_pending_exact_hour_franja
+franja_solicitada = 3:00 p. m.–5:00 p. m.
+
+but decide_appointment_request_persistence(...) still tries to resolve the slot from the current message text:
+
+Sí, registre esa franja
+
+That message does not contain 3, 5, primera, or segunda, so the decision returns:
+
+skipped_unsupported_slot_selection
+
+Correct behavior:
+
+If the state is already marked as:
+
+state_reason = confirmed_pending_exact_hour_franja
+
+and state.franja_solicitada exists, then the decision function must use state.franja_solicitada directly.
+
+It must not try to resolve the franja again from the confirmation text.
+
+Required implementation scope:
+
+Only touch what is necessary:
+
+app/services/appointment_request_runtime.py
+tests for the decision function
+webhook/stateful tests only if required
+
+Do not touch:
+
+Meta configuration
+real WhatsApp sending
+/ready
+/health
+Google Sheets
+Telegram
+n8n
+Calendar
+payment workflows
+doctor notification workflows
+unrelated appointment logic
+UI/copy polish unless needed to prevent false registration wording
+
+Required validation sequence:
+
+Add a RED test for:
+confirmed_pending_exact_hour_franja + state.franja_solicitada
+→ should_persist = true
+Implement the minimal fix.
+Run targeted tests:
+pytest tests/test_appointment_request_runtime_decision.py -q
+pytest tests/test_appointment_context.py tests/test_webhook_persistence.py -q
+Run full suite:
+pytest -q
+Commit.
+Redeploy.
+Validate /test/message-stateful full flow with a fresh phone.
+Validate /webhook Meta-shaped payload full flow with a different fresh phone.
+
+Important testing rule:
+
+Do not reuse phones after a failed flow.
+
+Use:
+
+1 complete flow = 1 fresh phone
+1 turn = 1 fresh wamid
+if a flow fails midway = abandon that phone
+
+Production activation rule:
+
+Do not set:
+
+WHATSAPP_SENDING_ENABLED=true
+
+until this exact bug is fixed and the complete flow passes through real /webhook with Meta-shaped payloads.
+
+Current Working Rule After P6-F.9.22
+
+No more documentation-heavy detours.
+
+The next session must start directly with:
+
+P6-F.9.23 — Exact-Hour Franja Confirmation Persistence Bugfix
+
+No scope expansion.
+
+No production sending.
+
+No Meta changes.
+
+No Google Sheets / Telegram / n8n / Calendar.
+
+Fix the bug, prove it with tests, redeploy, and validate the complete flow through /webhook.
+
