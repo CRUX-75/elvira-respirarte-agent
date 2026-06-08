@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.services.appointment_request_runtime import resolve_requested_slot_from_message
+
 
 APPOINTMENT_CONTEXT_FIELDS = (
     "fecha_solicitada",
@@ -162,13 +164,33 @@ def capture_pending_exact_hour_confirmation_context(
     deterministically.
     """
 
-    if getattr(decision, "reason", None) != "requires_exact_hour_franja_confirmation":
+    is_decision_exact_hour_confirmation = (
+        getattr(decision, "reason", None)
+        == "requires_exact_hour_franja_confirmation"
+    )
+    is_state_exact_hour_confirmation = (
+        getattr(state, "state_reason", None)
+        == "requires_exact_hour_franja_confirmation"
+        and getattr(state, "next_action", None) == "ask_confirm_exact_hour_as_slot"
+    )
+
+    if not (is_decision_exact_hour_confirmation or is_state_exact_hour_confirmation):
         return None
 
     if getattr(state, "nuevo_estado", None) != "ST_CITA_FRANJA":
         return None
 
     franja_solicitada = getattr(decision, "franja_solicitada", None)
+
+    if not franja_solicitada:
+        franja_solicitada = getattr(state, "franja_solicitada", None)
+
+    if not franja_solicitada:
+        franja_solicitada = resolve_requested_slot_from_message(
+            getattr(state, "mensaje_original", None),
+            getattr(state, "slots_candidatos", None) or [],
+        )
+
     if not franja_solicitada:
         return None
 
