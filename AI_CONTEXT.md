@@ -6432,3 +6432,141 @@ Still do not touch:
 - therapy sessions module
 - campaigns / marketing
 - real patients
+
+---
+
+## P6-F.9.31 — Webhook Exact-Hour State/Copy Guard
+
+Status:
+
+CLOSED / GREEN / COMMITTED
+
+Reason:
+
+During P6-F.9.30 controlled real WhatsApp sending, the message:
+
+`Se puede a las 4?`
+
+from state:
+
+`ST_CITA_FRANJA`
+
+incorrectly produced:
+
+- `nuevo_estado = ST_CITA_PENDIENTE`
+- `next_action = confirm_appointment_request`
+- response copy: `Perfecto, queda registrada su solicitud para esa franja...`
+
+However, no `appointment_requests` row was created.
+
+This created a dangerous product bug: Elvira told the patient that the request was registered while the backend had not persisted an AppointmentRequest.
+
+Root cause:
+
+The exact-hour franja clarification guard existed in the appointment request runtime/persistence layer, but the state machine could already move to:
+
+- `ST_CITA_PENDIENTE`
+- `confirm_appointment_request`
+
+before persistence protection ran.
+
+Therefore, the response layer could generate false registration copy too early.
+
+Fix:
+
+The exact-hour guard was moved earlier into the deterministic state transition layer.
+
+Changed file:
+
+- `app/graph/transitions.py`
+
+The state machine now checks:
+
+`is_exact_hour_without_explicit_franja_confirmation(state.mensaje_original)`
+
+before allowing transition to:
+
+`ST_CITA_PENDIENTE`
+
+New expected behavior:
+
+For:
+
+`ST_CITA_FRANJA + "Se puede a las 4?"`
+
+Elvira now returns:
+
+- `intent = hora_cita`
+- `nuevo_estado = ST_CITA_FRANJA`
+- `next_action = ask_confirm_exact_hour_as_slot`
+- `state_reason = requires_exact_hour_franja_confirmation`
+
+and must not say:
+
+`queda registrada`
+
+Tests updated:
+
+- `tests/test_state_machine.py`
+
+The former broad Colombian time preference test was split into:
+
+1. Explicit franja selection still moves to pending:
+   - `La primera`
+   - `La segunda`
+   - `La primera franja`
+   - `La segunda franja`
+
+2. Loose exact-hour messages now require franja confirmation:
+   - `A las 5 pm`
+   - `A las cinco`
+   - `Se puede a las 4?`
+
+Validation:
+
+`pytest -q`
+
+Result:
+
+`221 passed`
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy sessions
+- campaigns
+- real patients
+- WhatsApp real sending
+
+Production safety:
+
+`WHATSAPP_SENDING_ENABLED` must remain `false` until the next controlled dry-run block.
+
+Next recommended block:
+
+P6-F.9.32 — Controlled Dry-Run Exact-Hour State/Copy Guard
+
+Objective:
+
+Validate the fixed behavior first without real sending.
+
+Recommended validation path:
+
+1. Deploy latest main.
+2. Keep `WHATSAPP_SENDING_ENABLED=false`.
+3. Confirm `/ready`.
+4. Reset internal phone `4917655660163`.
+5. Run `/webhook` or the safest available production dry-run surface with Meta-shaped payloads.
+6. Validate:
+   - `Se puede a las 4?` stays in `ST_CITA_FRANJA`
+   - `next_action = ask_confirm_exact_hour_as_slot`
+   - response does not contain `queda registrada`
+   - `appointment_requests` remains empty until explicit confirmation
+7. Only after this passes, consider reopening controlled real sending again.
+
