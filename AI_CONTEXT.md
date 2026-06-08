@@ -6291,3 +6291,144 @@ Goal:
 
 Temporarily enable `WHATSAPP_SENDING_ENABLED=true` for one internal controlled test phone, verify real WhatsApp reply, DB evidence, LangSmith trace, then rollback to `WHATSAPP_SENDING_ENABLED=false`.
 
+
+---
+
+## P6-F.9.28 / P6-F.9.29 — Controlled Real Sending + Slot-Before-Date Guard
+
+Current checkpoint:
+
+P6-F.9.28 — First Controlled Real Sending Test
+
+Status:
+
+PARTIAL GREEN / REAL SENDING VALIDATED / BUG FOUND / ROLLBACK COMPLETED
+
+Validated with internal controlled phone only:
+
+- real WhatsApp inbound reached production `/webhook`
+- real WhatsApp outbound response was sent
+- `interactions.delivery_status = sent`
+- `processed_messages` deduplication row was created
+- patient state was persisted correctly
+- no real patients were involved
+- no public traffic was opened
+- `WHATSAPP_SENDING_ENABLED` was rolled back to `false`
+- `/ready` confirmed production safety after rollback
+
+Bug found during controlled real sending:
+
+When patient was in:
+
+- `ST_CITA_FECHA`
+
+and sent:
+
+- `Para la de las 5`
+
+the system incorrectly classified it as:
+
+- `intent = general`
+- `next_action = answer_general`
+
+and Elvira re-greeted the patient.
+
+This was safe from a persistence perspective, because no `AppointmentRequest` was created, but it was incorrect conversationally.
+
+---
+
+## P6-F.9.29 — Slot Preference Before Date Guard
+
+Status:
+
+CLOSED / GREEN / COMMITTED / PRODUCTION SAFE DRY-RUN GREEN
+
+Commit:
+
+12b12ce Add slot preference before date guard
+
+Validation:
+
+pytest -q → 220 passed
+
+Changed files:
+
+- app/services/intent.py
+- app/graph/transitions.py
+- app/services/llm.py
+- tests/test_intent.py
+- tests/test_state_machine.py
+- docs/P6-F.9.29_SLOT_PREFERENCE_BEFORE_DATE_GUARD.md
+
+Implemented behavior:
+
+If:
+
+- `estado_actual = ST_CITA_FECHA`
+- patient mentions a slot/hour preference before giving a date, e.g.:
+  - `Para la de las 5`
+  - `Para la de las 3`
+  - `La de las 5`
+
+Then:
+
+- `intent = hora_cita`
+- `nuevo_estado = ST_CITA_FECHA`
+- `next_action = ask_date_for_slot_preference`
+- `state_reason = slot_preference_before_date_guard`
+- no `AppointmentRequest` is created
+- Elvira does not greet again
+- Elvira asks for the missing day/date
+
+Approved response example:
+
+`Claro, con gusto. ¿Me indica por favor para qué día o fecha desea revisar la franja de 5:00 p. m. a 7:00 p. m.?`
+
+Production safe dry-run validated through:
+
+POST `/test/message-stateful`
+
+with real sending disabled.
+
+Validated sequence:
+
+1. `Quiero solicitar una cita`
+   - `intent = cita`
+   - `nuevo_estado = ST_CITA_FECHA`
+   - `persisted_state = ST_CITA_FECHA`
+   - `appointment_request = null`
+   - `delivery_status = sending_skipped`
+
+2. `Para la de las 5`
+   - `estado_anterior = ST_CITA_FECHA`
+   - `intent = hora_cita`
+   - `nuevo_estado = ST_CITA_FECHA`
+   - `next_action = ask_date_for_slot_preference`
+   - `state_reason = slot_preference_before_date_guard`
+   - `appointment_request = null`
+   - `delivery_status = sending_skipped`
+
+Current production safety:
+
+- `WHATSAPP_SENDING_ENABLED=false`
+- `/ready` confirmed safe
+- no real sending currently active
+
+Next recommended sprint:
+
+P6-F.9.30 — Resume Controlled Real Sending Appointment Flow
+
+Objective:
+
+Deploy/keep the P6-F.9.29 fix in production, then reopen a short controlled real sending window only for one internal phone and validate the appointment flow again.
+
+Still do not touch:
+
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy sessions module
+- campaigns / marketing
+- real patients
