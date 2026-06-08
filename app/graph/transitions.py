@@ -1,4 +1,7 @@
 from app.graph.state import ElviraState
+from app.services.appointment_request_runtime import (
+    is_exact_hour_without_explicit_franja_confirmation,
+)
 
 
 _AMBIGUOUS_SLOT_SELECTION_MESSAGES = {
@@ -92,6 +95,17 @@ def apply_state_transition(state: ElviraState) -> ElviraState:
             state.nuevo_estado = "ST_CITA_FRANJA"
             state.next_action = "ask_specific_time_slot"
             state.state_reason = "ambiguous_slot_selection_guard"
+            return state
+
+        if (
+            previous_state == "ST_CITA_FRANJA"
+            and is_exact_hour_without_explicit_franja_confirmation(
+                state.mensaje_original
+            )
+        ):
+            state.nuevo_estado = "ST_CITA_FRANJA"
+            state.next_action = "ask_confirm_exact_hour_as_slot"
+            state.state_reason = "requires_exact_hour_franja_confirmation"
             return state
 
         state.nuevo_estado = "ST_CITA_PENDIENTE"

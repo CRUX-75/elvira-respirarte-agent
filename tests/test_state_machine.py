@@ -67,14 +67,12 @@ def test_urgencia_flow():
     assert result.escalation_required is True
 
 
-def test_p6f71_colombian_time_preference_moves_to_pending_appointment_state():
+def test_p6f71_explicit_slot_selection_moves_to_pending_appointment_state():
     cases = [
-        "La de 5 de la tarde",
-        "A las 5 pm",
-        "17:00",
         "La segunda",
         "La primera",
-        "A las cinco",
+        "La segunda franja",
+        "La primera franja",
     ]
 
     for message in cases:
@@ -89,6 +87,29 @@ def test_p6f71_colombian_time_preference_moves_to_pending_appointment_state():
         assert result.intent == "hora_cita"
         assert result.nuevo_estado == "ST_CITA_PENDIENTE"
         assert result.next_action == "confirm_appointment_request"
+
+
+def test_p6f931_loose_exact_hour_requires_franja_confirmation():
+    cases = [
+        "A las 5 pm",
+        "A las cinco",
+        "Se puede a las 4?",
+    ]
+
+    for message in cases:
+        msg = IncomingMessage(
+            telefono="573001112233",
+            mensaje=message,
+            estado_actual="ST_CITA_FRANJA",
+        )
+
+        result = process_message(msg)
+
+        assert result.intent == "hora_cita"
+        assert result.nuevo_estado == "ST_CITA_FRANJA"
+        assert result.next_action == "ask_confirm_exact_hour_as_slot"
+        assert result.state_reason == "requires_exact_hour_franja_confirmation"
+        assert "queda registrada" not in result.respuesta.lower()
 
 
 def test_p6f8_valid_relative_tomorrow_repeats_absolute_date_and_pm_window(monkeypatch):
