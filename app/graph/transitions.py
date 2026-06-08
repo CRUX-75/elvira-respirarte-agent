@@ -73,6 +73,12 @@ def apply_state_transition(state: ElviraState) -> ElviraState:
 
     # HORA CITA — paciente dio hora o selección de franja
     if intent == "hora_cita":
+        if previous_state == "ST_CITA_FECHA":
+            state.nuevo_estado = "ST_CITA_FECHA"
+            state.next_action = "ask_date_for_slot_preference"
+            state.state_reason = "slot_preference_before_date_guard"
+            return state
+
         if previous_state == "ST_CITA_FRANJA" and _has_unavailable_appointment_context(state):
             state.nuevo_estado = "ST_CITA_FECHA"
             state.next_action = "ask_preferred_date"

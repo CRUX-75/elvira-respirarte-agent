@@ -82,3 +82,9 @@ def test_p6f91419_clarification_question_stays_in_appointment_date_context():
 
     for message in cases:
         assert classify_intent(message, "ST_CITA_FECHA") == "fecha_cita"
+
+
+def test_p6f929_slot_preference_before_date_is_not_general():
+    assert classify_intent("Para la de las 5", "ST_CITA_FECHA") == "hora_cita"
+    assert classify_intent("Para la de las 3", "ST_CITA_FECHA") == "hora_cita"
+    assert classify_intent("La de las 5", "ST_CITA_FECHA") == "hora_cita"

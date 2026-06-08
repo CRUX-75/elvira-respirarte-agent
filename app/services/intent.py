@@ -70,7 +70,20 @@ def classify_intent(message: str, current_state: str = "ST_INIT") -> Intent:
             r"\b\d{1,2}\s*(am|pm)\b",
             r"\b\d{1,2}:\d{2}\b",
             r"\ba las \d{1,2}\b",
+            r"\bpara la de las \d{1,2}\b",
+            r"\bla de las \d{1,2}\b",
+            r"\bpara la de \d{1,2}\b",
+            r"\bla de \d{1,2}\b",
+            r"\bpara la de las (?:una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)\b",
+            r"\bla de las (?:una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)\b",
+            r"\bpara la de (?:una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)\b",
+            r"\bla de (?:una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)\b",
         ]
+
+        # If we are still waiting for a date, a slot/hour preference is still
+        # part of the appointment flow. It must not fall back to general.
+        if current_state == "ST_CITA_FECHA" and any(re.search(p, msg) for p in time_patterns):
+            return "hora_cita"
 
         # In ST_CITA_FRANJA, the patient is expected to select or accept a time slot.
         # Therefore short phrases like "de 3 a 5", "la primera" or "me sirve"

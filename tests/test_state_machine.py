@@ -524,3 +524,41 @@ def test_p6f91444_unavailable_holiday_date_stays_in_date_state():
     assert state.estado_actual == "ST_CITA_FECHA"
     assert state.next_action == "ask_preferred_date"
     assert state.state_reason == "unavailable_date_guard"
+
+
+def test_p6f929_slot_preference_before_date_asks_for_date_without_greeting():
+    msg = IncomingMessage(
+        telefono="test-p6f929-slot-before-date",
+        nombre="Paciente Slot Before Date",
+        mensaje="Para la de las 5",
+        estado_actual="ST_CITA_FECHA",
+        opt_out=False,
+    )
+
+    result = process_message(msg)
+
+    assert result.intent == "hora_cita"
+    assert result.nuevo_estado == "ST_CITA_FECHA"
+    assert result.next_action == "ask_date_for_slot_preference"
+    assert "día o fecha" in result.respuesta
+    assert "5:00 p. m. a 7:00 p. m." in result.respuesta
+    assert not result.respuesta.lower().startswith("hola")
+
+
+def test_p6f929_first_slot_preference_before_date_asks_for_date_without_greeting():
+    msg = IncomingMessage(
+        telefono="test-p6f929-slot-before-date-3",
+        nombre="Paciente Slot Before Date",
+        mensaje="Para la de las 3",
+        estado_actual="ST_CITA_FECHA",
+        opt_out=False,
+    )
+
+    result = process_message(msg)
+
+    assert result.intent == "hora_cita"
+    assert result.nuevo_estado == "ST_CITA_FECHA"
+    assert result.next_action == "ask_date_for_slot_preference"
+    assert "día o fecha" in result.respuesta
+    assert "3:00 p. m. a 5:00 p. m." in result.respuesta
+    assert not result.respuesta.lower().startswith("hola")

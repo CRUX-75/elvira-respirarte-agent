@@ -212,6 +212,21 @@ def generate_llm_response(state: ElviraState) -> ElviraState:
         )
         return state
 
+    if state.next_action == "ask_date_for_slot_preference":
+        normalized_message = (state.sanitized_input or state.mensaje_original or "").lower()
+
+        if any(token in normalized_message for token in ["5", "cinco", "segunda"]):
+            slot = "5:00 p. m. a 7:00 p. m."
+        elif any(token in normalized_message for token in ["3", "tres", "primera"]):
+            slot = "3:00 p. m. a 5:00 p. m."
+        else:
+            slot = "la franja que prefiere"
+
+        state.respuesta = (
+            f"Claro, con gusto. ¿Me indica por favor para qué día o fecha desea revisar la franja de {slot}?"
+        )
+        return state
+
     if state.next_action == "confirm_appointment_request":
         state.respuesta = (
             "Perfecto, queda registrada su solicitud para esa franja. "
