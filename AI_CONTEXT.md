@@ -6570,3 +6570,225 @@ Recommended validation path:
    - `appointment_requests` remains empty until explicit confirmation
 7. Only after this passes, consider reopening controlled real sending again.
 
+
+
+---
+
+## P6-F.9.34 — Simplify Exact-Hour Guard to Explicit Slot Selection
+
+Status:
+
+CLOSED / GREEN / SWAGGER DRY-RUN VALIDATED / COMMITTED PENDING IF NOT YET PUSHED
+
+Reason:
+
+P6-F.9.32 / P6-F.9.33 left the exact-hour confirmation flow too complex.
+
+The previous approach tried to store a pending exact-hour franja and later allow vague follow-up confirmations such as:
+
+- "sí"
+- "esa franja"
+- "sí, registre esa franja"
+
+This created unsafe behavior:
+
+- `pending_exact_hour_franja` was not reliable enough as a functional dependency.
+- A vague confirmation could move the flow to `ST_CITA_PENDIENTE`.
+- Elvira could say "queda registrada" even when `AppointmentRequest` was not actually created.
+- Runtime persistence was protected, but state/copy could still lie to the patient.
+
+Final MVP decision:
+
+Exact-hour messages are clarification guards only.
+
+They must not create a pending-franja confirmation flow.
+
+Core product rule:
+
+If the patient asks for a loose exact hour such as:
+
+- "no se podría a las 4?"
+- "se puede a las 4?"
+- "a las 4"
+
+Elvira must:
+
+- stay in `ST_CITA_FRANJA`
+- use `next_action = ask_confirm_exact_hour_as_slot`
+- not persist `AppointmentRequest`
+- not say "queda registrada"
+- explain that domiciliary care is handled by franjas, not guaranteed exact hours
+- ask the patient to explicitly choose one available franja
+
+Approved exact-hour guard response:
+
+"Con gusto. Le aclaro que las atenciones domiciliarias se manejan por franjas, no por una hora exacta garantizada. Para continuar, por favor elija una de las franjas disponibles: de 3:00 p. m. a 5:00 p. m. o de 5:00 p. m. a 7:00 p. m. ¿Cuál le queda mejor?"
+
+Allowed explicit selections:
+
+- "la primera"
+- "la segunda"
+- "la primera franja"
+- "la segunda franja"
+
+Only explicit selections may move to:
+
+- `nuevo_estado = ST_CITA_PENDIENTE`
+- `next_action = confirm_appointment_request`
+- `appointment_request_decision.should_persist = true`
+- `appointment_request != null`
+
+Vague confirmations must not persist:
+
+- "sí"
+- "sí, registre esa franja"
+- "esa franja"
+- "registre esa franja"
+- "entiendo, entonces agéndeme esa franja"
+
+Final behavior for vague confirmations after exact-hour guard:
+
+- `nuevo_estado = ST_CITA_FRANJA`
+- `persisted_state = ST_CITA_FRANJA`
+- `next_action = ask_confirm_exact_hour_as_slot`
+- `state_reason = unsupported_slot_selection_guard`
+- `appointment_request_decision.should_persist = false`
+- `appointment_request_decision.reason = skipped_unsupported_slot_selection`
+- `appointment_request = null`
+- response asks the patient to choose one of the concrete available franjas
+- response must not contain "queda registrada"
+
+Files changed:
+
+- app/main.py
+- app/services/appointment_context.py
+- app/services/llm.py
+- tests/test_appointment_context.py
+- tests/test_appointment_request_runtime_decision.py
+- tests/test_stateful_appointment_context_carryover.py
+
+Additional hotfix during Swagger dry-run:
+
+`skipped_unsupported_slot_selection` now forces safe state/copy alignment.
+
+Reason:
+
+The decision layer correctly returned:
+
+- `should_persist = false`
+- `reason = skipped_unsupported_slot_selection`
+- `appointment_request = null`
+
+but the state/copy layer could still return:
+
+- `nuevo_estado = ST_CITA_PENDIENTE`
+- `next_action = confirm_appointment_request`
+- response: "queda registrada..."
+
+This was fixed in `app/main.py` with:
+
+- `_force_unsupported_slot_selection_guard_response(result)`
+
+This guard forces:
+
+- `nuevo_estado = ST_CITA_FRANJA`
+- `next_action = ask_confirm_exact_hour_as_slot`
+- `state_reason = unsupported_slot_selection_guard`
+- safe explicit-franja-selection copy
+
+Validation:
+
+Local full suite:
+
+- `222 passed`
+
+Targeted stateful test after hotfix:
+
+- `5 passed`
+
+Swagger dry-run validated through:
+
+POST `/test/message-stateful`
+
+Real `/webhook` was not touched.
+
+Real WhatsApp sending remained disabled.
+
+Production safety flag remained:
+
+- `WHATSAPP_SENDING_ENABLED=false`
+
+Validated positive flow:
+
+1. `quiero hacer una cita`
+2. `para mañana`
+3. `no se podria a las 4?`
+4. `la primera`
+
+Expected and observed final result:
+
+- `appointment_request_decision.should_persist = true`
+- `appointment_request != null`
+- `franja_solicitada = 3:00 p. m.–5:00 p. m.`
+- `estado_solicitud = pendiente_confirmacion`
+- `delivery_status = sending_skipped`
+
+Validated negative flow:
+
+1. `quiero hacer una cita`
+2. `para mañana`
+3. `no se podria a las 4?`
+4. `sí, registre esa franja`
+
+Expected and observed final result:
+
+- `nuevo_estado = ST_CITA_FRANJA`
+- `persisted_state = ST_CITA_FRANJA`
+- `next_action = ask_confirm_exact_hour_as_slot`
+- `state_reason = unsupported_slot_selection_guard`
+- `appointment_request_decision.should_persist = false`
+- `appointment_request_decision.reason = skipped_unsupported_slot_selection`
+- `appointment_request = null`
+- response does not say "queda registrada"
+- `delivery_status = sending_skipped`
+
+Important operational note:
+
+Dry-run does not send real WhatsApp messages, but `/test/message-stateful` does write test patient state, appointment context, interactions, and AppointmentRequests when persistence is intentionally reached.
+
+Use fresh test phone identifiers for repeated Swagger validation.
+
+Do not reset production DB unless reusing the same test phone and stale test state contaminates the flow.
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- real POST `/webhook`
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy session tracking
+- campaigns
+- real patients
+
+Current conclusion:
+
+P6-F.9.34 closes the exact-hour ambiguity bug.
+
+Elvira no longer treats vague confirmations like "sí, registre esa franja" as a valid slot selection.
+
+Elvira only registers an appointment request after the patient explicitly chooses one concrete offered franja.
+
+Next recommended step:
+
+If not already done:
+
+1. Commit the hotfix:
+   - `Guard unsupported exact-hour slot confirmations`
+2. Push main.
+3. Keep `WHATSAPP_SENDING_ENABLED=false`.
+4. Do not move to controlled real sending until the production activation checklist is explicitly reopened and completed.
