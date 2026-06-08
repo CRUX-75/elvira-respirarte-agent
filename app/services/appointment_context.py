@@ -42,7 +42,10 @@ def apply_appointment_context_to_state(state: Any, context: dict[str, Any] | Non
     if getattr(state, "intent", None) != "hora_cita":
         return state
 
-    if getattr(state, "nuevo_estado", None) != "ST_CITA_PENDIENTE":
+    if getattr(state, "nuevo_estado", None) not in {
+        "ST_CITA_FRANJA",
+        "ST_CITA_PENDIENTE",
+    }:
         return state
 
     if getattr(state, "fecha_solicitada", None):
