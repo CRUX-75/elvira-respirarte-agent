@@ -150,3 +150,63 @@ Before another controlled real sending test, deploy this fix and verify through 
 The bug found during controlled real sending has been fixed locally.
 
 Elvira now keeps conversational continuity when a patient mentions a preferred slot before providing the appointment date.
+
+---
+
+## Production Safe Dry-Run Validation
+
+Status:
+
+GREEN
+
+Validation surface:
+
+POST /test/message-stateful
+
+Real WhatsApp sending:
+
+DISABLED
+
+WHATSAPP_SENDING_ENABLED:
+
+false
+
+Validated production sequence:
+
+1. Patient message:
+
+Quiero solicitar una cita
+
+Result:
+
+- intent = cita
+- nuevo_estado = ST_CITA_FECHA
+- next_action = ask_preferred_date
+- persisted_state = ST_CITA_FECHA
+- appointment_request = null
+- delivery_status = sending_skipped
+
+2. Patient message:
+
+Para la de las 5
+
+Result:
+
+- estado_anterior = ST_CITA_FECHA
+- intent = hora_cita
+- nuevo_estado = ST_CITA_FECHA
+- next_action = ask_date_for_slot_preference
+- state_reason = slot_preference_before_date_guard
+- persisted_state = ST_CITA_FECHA
+- appointment_request = null
+- delivery_status = sending_skipped
+
+Validated response:
+
+Claro, con gusto. ¿Me indica por favor para qué día o fecha desea revisar la franja de 5:00 p. m. a 7:00 p. m.?
+
+Conclusion:
+
+The production safe dry-run confirms that the slot-before-date bug found during P6-F.9.28 is fixed.
+
+Elvira no longer re-greets the patient, no longer classifies the slot preference as general, and correctly asks for the missing day/date while preserving ST_CITA_FECHA.
