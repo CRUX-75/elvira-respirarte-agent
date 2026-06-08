@@ -438,6 +438,14 @@ def _force_exact_hour_franja_confirmation_state_guard_response(result):
     return result
 
 
+def _force_unsupported_slot_selection_guard_response(result):
+    result.nuevo_estado = "ST_CITA_FRANJA"
+    result.next_action = "ask_confirm_exact_hour_as_slot"
+    result.state_reason = "unsupported_slot_selection_guard"
+    result.respuesta = _build_exact_hour_franja_confirmation_response(None)
+    return result
+
+
 def _force_unavailable_date_guard_response(result):
     """Force safe appointment state/copy when carried date context is unavailable."""
     if not getattr(result, "fecha_solicitada", None):
@@ -522,6 +530,9 @@ def _apply_appointment_request_runtime(
         result.respuesta = _build_exact_hour_franja_confirmation_response(
             appointment_request_decision.franja_solicitada
         )
+
+    if appointment_request_decision.reason == "skipped_unsupported_slot_selection":
+        result = _force_unsupported_slot_selection_guard_response(result)
 
     appointment_request_metadata = None
     appointment_request_persisted = False
@@ -644,6 +655,9 @@ def test_message_stateful(message: IncomingMessage):
         result.respuesta = _build_exact_hour_franja_confirmation_response(
             appointment_request_decision.franja_solicitada
         )
+
+    if appointment_request_decision.reason == "skipped_unsupported_slot_selection":
+        result = _force_unsupported_slot_selection_guard_response(result)
 
     appointment_request_metadata = None
     appointment_request_persisted = False

@@ -390,3 +390,71 @@ def test_stateful_endpoint_persists_after_pending_exact_hour_franja_confirmation
     assert "queda registrada" not in body["respuesta"].lower()
 
 
+
+
+def test_stateful_endpoint_rejects_vague_register_that_franja_after_exact_hour_guard(monkeypatch):
+    fake_result = FakeElviraResult(
+        intent="hora_cita",
+        nuevo_estado="ST_CITA_PENDIENTE",
+        next_action="confirm_appointment_request",
+        fecha_solicitada=None,
+        slots_candidatos=[],
+        mensaje_original="sí, registre esa franja",
+    )
+
+    patient = {
+        "id": "patient-001",
+        "telefono": "573001112233",
+        "nombre": "Paciente Test",
+        "estado_actual": "ST_CITA_FRANJA",
+        "opt_out": False,
+        "appointment_context": {
+            "fecha_solicitada": "2026-06-09",
+            "fecha_solicitada_texto": "martes 9 de junio",
+            "slots_candidatos": [
+                "3:00 p. m.–5:00 p. m.",
+                "5:00 p. m.–7:00 p. m.",
+            ],
+            "es_dia_disponible": True,
+            "is_weekend": False,
+            "is_colombia_holiday": False,
+            "colombia_holiday_name": None,
+            "pending_exact_hour_franja": "3:00 p. m.–5:00 p. m.",
+            "pending_exact_hour_text": "no se podria a las 4?",
+            "pending_exact_hour_requires_confirmation": True,
+        },
+    }
+
+    calls = _patch_stateful_dependencies(
+        monkeypatch,
+        fake_result=fake_result,
+        patient=patient,
+    )
+
+    response = client.post(
+        "/test/message-stateful",
+        json={
+            "telefono": "573001112233",
+            "nombre": "Paciente Test",
+            "mensaje": "sí, registre esa franja",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["nuevo_estado"] == "ST_CITA_FRANJA"
+    assert body["persisted_state"] == "ST_CITA_FRANJA"
+    assert body["next_action"] == "ask_confirm_exact_hour_as_slot"
+    assert body["state_reason"] == "unsupported_slot_selection_guard"
+
+    assert body["appointment_request_decision"]["should_persist"] is False
+    assert body["appointment_request_decision"]["reason"] == "skipped_unsupported_slot_selection"
+    assert body["appointment_request"] is None
+
+    assert "queda registrada" not in body["respuesta"].lower()
+    assert "por favor elija una de las franjas disponibles" in body["respuesta"]
+    assert "3:00 p. m. a 5:00 p. m." in body["respuesta"]
+    assert "5:00 p. m. a 7:00 p. m." in body["respuesta"]
+
+    assert calls["appointment_service_call"] is None
