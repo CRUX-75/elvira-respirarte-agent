@@ -6177,3 +6177,117 @@ is valid only when:
 appointment_request != null
 and appointment_requests.estado_solicitud = pendiente_confirmacion
 ~~~
+
+---
+
+## Current Checkpoint — MVP Real Sending Action Plan Prepared
+
+Status:
+
+P6-F.9.27 ACTION PLAN CREATED / READY FOR NEXT CHAT / REAL SENDING STILL DISABLED
+
+Current repository:
+
+elvira-respirarte-agent
+
+Current branch:
+
+main
+
+Latest closed sprint:
+
+P6-F.9.26 — Final Webhook Dry-Run Regression Pack
+
+Latest prepared sprint:
+
+P6-F.9.27 — Controlled Real Sending MVP Action Plan
+
+Document:
+
+docs/P6-F.9.27_CONTROLLED_REAL_SENDING_MVP_ACTION_PLAN.md
+
+Important discovery:
+
+Meta / WhatsApp infrastructure is already more advanced than initially assumed.
+
+Confirmed by user screenshots and prior real tests:
+
+- Respirarte-WA-bot app exists
+- app is Live
+- WhatsApp product is configured
+- webhook subscription for `messages` is active
+- API version v25.0 is selected
+- templates exist and are active
+- German WhatsApp number is connected
+- user already performed real tests with the German number
+- Colombian Respirarte number exists in WABA but may still require verification / final readiness confirmation
+
+Current operational conclusion:
+
+It is time to move from documentation/dry-run into controlled real sending tests.
+
+Do not open public patient traffic.
+
+Do not activate broad production.
+
+Next sprint should be practical execution:
+
+P6-F.9.28 — First Controlled Real Sending Test
+
+Recommended first path:
+
+Use the already connected German number first if the Colombian number is still not fully verified.
+
+Then repeat with the Colombian Respirarte number after verification.
+
+Safety baseline:
+
+~~~txt
+WHATSAPP_SENDING_ENABLED=false
+~~~
+
+Controlled sending may be enabled only temporarily for one internal test phone in P6-F.9.28.
+
+Do not touch yet:
+
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy sessions module
+- public patient traffic
+- mass messaging
+- marketing templates
+
+Evidence hierarchy remains:
+
+~~~txt
+Swagger = manual inspection and safe pre-check surface
+/webhook Meta-shaped = realistic WhatsApp ingress validation
+LangSmith = observability and traceability evidence
+PostgreSQL = final operational source of truth
+~~~
+
+Operational rule:
+
+~~~txt
+LangSmith explains what happened.
+PostgreSQL proves what happened.
+~~~
+
+Next chat starting point:
+
+Project: Elvira / Respirarte
+Repo: elvira-respirarte-agent
+Branch: main
+Status: clean after commit expected
+
+Start directly with:
+
+P6-F.9.28 — First Controlled Real Sending Test
+
+Goal:
+
+Temporarily enable `WHATSAPP_SENDING_ENABLED=true` for one internal controlled test phone, verify real WhatsApp reply, DB evidence, LangSmith trace, then rollback to `WHATSAPP_SENDING_ENABLED=false`.
+
