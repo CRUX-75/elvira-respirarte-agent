@@ -218,38 +218,15 @@ def apply_pending_exact_hour_confirmation_to_state(
     state: Any,
     context: dict[str, Any] | None,
 ) -> Any:
-    """Apply pending exact-hour franja context after an affirmative reply."""
+    """Do not convert vague exact-hour follow-ups into appointment requests.
 
-    if not context:
-        return state
-
-    if not context.get("pending_exact_hour_requires_confirmation"):
-        return state
-
-    pending_franja = context.get("pending_exact_hour_franja")
-    if not pending_franja:
-        return state
-
-    if getattr(state, "nuevo_estado", None) not in {
-        "ST_CITA_FRANJA",
-        "ST_CITA_PENDIENTE",
-    }:
-        return state
-
-    if not _is_affirmative_confirmation(getattr(state, "mensaje_original", None)):
-        return state
-
-    if not context.get("fecha_solicitada"):
-        return state
-
-    for field in APPOINTMENT_CONTEXT_FIELDS:
-        if field in context:
-            setattr(state, field, context.get(field))
-
-    state.intent = "hora_cita"
-    state.nuevo_estado = "ST_CITA_PENDIENTE"
-    state.next_action = "confirm_appointment_request"
-    state.franja_solicitada = pending_franja
-    state.state_reason = "confirmed_pending_exact_hour_franja"
+    MVP rule P6-F.9.34:
+    Exact-hour messages such as ""no se podría a las 4?"" are clarification
+    guards only. Follow-ups like ""sí"", ""esa franja"" or
+    ""registre esa franja"" must not create AppointmentRequest.
+    The patient must explicitly choose an available slot, for example
+    ""la primera"" or ""la segunda"".
+    """
 
     return state
+

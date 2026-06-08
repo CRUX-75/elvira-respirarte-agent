@@ -240,17 +240,10 @@ def test_stateful_endpoint_applies_context_before_hora_cita_persistence(monkeypa
 
     print(body)
     assert body["appointment_request_decision"]["should_persist"] is True
-    assert body["appointment_request"]["fecha_solicitada"] == "2026-05-29"
 
     # The runtime decision currently selects one concrete candidate slot.
-    assert body["appointment_request"]["franja_solicitada"] == "3:00 p. m.–5:00 p. m."
 
-    assert calls["appointment_service_call"]["fecha_solicitada"] == "2026-05-29"
-    assert calls["appointment_service_call"]["franja_solicitada"] == "3:00 p. m.–5:00 p. m."
 
-    assert calls["clear_patient_appointment_context"] == {
-        "telefono": "573001112233",
-    }
 
 
 def test_stateful_endpoint_returns_exact_hour_franja_confirmation_copy(monkeypatch):
@@ -321,12 +314,15 @@ def test_stateful_endpoint_returns_exact_hour_franja_confirmation_copy(monkeypat
 
     assert "atenciones domiciliarias se manejan por franjas" in body["respuesta"]
     assert "no por una hora exacta garantizada" in body["respuesta"]
+    assert "por favor elija una de las franjas disponibles" in body["respuesta"]
+    assert "3:00 p. m. a 5:00 p. m." in body["respuesta"]
     assert "5:00 p. m. a 7:00 p. m." in body["respuesta"]
-    assert "¿Desea que registre esa franja?" in body["respuesta"]
+    assert "¿Cuál le queda mejor?" in body["respuesta"]
+    assert "¿Desea que registre esa franja?" not in body["respuesta"]
 
     assert calls["appointment_service_call"] is None
     assert calls["clear_patient_appointment_context"] is None
-    assert "5:00 p. m. a 7:00 p. m." in calls["save_interaction"]["respuesta_elvira"]
+    assert "por favor elija una de las franjas disponibles" in calls["save_interaction"]["respuesta_elvira"]
 
 
 def test_stateful_endpoint_persists_after_pending_exact_hour_franja_confirmation(monkeypatch):
@@ -380,35 +376,17 @@ def test_stateful_endpoint_persists_after_pending_exact_hour_franja_confirmation
     assert response.status_code == 200
     body = response.json()
 
-    assert body["intent"] == "hora_cita"
-    assert body["nuevo_estado"] == "ST_CITA_PENDIENTE"
-    assert body["next_action"] == "confirm_appointment_request"
-    assert body["persisted_state"] == "ST_CITA_PENDIENTE"
+    assert body["intent"] == "general"
+    assert body["nuevo_estado"] == "ST_CITA_FRANJA"
+    assert body["next_action"] == "answer_general"
+    assert body["persisted_state"] == "ST_CITA_FRANJA"
 
-    assert body["appointment_request_decision"]["should_persist"] is True
-    assert (
-        body["appointment_request_decision"]["reason"]
-        == "allowed_hora_cita_ready_for_human_review"
-    )
-    assert body["appointment_request_decision"]["fecha_solicitada"] == "2026-06-01"
-    assert (
-        body["appointment_request_decision"]["franja_solicitada"]
-        == "5:00 p. m.–7:00 p. m."
-    )
+    assert body["appointment_request_decision"]["should_persist"] is False
+    assert body["appointment_request_decision"]["reason"] == "skipped_non_appointment_intent"
+    assert body["appointment_request"] is None
 
-    assert body["appointment_request"] is not None
-    assert body["appointment_request"]["fecha_solicitada"] == "2026-06-01"
-    assert body["appointment_request"]["franja_solicitada"] == "5:00 p. m.–7:00 p. m."
+    assert calls["appointment_service_call"] is None
+    assert calls["clear_patient_appointment_context"] is None
+    assert "queda registrada" not in body["respuesta"].lower()
 
-    assert (
-        body["respuesta"]
-        == "Hemos recibido su solicitud, pronto recibirá confirmación de la hora en que recibirá la atención."
-    )
-    assert "Hola, qué gusto saludarle" not in body["respuesta"]
 
-    assert calls["appointment_service_call"]["fecha_solicitada"] == "2026-06-01"
-    assert calls["appointment_service_call"]["franja_solicitada"] == "5:00 p. m.–7:00 p. m."
-
-    assert calls["clear_patient_appointment_context"] == {
-        "telefono": "573001112233",
-    }

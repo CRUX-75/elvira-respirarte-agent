@@ -195,7 +195,7 @@ def test_capture_pending_exact_hour_confirmation_context():
     }
 
 
-def test_apply_pending_exact_hour_confirmation_to_affirmative_state():
+def test_apply_pending_exact_hour_confirmation_ignores_affirmative_state():
     class State:
         intent = "general"
         nuevo_estado = "ST_CITA_FRANJA"
@@ -231,18 +231,10 @@ def test_apply_pending_exact_hour_confirmation_to_affirmative_state():
 
     state = apply_pending_exact_hour_confirmation_to_state(State(), context)
 
-    assert state.intent == "hora_cita"
-    assert state.nuevo_estado == "ST_CITA_PENDIENTE"
-    assert state.next_action == "confirm_appointment_request"
-    assert state.fecha_solicitada == "2026-06-01"
-    assert state.fecha_solicitada_texto == "lunes 1 de junio"
-    assert state.slots_candidatos == [
-        "3:00 p. m.–5:00 p. m.",
-        "5:00 p. m.–7:00 p. m.",
-    ]
-    assert state.franja_solicitada == "5:00 p. m.–7:00 p. m."
-    assert state.state_reason == "confirmed_pending_exact_hour_franja"
-
+    assert state.intent == "general"
+    assert state.nuevo_estado == "ST_CITA_FRANJA"
+    assert state.next_action == "answer_general"
+    assert state.fecha_solicitada is None
 
 def test_apply_pending_exact_hour_confirmation_ignores_non_affirmative_message():
     class State:
@@ -269,7 +261,7 @@ def test_apply_pending_exact_hour_confirmation_ignores_non_affirmative_message()
     assert state.next_action == "answer_general"
 
 
-def test_apply_pending_exact_hour_confirmation_works_with_real_elvira_state():
+def test_apply_pending_exact_hour_confirmation_ignores_real_elvira_state():
     from app.graph.state import ElviraState
     from app.services.appointment_context import (
         apply_pending_exact_hour_confirmation_to_state,
@@ -304,15 +296,14 @@ def test_apply_pending_exact_hour_confirmation_works_with_real_elvira_state():
 
     result = apply_pending_exact_hour_confirmation_to_state(state, context)
 
-    assert result.intent == "hora_cita"
-    assert result.nuevo_estado == "ST_CITA_PENDIENTE"
-    assert result.next_action == "confirm_appointment_request"
-    assert result.fecha_solicitada == "2026-06-01"
-    assert result.franja_solicitada == "5:00 p. m.–7:00 p. m."
-    assert result.state_reason == "confirmed_pending_exact_hour_franja"
+    assert result.intent == "general"
+    assert result.nuevo_estado == "ST_CITA_FRANJA"
+    assert result.next_action == "answer_general"
+    assert result.fecha_solicitada is None
+    assert getattr(result, "franja_solicitada", None) is None
+    assert getattr(result, "state_reason", None) != "confirmed_pending_exact_hour_franja"
 
-
-def test_apply_pending_exact_hour_confirmation_when_state_already_pending():
+def test_apply_pending_exact_hour_confirmation_ignores_vague_registered_franja_when_state_already_pending():
     class State:
         intent = "hora_cita"
         nuevo_estado = "ST_CITA_PENDIENTE"
@@ -349,6 +340,7 @@ def test_apply_pending_exact_hour_confirmation_when_state_already_pending():
     assert state.intent == "hora_cita"
     assert state.nuevo_estado == "ST_CITA_PENDIENTE"
     assert state.next_action == "confirm_appointment_request"
-    assert state.state_reason == "confirmed_pending_exact_hour_franja"
-    assert state.fecha_solicitada == "2026-06-09"
-    assert state.franja_solicitada == "3:00 p. m.–5:00 p. m."
+    assert state.state_reason is None
+    assert state.fecha_solicitada is None
+    assert state.franja_solicitada is None
+

@@ -712,7 +712,7 @@ def test_p6f91425_blocks_unsupported_loose_hour_and_does_not_fallback_to_first_s
     assert decision.franja_solicitada is None
 
 
-def test_persists_confirmed_pending_exact_hour_franja_from_state_context():
+def test_persists_explicit_franja_selection_from_state_context():
     decision = decide_appointment_request_persistence(
         state=make_state(
             intent="hora_cita",
@@ -723,8 +723,8 @@ def test_persists_confirmed_pending_exact_hour_franja_from_state_context():
                 "3:00 p. m.–5:00 p. m.",
                 "5:00 p. m.–7:00 p. m.",
             ],
-            mensaje_original="Sí, registre esa franja",
-            state_reason="confirmed_pending_exact_hour_franja",
+            mensaje_original="la primera franja",
+            state_reason=None,
             franja_solicitada="3:00 p. m.–5:00 p. m.",
         ),
         telefono="573001112233",
@@ -737,5 +737,5 @@ def test_persists_confirmed_pending_exact_hour_franja_from_state_context():
     assert decision.estado_solicitud == "pendiente_confirmacion"
     assert decision.fecha_solicitada == "2026-06-09"
     assert decision.franja_solicitada == "3:00 p. m.–5:00 p. m."
-    assert decision.hora_solicitada_texto == "Sí, registre esa franja"
+    assert decision.hora_solicitada_texto == "la primera franja"
     assert decision.source_interaction_id == "wamid.test-confirmed-exact-hour-franja"

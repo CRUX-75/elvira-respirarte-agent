@@ -230,8 +230,9 @@ def generate_llm_response(state: ElviraState) -> ElviraState:
     if state.next_action == "ask_confirm_exact_hour_as_slot":
         state.respuesta = (
             "Con gusto. Le aclaro que las atenciones domiciliarias se manejan por franjas, "
-            "no por una hora exacta garantizada. Esa hora corresponde a la franja de "
-            "3:00 p. m. a 5:00 p. m. ¿Desea que registre esa franja como su preferencia?"
+            "no por una hora exacta garantizada. Para continuar, por favor elija una de "
+            "las franjas disponibles: de 3:00 p. m. a 5:00 p. m. o de "
+            "5:00 p. m. a 7:00 p. m. ¿Cuál le queda mejor?"
         )
         return state
 

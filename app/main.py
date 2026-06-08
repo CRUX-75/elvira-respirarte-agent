@@ -424,20 +424,11 @@ def test_message(message: IncomingMessage):
 
 
 def _build_exact_hour_franja_confirmation_response(franja: str | None) -> str:
-    if not franja:
-        return (
-            "Claro. Le cuento que las atenciones domiciliarias se manejan por franjas, "
-            "no por una hora exacta garantizada. "
-            "¿Desea que registre una de las franjas disponibles como preferencia?"
-        )
-
-    readable_franja = franja.replace("–", " a ")
-
     return (
-        "Claro. Le cuento que las atenciones domiciliarias se manejan por franjas, "
-        "no por una hora exacta garantizada. "
-        f"Para la hora que me indica, puedo registrar como preferencia la franja de {readable_franja}. "
-        "¿Desea que registre esa franja?"
+        "Con gusto. Le aclaro que las atenciones domiciliarias se manejan por franjas, "
+        "no por una hora exacta garantizada. Para continuar, por favor elija una de "
+        "las franjas disponibles: de 3:00 p. m. a 5:00 p. m. o de "
+        "5:00 p. m. a 7:00 p. m. ¿Cuál le queda mejor?"
     )
 
 def _force_exact_hour_franja_confirmation_state_guard_response(result):
@@ -560,16 +551,6 @@ def _apply_appointment_request_runtime(
             "franja_solicitada": appointment_request.franja_solicitada,
         }
 
-    if (
-        appointment_request_decision.should_persist
-        and getattr(result, "state_reason", None)
-        == "confirmed_pending_exact_hour_franja"
-    ):
-        result.respuesta = (
-            "Hemos recibido su solicitud, pronto recibirá confirmación "
-            "de la hora en que recibirá la atención."
-        )
-
     captured_appointment_context = (
         capture_pending_exact_hour_confirmation_context(
             result,
@@ -691,16 +672,6 @@ def test_message_stateful(message: IncomingMessage):
             "fecha_solicitada": appointment_request.fecha_solicitada,
             "franja_solicitada": appointment_request.franja_solicitada,
         }
-
-    if (
-        appointment_request_decision.should_persist
-        and getattr(result, "state_reason", None)
-        == "confirmed_pending_exact_hour_franja"
-    ):
-        result.respuesta = (
-            "Hemos recibido su solicitud, pronto recibirá confirmación "
-            "de la hora en que recibirá la atención."
-        )
 
     logged_response = f"[TEST_STATEFUL_WHATSAPP_SENDING_DISABLED] {result.respuesta}"
 
