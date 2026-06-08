@@ -5806,3 +5806,374 @@ Calendar integration
 doctor confirmation automation
 therapy sessions module
 
+
+---
+
+## Current Checkpoint — P6-F.9.26 Closed
+
+Status:
+
+CLOSED / GREEN / COMMITTED / PRODUCTION WEBHOOK DRY-RUN REGRESSION APPROVED / REAL SENDING DISABLED
+
+Current repository:
+
+elvira-respirarte-agent
+
+Current branch:
+
+main
+
+Working tree:
+
+clean
+
+Latest closed sprint:
+
+P6-F.9.26 — Final Webhook Dry-Run Regression Pack
+
+Latest validation:
+
+- `pytest -q` → 217 passed
+- Production `POST /webhook` Meta-shaped regression pack executed through Swagger
+- Real WhatsApp sending remained disabled
+- `WHATSAPP_SENDING_ENABLED=false`
+- `/ready` confirmed production healthy
+- LangSmith production tracing enabled
+- PostgreSQL remains final operational source of truth
+
+Latest relevant commits:
+
+- `7e0da8d` Add production MVP activation SDD
+- `3fbe528` Add controlled WhatsApp sending activation plan
+- Latest commit after P6-F.9.26 documented final webhook dry-run regression results
+
+## P6-F.9.24 — Production MVP Activation SDD
+
+Status:
+
+CLOSED / COMMITTED
+
+Document:
+
+docs/P6-F.9.24_PRODUCTION_MVP_ACTIVATION_SDD.md
+
+Decision:
+
+Production activation must follow controlled sprint-based SDD.
+
+Hard rule:
+
+A conversational response is not trusted unless the expected PostgreSQL effect exists.
+
+For appointment requests:
+
+~~~txt
+appointment_request != null
+and appointment_requests contains the correct row in PostgreSQL
+~~~
+
+## P6-F.9.25 — Controlled WhatsApp Sending Activation Plan
+
+Status:
+
+CLOSED / COMMITTED
+
+Document:
+
+docs/P6-F.9.25_CONTROLLED_WHATSAPP_SENDING_ACTIVATION_PLAN.md
+
+Key decision:
+
+Swagger, LangSmith, and PostgreSQL have different roles.
+
+Evidence hierarchy:
+
+~~~txt
+Swagger = manual inspection and safe pre-check surface
+/webhook Meta-shaped = realistic WhatsApp ingress validation
+LangSmith = observability and traceability evidence
+PostgreSQL = final operational source of truth
+~~~
+
+Operational rule:
+
+~~~txt
+LangSmith explains what happened.
+PostgreSQL proves what happened.
+~~~
+
+Real sending must not be enabled until a later explicit controlled activation sprint.
+
+## P6-F.9.26 — Final Webhook Dry-Run Regression Pack
+
+Status:
+
+CLOSED / GREEN / APPROVED / COMMITTED
+
+Document:
+
+docs/P6-F.9.26_FINAL_WEBHOOK_DRY_RUN_REGRESSION_PACK.md
+
+Execution surface:
+
+- Production `POST /webhook`
+- Meta-shaped payloads through Swagger
+- `WHATSAPP_SENDING_ENABLED=false`
+- real WhatsApp sending disabled
+
+Production readiness result:
+
+- `status = ready`
+- `environment = production`
+- `app_version = 0.2.1`
+- `whatsapp_sending_enabled = false`
+- `real_whatsapp_sending_allowed = false`
+- `kb_runtime_enabled = true`
+- database configured
+- LangSmith tracing enabled
+- LangSmith project = `elvira-respirarte-prod`
+- OpenAI configured
+- WhatsApp configured
+- `hard_failures = []`
+
+Approved regression flows:
+
+1. Flow 0 — Readiness Check
+
+Result:
+
+- production app ready
+- real sending disabled
+- no hard failures
+
+2. Flow 1 — Basic Greeting
+
+Phone:
+
+~~~txt
+test-p6f926-greeting-001
+~~~
+
+WAMID:
+
+~~~txt
+wamid.p6f926.greeting.001
+~~~
+
+Result:
+
+- `status = sending_skipped`
+- `intent = general`
+- `estado_anterior = ST_INIT`
+- `nuevo_estado = ST_GENERAL`
+- `appointment_request_decision_reason = skipped_non_appointment_intent`
+- `appointment_request = null`
+- `whatsapp_sending_enabled = false`
+
+Conclusion:
+
+Basic Meta-shaped greeting was accepted safely without appointment side effects.
+
+3. Flow 2 — Appointment Happy Path With Exact-Hour Franja Confirmation
+
+Phone:
+
+~~~txt
+test-p6f926-happy-001
+~~~
+
+Important correction:
+
+The accepted production happy path has four turns when the patient says `A las 3`, because exact-hour requests require explicit franja confirmation.
+
+Turn sequence:
+
+~~~txt
+Quiero pedir una cita
+El martes en la tarde
+A las 3
+Sí, registre esa franja
+~~~
+
+Final result:
+
+- `status = sending_skipped`
+- `intent = hora_cita`
+- `estado_anterior = ST_CITA_FRANJA`
+- `nuevo_estado = ST_CITA_PENDIENTE`
+- `appointment_request_decision_reason = allowed_hora_cita_ready_for_human_review`
+- `appointment_request != null`
+- `estado_solicitud = pendiente_confirmacion`
+- `fecha_solicitada = 2026-06-09`
+- `franja_solicitada = 3:00 p. m.–5:00 p. m.`
+- `source_interaction_id = wamid.p6f926.happy.004`
+- `whatsapp_sending_enabled = false`
+
+Conclusion:
+
+Appointment request registration is accepted because the patient-facing confirmation response is backed by `appointment_request != null`.
+
+4. Flow 4 — Ambiguous Slot Guard
+
+Phone:
+
+~~~txt
+test-p6f926-ambiguous-001
+~~~
+
+Turn sequence:
+
+~~~txt
+Quiero pedir una cita
+El martes en la tarde
+En la tarde
+~~~
+
+Final result:
+
+- `status = sending_skipped`
+- `intent = hora_cita`
+- `estado_anterior = ST_CITA_FRANJA`
+- `nuevo_estado = ST_CITA_FRANJA`
+- `appointment_request_decision_reason = skipped_wrong_state_or_action`
+- `appointment_request = null`
+- Elvira asks the patient to choose one concrete available franja
+- `whatsapp_sending_enabled = false`
+
+Conclusion:
+
+Ambiguous generic time-window reply did not create AppointmentRequest and did not advance to `ST_CITA_PENDIENTE`.
+
+5. Flow 5 — Duplicate WAMID Deduplication
+
+Duplicated WAMID:
+
+~~~txt
+wamid.p6f926.ambiguous.003
+~~~
+
+Result on repeated payload:
+
+- `status = ignored`
+- `reason = duplicate_message`
+- `whatsapp_message_id = wamid.p6f926.ambiguous.003`
+
+Conclusion:
+
+Duplicate Meta message was ignored and did not create duplicate operational effects.
+
+6. Flow 6 — Opt-Out Safety Check
+
+Phone:
+
+~~~txt
+test-p6f926-optout-001
+~~~
+
+WAMID:
+
+~~~txt
+wamid.p6f926.optout.001
+~~~
+
+Message:
+
+~~~txt
+No quiero recibir más mensajes
+~~~
+
+Result:
+
+- `status = sending_skipped`
+- `intent = optout`
+- `estado_anterior = ST_INIT`
+- `nuevo_estado = ST_OPTOUT`
+- `appointment_request_decision_reason = skipped_non_appointment_intent`
+- `appointment_request = null`
+- `whatsapp_sending_enabled = false`
+
+Conclusion:
+
+Opt-out is handled safely, without creating AppointmentRequest and without real sending.
+
+## Current Safety Baseline
+
+Do not enable real sending yet.
+
+Still active:
+
+~~~txt
+WHATSAPP_SENDING_ENABLED=false
+~~~
+
+Do not touch yet unless explicitly started as a later sprint:
+
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy sessions module
+- public patient traffic
+- mass messaging
+- marketing templates
+
+## Next Sprint
+
+P6-F.9.27 — Controlled Sending Activation Execution Checklist
+
+Goal:
+
+Prepare the exact execution checklist for enabling real WhatsApp sending only for one controlled internal test phone.
+
+Important:
+
+P6-F.9.27 should still be checklist/execution-prep oriented.
+
+Do not broadly open production.
+
+Do not enable public patient traffic.
+
+Do not activate Google Sheets, Telegram, n8n, Calendar, doctor confirmation automation, or therapy session tracking.
+
+Recommended next steps:
+
+1. Confirm `git status --short` is clean.
+2. Confirm `pytest -q` still returns 217 passed.
+3. Confirm `/ready` still shows:
+   - `whatsapp_sending_enabled = false`
+   - `real_whatsapp_sending_allowed = false`
+4. Define the exact internal test phone allowed for controlled sending.
+5. Define rollback command/procedure before enabling sending.
+6. Only then prepare the controlled activation sprint.
+
+## Standing Development Rules
+
+Use sprint-based SDD, not microphases.
+
+Document at sprint/final checkpoint level, not after every tiny step.
+
+For Markdown documentation:
+
+- use one single copy-paste Bash block
+- prefer `cat > file <<'EOF'` or `cat >> file <<'EOF'`
+- do not use `python - <<'PY'` for Markdown files
+- prefer `~~~` fences inside generated Markdown to avoid broken code fences
+- avoid fragmented copy-paste blocks
+
+Acceptance for conversational flows:
+
+A flow is accepted only when response behavior and expected PostgreSQL effect are both correct.
+
+For appointment requests, a response such as:
+
+~~~txt
+Hemos recibido su solicitud...
+~~~
+
+is valid only when:
+
+~~~txt
+appointment_request != null
+and appointment_requests.estado_solicitud = pendiente_confirmacion
+~~~
