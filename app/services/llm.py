@@ -183,9 +183,21 @@ def generate_llm_response(state: ElviraState) -> ElviraState:
             )
             return state
 
+        slots_candidatos = list(state.slots_candidatos or [])
+
+        if len(slots_candidatos) == 1:
+            slot = slots_candidatos[0].replace("–", " a ")
+            state.respuesta = (
+                f"Perfecto, se refiere a {date_reference}. "
+                "La doctora solo atiende consultas domiciliarias en la tarde. "
+                f"Para ese día solo tenemos disponible la franja de {slot} "
+                "¿Desea que registre esa franja como preferencia?"
+            )
+            return state
+
         slots = " o ".join(
             f"entre {slot.replace('–', ' y ')}"
-            for slot in state.slots_candidatos
+            for slot in slots_candidatos
         )
 
         if slots:

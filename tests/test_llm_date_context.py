@@ -34,6 +34,39 @@ def test_preferred_time_response_is_deterministic_with_slots():
     )
 
 
+def test_preferred_time_response_with_single_slot_does_not_ask_which_one():
+    state = ElviraState(
+        telefono="573001112233",
+        mensaje_original="El miércoles",
+        sanitized_input="el miércoles",
+        estado_actual="ST_CITA_FECHA",
+        nuevo_estado="ST_CITA_FRANJA",
+        intent="fecha_cita",
+        next_action="ask_preferred_time",
+        fecha_actual_colombia="2026-05-11",
+        fecha_solicitada="2026-05-13",
+        fecha_solicitada_texto="miércoles 13 de mayo",
+        dia_semana_solicitado="miércoles",
+        es_dia_disponible=True,
+        slots_candidatos=["3:00 p. m.–5:00 p. m."],
+        is_weekend=False,
+        is_colombia_holiday=False,
+        colombia_holiday_name=None,
+        date_resolution_source="deterministic_relative_date_resolver",
+    )
+
+    result = llm.generate_llm_response(state)
+
+    assert result.respuesta == (
+        "Perfecto, se refiere a miércoles 13 de mayo. "
+        "La doctora solo atiende consultas domiciliarias en la tarde. "
+        "Para ese día solo tenemos disponible la franja de 3:00 p. m. a 5:00 p. m. "
+        "¿Desea que registre esa franja como preferencia?"
+    )
+    assert "¿Cuál le sirve mejor?" not in result.respuesta
+    assert "tengo disponibles" not in result.respuesta
+
+
 def test_preferred_time_response_is_deterministic_without_slots():
     state = ElviraState(
         telefono="573001112233",
