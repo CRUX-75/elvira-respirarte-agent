@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+import unicodedata
 from typing import Any
 
 from sqlalchemy.engine import Engine
@@ -104,11 +106,77 @@ SIMPLE_GREETING_MESSAGES = {
 
 
 def _normalize(text: str | None) -> str:
-    return (text or "").strip().lower()
+    """
+    Normalize patient-facing WhatsApp text for deterministic KB matching.
+
+    This intentionally removes accents so common Colombian/WhatsApp variants like
+    "oxígeno/oxigeno", "cánula/canula" and "respiración/respiracion" match the
+    same service search terms.
+    """
+    cleaned = (text or "").strip().lower()
+    cleaned = unicodedata.normalize("NFKD", cleaned)
+    cleaned = "".join(char for char in cleaned if not unicodedata.combining(char))
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return cleaned
 
 
 def _contains_any(text: str, keywords: set[str]) -> bool:
     return any(keyword in text for keyword in keywords)
+
+
+def _split_search_terms(search_terms: str | None) -> list[str]:
+    if not search_terms:
+        return []
+
+    normalized_terms = _normalize(search_terms)
+    return [
+        term.strip()
+        for term in re.split(r"[,;|\n]+", normalized_terms)
+        if len(term.strip()) >= 3
+    ]
+
+
+def _service_matches_search_terms(
+    row: dict[str, Any],
+    normalized_message: str,
+) -> bool:
+    """
+    Match colloquial patient language against service-owned search terms.
+
+    This is not clinical reasoning. It only maps patient language to the most
+    likely Respirarte service category so the response can stay safe and the
+    doctor can review the case.
+    """
+    for term in _split_search_terms(row.get("search_terms")):
+        if term in normalized_message:
+            return True
+
+        # Support natural WhatsApp variants like:
+        # "el niño está muy mocoso" vs search term "niño mocoso"
+        # "le saquen los mocos" vs search terms containing "mocos"
+        tokens = re.findall(r"[a-z0-9]+", term)
+        relevant_tokens = [token for token in tokens if len(token) >= 4]
+
+        if len(relevant_tokens) == 1 and relevant_tokens[0] in normalized_message:
+            return True
+
+        if len(relevant_tokens) >= 2 and all(
+            token in normalized_message for token in relevant_tokens
+        ):
+            return True
+
+    return False
+
+
+def _filter_services_by_search_terms(
+    rows: list[dict[str, Any]],
+    normalized_message: str,
+) -> list[dict[str, Any]]:
+    return [
+        row
+        for row in rows
+        if _service_matches_search_terms(row, normalized_message)
+    ]
 
 
 def _is_simple_greeting(text: str) -> bool:
@@ -279,8 +347,32 @@ def get_kb_context(
 
     if should_use_services:
         service_rows = search_services(engine, normalized_message)
+
         if not service_rows:
-            service_rows = get_active_services(engine)
+            active_service_rows = get_active_services(engine)
+            matched_service_rows = _filter_services_by_search_terms(
+                active_service_rows,
+                normalized_message,
+            )
+
+            # If the KB has service-owned search terms, prefer them over the
+            # old full-portfolio fallback. This prevents colloquial patient
+            # messages like "le silva el pecho" or "niño mocoso" from loading
+            # unrelated services such as Curso Materno or SST.
+            has_search_terms = any(
+                bool((row.get("search_terms") or "").strip())
+                for row in active_service_rows
+            )
+
+            if matched_service_rows:
+                service_rows = matched_service_rows
+            elif has_search_terms and not _contains_any(
+                normalized_message,
+                {"servicio", "servicios", "ofrecen", "ofrece", "portafolio"},
+            ):
+                service_rows = []
+            else:
+                service_rows = active_service_rows
 
         service_rows = _compact_rows(service_rows)
         service_context = _build_services_context(service_rows)

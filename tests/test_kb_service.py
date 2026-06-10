@@ -227,3 +227,96 @@ def test_kb_context_unknown_service_does_not_invent_kb_context():
         "kb_sources": [],
         "kb_context": "",
     }
+
+def test_kb_context_maps_colombian_colloquial_respiratory_language_to_single_service():
+    engine = Mock()
+
+    respiratory_service = {
+        "service_name": "Terapia Respiratoria",
+        "modality": "Domiciliaria",
+        "public_answer_short": "Sí, en Respirarte ofrecemos terapia respiratoria directamente en su domicilio.",
+        "search_terms": (
+            "le silva el pecho, le silba el pecho, le suena el pecho, "
+            "niño mocoso, mocos, sacar mocos, sacarle los mocos, "
+            "saquen los mocos, flemas, tos, tos de perro, tos de fumador, "
+            "carraspera, destete de oxigeno, "
+            "quitar oxigeno, reducir oxigeno"
+        ),
+        "escalation_required": False,
+    }
+
+    full_portfolio = [
+        respiratory_service,
+        {
+            "service_name": "Manejo de Pacientes Traqueotomizados",
+            "modality": "Domiciliaria",
+            "public_answer_short": "Sí, manejamos pacientes traqueotomizados directamente en casa.",
+            "search_terms": "traqueo, canula, traqueostomia",
+            "escalation_required": False,
+        },
+        {
+            "service_name": "Pruebas de Función Pulmonar",
+            "modality": "Domiciliaria",
+            "public_answer_short": "Sí, realizamos pruebas de función pulmonar.",
+            "search_terms": "espirometria, prueba pulmonar, examen de pulmones",
+            "escalation_required": False,
+        },
+        {
+            "service_name": "Rehabilitación Pulmonar",
+            "modality": "Domiciliaria",
+            "public_answer_short": "Sí, hacemos rehabilitación pulmonar domiciliaria.",
+            "search_terms": "ejercicios respiratorios, recuperacion pulmonar",
+            "escalation_required": False,
+        },
+        {
+            "service_name": "Curso Profiláctico Materno",
+            "modality": "Domiciliaria / Virtual",
+            "public_answer_short": "Sí, tenemos curso de respiración para gestantes.",
+            "search_terms": "curso embarazadas, curso gestantes, preparacion parto",
+            "escalation_required": False,
+        },
+        {
+            "service_name": "SST Salud Respiratoria Empresarial",
+            "modality": "Presencial en empresa",
+            "public_answer_short": "Sí, ofrecemos servicios de salud respiratoria para empresas.",
+            "search_terms": "sst, empresa, salud ocupacional",
+            "escalation_required": False,
+        },
+    ]
+
+    messages = [
+        "Le silva el pecho",
+        "Le silba el pecho",
+        "Le suena el pecho",
+        "El niño está muy mocoso",
+        "Necesito que le saquen los mocos al niño",
+        "Tiene mucha tos y carraspera",
+        "Tiene tos de perro",
+        "Hacen destete de oxigeno",
+    ]
+
+    for message in messages:
+        with (
+            patch("app.services.kb.search_services", return_value=[]),
+            patch("app.services.kb.get_active_services", return_value=full_portfolio),
+            patch("app.services.kb.search_schedules", return_value=[]),
+            patch("app.services.kb.get_all_schedules", return_value=[]),
+            patch("app.services.kb.search_rules", return_value=[]),
+            patch("app.services.kb.get_active_rules", return_value=[]),
+        ):
+            result = get_kb_context(
+                engine,
+                intent="general",
+                message=message,
+                estado_actual="ST_GENERAL",
+            )
+
+        assert result["kb_used"] is True
+        assert result["kb_sources"] == ["kb_services"]
+        assert "Terapia Respiratoria" in result["kb_context"]
+
+        # Must not fall back to the full service portfolio.
+        assert "Curso Profiláctico Materno" not in result["kb_context"]
+        assert "SST Salud Respiratoria Empresarial" not in result["kb_context"]
+        assert "Manejo de Pacientes Traqueotomizados" not in result["kb_context"]
+

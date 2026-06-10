@@ -76,6 +76,17 @@ def generate_response(state: ElviraState) -> ElviraState:
         )
         return state
 
+    if (
+        action == "answer_general"
+        and state.nuevo_estado == "ST_CITA_PENDIENTE"
+        and state.intent == "general"
+    ):
+        state.respuesta = (
+            "Con gusto. Su solicitud quedó registrada y la Dra. D'Aleman "
+            "le confirmará posteriormente. Si necesita algo más, aquí estoy."
+        )
+        return state
+
     # General por defecto
     state.respuesta = (
         "Hola, qué gusto saludarle. Cuénteme, ¿en qué le podemos ayudar hoy en Respirarte?"

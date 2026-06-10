@@ -6792,3 +6792,176 @@ If not already done:
 2. Push main.
 3. Keep `WHATSAPP_SENDING_ENABLED=false`.
 4. Do not move to controlled real sending until the production activation checklist is explicitly reopened and completed.
+
+## P6-F.9.36 checkpoint — Post-Beta Fixes partial
+
+Status: PARTIAL GREEN checkpoint before moving to a new chat.
+
+### Environment / safety
+
+Production/preproduction healthcheck confirmed:
+
+- service: elvira-respirarte-agent
+- environment: production
+- app_version: 0.2.1
+- WHATSAPP_SENDING_ENABLED=false
+- real_whatsapp_sending_allowed=false
+- database configured
+- LangSmith tracing enabled in project `elvira-respirarte-prod`
+- OpenAI configured
+- WhatsApp configured
+- hard_failures=[]
+
+Post-beta cleanup completed:
+
+- `appointment_requests` cleaned from beta/test rows.
+- `interactions` kept intact as debugging evidence.
+- `patients` kept intact.
+- `processed_messages` kept intact.
+- LangSmith traces kept intact.
+- No destructive cleanup beyond beta `appointment_requests`.
+
+### P6-F.9.36-A — ST_CITA_PENDIENTE general response guard
+
+Implemented and GREEN.
+
+Problem observed in beta:
+
+- From `ST_CITA_PENDIENTE`, short messages like `Ok` could trigger a new greeting:
+  `Hola, qué gusto saludarle...`
+- This made Elvira sound as if the conversation had restarted.
+
+Fix implemented:
+
+- Added deterministic response guard in `app/services/response.py`.
+- If:
+  - `next_action == "answer_general"`
+  - `nuevo_estado == "ST_CITA_PENDIENTE"`
+  - `intent == "general"`
+- Then Elvira responds as follow-up to an already registered request:
+  `Con gusto. Su solicitud quedó registrada y la Dra. D'Aleman le confirmará posteriormente. Si necesita algo más, aquí estoy.`
+
+Tests added:
+
+- `tests/test_response_pending_general.py`
+
+Validated:
+
+- `Ok` from `ST_CITA_PENDIENTE` does not re-salute.
+- `Muchas gracias` from `ST_CITA_PENDIENTE` does not restart the conversation.
+- Targeted tests GREEN.
+
+### P6-F.9.36-B.1 — KB matching logic for Colombian colloquial respiratory language
+
+Implemented and GREEN at logic/test level.
+
+Product decision:
+
+- Elvira does not need to be clinically expert.
+- Elvira must understand Colombian/Bogotá-style colloquial patient language and common WhatsApp misspellings well enough to map the message to Respirarte service categories.
+- Elvira must not diagnose or suggest specific clinical procedures.
+- Technical terms like oximetría, higiene bronquial, sibilancias, etc. are mainly for later doctor-facing/internal reasoning, not current patient-facing explanations.
+
+Current MVP rule:
+
+Patient colloquial language
+→ deterministic service/category match
+→ safe patient-facing response
+→ appointment/consultation request registration
+→ Dra. D'Aleman reviews and decides clinically.
+
+Examples that must map to `SRV-01 — Terapia Respiratoria`:
+
+- `Le silva el pecho`
+- `Le silba el pecho`
+- `Le suena el pecho`
+- `El niño está muy mocoso`
+- `Necesito que le saquen los mocos al niño`
+- `Tiene mucha tos y carraspera`
+- `Tiene tos de perro`
+- `Hacen destete de oxigeno`
+
+Important: these matches must not fall back to the full service portfolio.
+
+Implemented in `app/services/kb.py`:
+
+- `_normalize()` now removes accents and normalizes whitespace for deterministic KB matching.
+- Added search-term helper functions:
+  - `_split_search_terms`
+  - `_service_matches_search_terms`
+  - `_filter_services_by_search_terms`
+- Added stricter matching logic:
+  - exact term match first
+  - single relevant token can match
+  - multi-token terms require all relevant tokens
+- Fixed search-term splitting bug so real newlines are handled correctly and the letter `n` is not treated as a separator.
+- Adjusted service fallback logic to avoid full-portfolio fallback when service-owned `search_terms` exist and no match is found for a non-portfolio question.
+
+Tests updated:
+
+- `tests/test_kb_service.py`
+
+Validated:
+
+- Colombian colloquial respiratory language maps to `Terapia Respiratoria`.
+- It does not include unrelated services like:
+  - `Curso Profiláctico Materno`
+  - `SST Salud Respiratoria Empresarial`
+  - `Manejo de Pacientes Traqueotomizados`
+
+Targeted tests GREEN:
+
+- `tests/test_kb_service.py`
+- `tests/test_kb_runtime_integration.py`
+- `tests/test_response_pending_general.py`
+
+### Important note
+
+The current `search_terms` matching logic is implemented and tested with mocked KB rows.
+
+Next required block:
+
+## P6-F.9.36-B.2 — Persist `search_terms` into real KB schema/import/repository/CSV
+
+Scope for next block:
+
+1. Add `search_terms TEXT` to `kb_services` schema.
+2. Add migration / production SQL for existing DB.
+3. Update `scripts/import_kb_from_csv.py`:
+   - INSERT `search_terms`
+   - UPDATE `search_terms` on conflict
+   - read `search_terms` from CSV
+4. Update `app/repositories/kb_services.py`:
+   - include `search_terms` in SELECTs
+   - search `search_terms` in `search_services`
+5. Update `data/kb/datakbKB_Servicios.csv` with `search_terms` column.
+6. Add real repository/import tests if appropriate.
+7. Run full targeted KB suite.
+8. Keep `WHATSAPP_SENDING_ENABLED=false`.
+
+Do not touch yet:
+
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- campaigns
+- Colombian number cutover
+- real WhatsApp sending
+- clinical diagnosis logic
+
+### Next clean starting point
+
+Start next chat at:
+
+P6-F.9.36-B.2 — Persist search_terms into schema/import/repository/CSV
+
+Current state before next chat:
+
+- P6-F.9.36-A GREEN
+- P6-F.9.36-B.1 GREEN
+- Logic ready
+- Production sending disabled
+- Need to persist `search_terms` into real KB data path
+
