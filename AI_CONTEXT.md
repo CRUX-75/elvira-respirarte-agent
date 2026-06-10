@@ -7057,3 +7057,76 @@ Pending post-beta bugs after this block:
 - Gap — exact-hour follow-up from `ST_CITA_PENDIENTE` must not re-register the request.
 - FEAT-1 — capture `servicio_solicitado` in appointment flow remains optional / low priority.
 
+
+---
+
+## P6-F.9.36-B.3 — Controlled production migration + KB import validation for search_terms
+
+Status:
+
+CLOSED / PRODUCTION VALIDATED / SAFE RUNTIME GREEN
+
+Production actions completed:
+
+- Applied controlled production migration:
+  - `ALTER TABLE kb_services ADD COLUMN IF NOT EXISTS search_terms TEXT;`
+- Verified in pgweb:
+  - `kb_services.search_terms` exists with type `text`.
+- Updated production `SRV-01 — Terapia Respiratoria` with Colombian colloquial respiratory `search_terms`.
+- Verified in pgweb that:
+  - `search_terms IS NOT NULL` for SRV-01.
+  - `ILIKE '%le silva%'` returns only SRV-01.
+
+Safe runtime validation:
+
+Endpoint:
+
+- `/test/message-stateful`
+
+Payload:
+
+- telefono: `test-searchterms-b3-01`
+- mensaje: `A mi niño le silva el pecho`
+
+Observed result:
+
+- `intent = general`
+- `nuevo_estado = ST_GENERAL`
+- `kb_used = true`
+- `kb_sources = ["kb_services"]`
+- `kb_context` included only:
+  - `Terapia Respiratoria`
+- No full service portfolio was loaded.
+- `appointment_request = null`
+- `delivery_status = sending_skipped`
+
+Conclusion:
+
+The real production KB now supports Colombian colloquial respiratory language for SRV-01 without exposing the full service portfolio.
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- real `/webhook`
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- campaigns
+- Colombian production number
+- clinical diagnosis logic
+
+Remaining post-beta bugs:
+
+- BUG-1 — pure greeting from ST_INIT must not list the full portfolio.
+- BUG-2 — Wednesday single-slot copy must not ask “¿Cuál le sirve mejor?”
+- BUG-2B — exact-hour guard must use real `slots_candidatos`.
+- Gap — exact-hour follow-up from `ST_CITA_PENDIENTE` must not re-register the request.
+- FEAT-1 — capture `servicio_solicitado` in appointment flow remains optional / low priority.
+
+Next recommended block:
+
+P6-F.9.37 — BUG-1 Pure greeting from ST_INIT must not list full portfolio
+
