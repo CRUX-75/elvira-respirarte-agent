@@ -320,3 +320,32 @@ def test_kb_context_maps_colombian_colloquial_respiratory_language_to_single_ser
         assert "SST Salud Respiratoria Empresarial" not in result["kb_context"]
         assert "Manejo de Pacientes Traqueotomizados" not in result["kb_context"]
 
+
+
+def test_simple_general_greeting_from_st_init_does_not_load_service_portfolio():
+    from unittest.mock import patch
+
+    from app.services.kb import get_kb_context
+
+    with (
+        patch("app.services.kb.search_services") as search_services_mock,
+        patch("app.services.kb.get_active_services") as get_active_services_mock,
+        patch("app.services.kb.search_schedules") as search_schedules_mock,
+        patch("app.services.kb.get_all_schedules") as get_all_schedules_mock,
+    ):
+        result = get_kb_context(
+            engine=object(),
+            intent="general",
+            message="Hola buen día",
+            estado_actual="ST_INIT",
+        )
+
+    assert result == {
+        "kb_used": False,
+        "kb_sources": [],
+        "kb_context": "",
+    }
+    search_services_mock.assert_not_called()
+    get_active_services_mock.assert_not_called()
+    search_schedules_mock.assert_not_called()
+    get_all_schedules_mock.assert_not_called()

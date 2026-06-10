@@ -306,13 +306,12 @@ def get_kb_context(
         "services",
     }
 
-    simple_general_greeting_in_appointment_state = (
+    simple_general_greeting = (
         normalized_intent == "general"
-        and normalized_state in APPOINTMENT_RULE_STATES
         and _is_simple_greeting(normalized_message)
     )
 
-    if simple_general_greeting_in_appointment_state:
+    if simple_general_greeting:
         return {
             "kb_used": False,
             "kb_sources": [],
