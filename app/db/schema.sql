@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS kb_services (
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     public_answer_short TEXT,
     public_answer_long TEXT,
+    search_terms TEXT,
     escalation_required BOOLEAN NOT NULL DEFAULT FALSE,
     source TEXT NOT NULL DEFAULT 'google_sheets',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

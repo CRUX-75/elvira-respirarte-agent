@@ -6965,3 +6965,95 @@ Current state before next chat:
 - Production sending disabled
 - Need to persist `search_terms` into real KB data path
 
+
+---
+
+## P6-F.9.36-B.2 — Persist search_terms into real KB
+
+Status:
+
+CLOSED / RED-THEN-GREEN / GREEN
+
+Reason:
+
+P6-F.9.36-B.1 validated Colombian colloquial respiratory matching with mocked/test `search_terms`, but the real production KB did not yet persist or expose `search_terms`.
+
+Implemented changes:
+
+- Added `search_terms TEXT` to `app/db/schema.sql`.
+- Added migration draft:
+  - `scripts/sql/003_add_kb_services_search_terms.sql`
+- Updated `app/repositories/kb_services.py`:
+  - `get_active_services()` now selects `search_terms`.
+  - `get_service_by_id()` now selects `search_terms`.
+  - `search_services()` now selects and searches `search_terms` with `ILIKE`.
+- Updated `scripts/import_kb_from_csv.py`:
+  - Uses real CSV filenames:
+    - `datakbKB_Servicios.csv`
+    - `datakbKB_Horarios.csv`
+    - `datakbKB_Reglas.csv`
+  - Inserts and updates `search_terms`.
+- Added canonical versioned CSV:
+  - `data/kb/datakbKB_Servicios.csv`
+- Added repository/import tests:
+  - `tests/test_kb_services_repository.py`
+  - `tests/test_import_kb_from_csv.py`
+
+Important product behavior now supported by real KB:
+
+Colombian colloquial respiratory phrases such as:
+
+- `le silva el pecho`
+- `le silba el pecho`
+- `le suena el pecho`
+- `niño mocoso`
+- `tos de perro`
+- `destete de oxígeno`
+
+can match:
+
+- `SRV-01 — Terapia Respiratoria`
+
+without loading or exposing the full service portfolio.
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- real `/webhook`
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- campaigns
+- Colombian production number
+- clinical diagnosis logic
+
+Production migration still pending:
+
+The production database still needs this controlled SQL migration before production KB import/runtime validation:
+
+ALTER TABLE kb_services
+ADD COLUMN IF NOT EXISTS search_terms TEXT;
+
+Next recommended block:
+
+P6-F.9.36-B.3 — Controlled production migration + KB import validation for `search_terms`
+
+Objective:
+
+1. Apply `scripts/sql/003_add_kb_services_search_terms.sql` to production PostgreSQL.
+2. Run/import KB CSV safely.
+3. Validate that `kb_services.search_terms` exists and SRV-01 contains colloquial respiratory search terms.
+4. Validate via safe runtime surface only.
+5. Keep `WHATSAPP_SENDING_ENABLED=false`.
+
+Pending post-beta bugs after this block:
+
+- BUG-1 — pure greeting from ST_INIT must not list the full portfolio.
+- BUG-2 — Wednesday single-slot copy must not ask “¿Cuál le sirve mejor?”
+- BUG-2B — exact-hour guard must use real `slots_candidatos`.
+- Gap — exact-hour follow-up from `ST_CITA_PENDIENTE` must not re-register the request.
+- FEAT-1 — capture `servicio_solicitado` in appointment flow remains optional / low priority.
+

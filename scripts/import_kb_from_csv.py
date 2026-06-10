@@ -12,9 +12,9 @@ from app.db.session import engine
 BASE_DIR = Path(__file__).resolve().parents[1]
 KB_DIR = BASE_DIR / "data" / "kb"
 
-SERVICES_CSV = KB_DIR / "KB_Servicios.csv"
-SCHEDULES_CSV = KB_DIR / "KB_Horarios.csv"
-RULES_CSV = KB_DIR / "KB_Reglas.csv"
+SERVICES_CSV = KB_DIR / "datakbKB_Servicios.csv"
+SCHEDULES_CSV = KB_DIR / "datakbKB_Horarios.csv"
+RULES_CSV = KB_DIR / "datakbKB_Reglas.csv"
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
@@ -69,6 +69,7 @@ def import_services() -> int:
             is_active,
             public_answer_short,
             public_answer_long,
+            search_terms,
             escalation_required,
             source,
             updated_at
@@ -84,6 +85,7 @@ def import_services() -> int:
             :is_active,
             :public_answer_short,
             :public_answer_long,
+            :search_terms,
             :escalation_required,
             'google_sheets_csv',
             NOW()
@@ -99,6 +101,7 @@ def import_services() -> int:
             is_active = EXCLUDED.is_active,
             public_answer_short = EXCLUDED.public_answer_short,
             public_answer_long = EXCLUDED.public_answer_long,
+            search_terms = EXCLUDED.search_terms,
             escalation_required = EXCLUDED.escalation_required,
             source = EXCLUDED.source,
             updated_at = NOW()
@@ -128,6 +131,7 @@ def import_services() -> int:
                     "is_active": _to_bool(row.get("is_active"), default=True),
                     "public_answer_short": _clean(row.get("public_answer_short")),
                     "public_answer_long": _clean(row.get("public_answer_long")),
+                    "search_terms": _clean(row.get("search_terms")),
                     "escalation_required": _to_bool(
                         row.get("escalation_required"),
                         default=False,

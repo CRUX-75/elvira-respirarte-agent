@@ -26,6 +26,7 @@ def get_active_services(engine: Engine) -> list[dict[str, Any]]:
             is_active,
             public_answer_short,
             public_answer_long,
+            search_terms,
             escalation_required
         FROM kb_services
         WHERE is_active = TRUE
@@ -56,6 +57,7 @@ def get_service_by_id(engine: Engine, service_id: str) -> dict[str, Any] | None:
             is_active,
             public_answer_short,
             public_answer_long,
+            search_terms,
             escalation_required
         FROM kb_services
         WHERE service_id = :service_id
@@ -92,6 +94,7 @@ def search_services(engine: Engine, search_text: str) -> list[dict[str, Any]]:
             is_active,
             public_answer_short,
             public_answer_long,
+            search_terms,
             escalation_required
         FROM kb_services
         WHERE is_active = TRUE
@@ -104,6 +107,7 @@ def search_services(engine: Engine, search_text: str) -> list[dict[str, Any]]:
             OR modality ILIKE :search
             OR public_answer_short ILIKE :search
             OR public_answer_long ILIKE :search
+            OR search_terms ILIKE :search
         )
         ORDER BY service_id ASC
         """
