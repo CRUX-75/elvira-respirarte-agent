@@ -521,7 +521,7 @@ def test_p6f91444_unavailable_holiday_date_stays_in_date_state():
 
     state = ElviraState(
         telefono="test-p6f91444",
-        mensaje_original="para el lunes",
+        mensaje_original="para el próximo lunes",
         sanitized_input="",
         estado_actual="ST_CITA_FECHA",
     )

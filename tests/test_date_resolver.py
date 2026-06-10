@@ -176,3 +176,50 @@ def test_p6f91419_time_window_without_date_does_not_resolve_requested_date():
     assert result.fecha_solicitada_texto is None
     assert result.es_dia_disponible is False
     assert result.slots_candidatos == []
+
+
+def test_same_weekday_reference_resolves_to_today_when_no_next_marker():
+    result = resolve_requested_date(
+        "El miércoles.",
+        now=datetime(2026, 6, 10, 7, 51, tzinfo=BOGOTA),
+    )
+
+    assert result.fecha_actual_colombia.isoformat() == "2026-06-10"
+    assert result.fecha_solicitada.isoformat() == "2026-06-10"
+    assert result.fecha_solicitada_texto == "miércoles 10 de junio"
+    assert result.dia_semana_solicitado == "miércoles"
+    assert result.es_dia_disponible is True
+    assert result.slots_candidatos == ["3:00 p. m.–5:00 p. m."]
+
+
+def test_same_weekday_reference_without_article_resolves_to_today():
+    result = resolve_requested_date(
+        "miércoles en la tarde",
+        now=datetime(2026, 6, 10, 7, 51, tzinfo=BOGOTA),
+    )
+
+    assert result.fecha_solicitada.isoformat() == "2026-06-10"
+    assert result.fecha_solicitada_texto == "miércoles 10 de junio"
+    assert result.dia_semana_solicitado == "miércoles"
+
+
+def test_same_weekday_reference_with_proximo_resolves_to_next_week():
+    result = resolve_requested_date(
+        "El próximo miércoles.",
+        now=datetime(2026, 6, 10, 7, 51, tzinfo=BOGOTA),
+    )
+
+    assert result.fecha_solicitada.isoformat() == "2026-06-17"
+    assert result.fecha_solicitada_texto == "miércoles 17 de junio"
+    assert result.dia_semana_solicitado == "miércoles"
+
+
+def test_same_weekday_reference_with_que_viene_resolves_to_next_week():
+    result = resolve_requested_date(
+        "El miércoles que viene.",
+        now=datetime(2026, 6, 10, 7, 51, tzinfo=BOGOTA),
+    )
+
+    assert result.fecha_solicitada.isoformat() == "2026-06-17"
+    assert result.fecha_solicitada_texto == "miércoles 17 de junio"
+    assert result.dia_semana_solicitado == "miércoles"

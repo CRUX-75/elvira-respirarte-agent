@@ -97,9 +97,26 @@ def _normalize_text(text: str | None) -> str:
     return normalized
 
 
-def _resolve_weekday_reference(base_date: date, target_weekday: int) -> date:
+NEXT_WEEK_MARKERS = (
+    "proximo",
+    "proxima",
+    "siguiente",
+    "que viene",
+)
+
+
+def _has_explicit_next_week_marker(normalized_message: str) -> bool:
+    return any(marker in normalized_message for marker in NEXT_WEEK_MARKERS)
+
+
+def _resolve_weekday_reference(
+    base_date: date,
+    target_weekday: int,
+    *,
+    explicit_next_week: bool = False,
+) -> date:
     days_ahead = (target_weekday - base_date.weekday()) % 7
-    if days_ahead == 0:
+    if days_ahead == 0 and explicit_next_week:
         days_ahead = 7
 
     return base_date + timedelta(days=days_ahead)
@@ -156,6 +173,7 @@ def resolve_requested_date(
                 requested_date = _resolve_weekday_reference(
                     fecha_actual_colombia,
                     weekday_index,
+                    explicit_next_week=_has_explicit_next_week_marker(normalized_message),
                 )
                 break
 
