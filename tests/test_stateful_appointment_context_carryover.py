@@ -458,3 +458,68 @@ def test_stateful_endpoint_rejects_vague_register_that_franja_after_exact_hour_g
     assert "5:00 p. m. a 7:00 p. m." in body["respuesta"]
 
     assert calls["appointment_service_call"] is None
+
+
+def test_stateful_endpoint_pending_request_exact_hour_followup_does_not_register_again(monkeypatch):
+    fake_result = FakeElviraResult(
+        intent="hora_cita",
+        nuevo_estado="ST_CITA_PENDIENTE",
+        next_action="confirm_appointment_request",
+        fecha_solicitada="2026-06-09",
+        slots_candidatos=["3:00 p. m.–5:00 p. m."],
+        mensaje_original="Pueden llegar a las 4",
+    )
+    fake_result.estado_actual = "ST_CITA_PENDIENTE"
+    fake_result.estado_anterior = "ST_CITA_PENDIENTE"
+    fake_result.appointment_context = {
+        "fecha_solicitada": "2026-06-09",
+        "fecha_solicitada_texto": "martes 9 de junio",
+        "slots_candidatos": ["3:00 p. m.–5:00 p. m."],
+        "franja_solicitada": "3:00 p. m.–5:00 p. m.",
+        "es_dia_disponible": True,
+        "is_weekend": False,
+        "is_colombia_holiday": False,
+        "colombia_holiday_name": None,
+    }
+
+    patient = {
+        "id": "patient-001",
+        "telefono": "573001112233",
+        "nombre": "Paciente Test",
+        "estado_actual": "ST_CITA_PENDIENTE",
+        "opt_out": False,
+        "appointment_context": fake_result.appointment_context,
+    }
+
+    calls = _patch_stateful_dependencies(
+        monkeypatch,
+        fake_result=fake_result,
+        patient=patient,
+    )
+
+    response = client.post(
+        "/test/message-stateful",
+        json={
+            "telefono": "573001112233",
+            "nombre": "Paciente Test",
+            "mensaje": "Pueden llegar a las 4",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["nuevo_estado"] == "ST_CITA_PENDIENTE"
+    assert body["persisted_state"] == "ST_CITA_PENDIENTE"
+    assert body["next_action"] == "none"
+    assert body["state_reason"] == "registered_request_exact_hour_followup"
+
+    assert body["appointment_request_decision"]["should_persist"] is False
+    assert body["appointment_request"] is None
+    assert calls["appointment_service_call"] is None
+
+    assert "queda registrada su solicitud" not in body["respuesta"].lower()
+    assert "su solicitud ya quedó registrada" in body["respuesta"].lower()
+    assert "3:00 p. m. a 5:00 p. m." in body["respuesta"]
+    assert "hora exacta" in body["respuesta"].lower()
+    assert "Dra. D’Aleman" in body["respuesta"]

@@ -439,6 +439,41 @@ def _force_exact_hour_franja_confirmation_state_guard_response(result):
 
 
 def _force_unsupported_slot_selection_guard_response(result):
+    message = (getattr(result, "mensaje_original", None) or "").lower()
+    is_vague_franja_confirmation = (
+        "franja" in message
+        or "registre" in message
+        or "registrar" in message
+    )
+    is_loose_exact_hour_followup = (
+        not is_vague_franja_confirmation
+        and any(char.isdigit() for char in message)
+        and ("a las" in message or "las " in message)
+    )
+
+    if (
+        is_loose_exact_hour_followup
+        and getattr(result, "nuevo_estado", None) == "ST_CITA_PENDIENTE"
+    ):
+        slots = list(getattr(result, "slots_candidatos", None) or [])
+
+        if len(slots) == 1:
+            slot = slots[0].replace("–", " a ")
+            result.respuesta = (
+                f"Su solicitud ya quedó registrada para la franja de {slot}. "
+                "La hora exacta dentro de la franja será confirmada por la Dra. D’Aleman según disponibilidad."
+            )
+        else:
+            result.respuesta = (
+                "Su solicitud ya quedó registrada. "
+                "La hora exacta será confirmada por la Dra. D’Aleman según disponibilidad."
+            )
+
+        result.nuevo_estado = "ST_CITA_PENDIENTE"
+        result.next_action = "none"
+        result.state_reason = "registered_request_exact_hour_followup"
+        return result
+
     result.nuevo_estado = "ST_CITA_FRANJA"
     result.next_action = "ask_confirm_exact_hour_as_slot"
     result.state_reason = "unsupported_slot_selection_guard"
