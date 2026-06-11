@@ -7402,3 +7402,113 @@ Runtime safety remains:
 
 WHATSAPP_SENDING_ENABLED=false
 
+
+---
+
+## P6-F.9.43 — Exact Hour Inside Available Slot Maps to Franja and Persists
+
+Status:
+
+CLOSED / RED-THEN-GREEN / GREEN / COMMITTED / PHASE D AUDIT-ONLY
+
+Objective:
+
+When the patient is in `ST_CITA_FRANJA`, has valid carried appointment context, and sends an exact hour that maps into a real available slot, the state machine must map that exact hour to the offered franja instead of forcing the old exact-hour clarification guard.
+
+Example:
+
+- Patient state: `ST_CITA_FRANJA`
+- Message: `A las 3`
+- Context:
+  - `fecha_solicitada = 2026-06-17`
+  - `fecha_solicitada_texto = miércoles 17 de junio`
+  - `slots_candidatos = ["3:00 p. m.–5:00 p. m."]`
+  - `es_dia_disponible = true`
+  - `is_weekend = false`
+  - `is_colombia_holiday = false`
+
+Expected result:
+
+- `intent = hora_cita`
+- `nuevo_estado = ST_CITA_PENDIENTE`
+- `next_action = confirm_appointment_request`
+- `franja_solicitada = 3:00 p. m.–5:00 p. m.`
+- `state_reason = exact_hour_inside_available_slot`
+
+Changed files:
+
+- `app/graph/transitions.py`
+- `tests/test_state_machine.py`
+
+Implementation:
+
+`app/graph/transitions.py` now imports and uses:
+
+- `resolve_requested_slot_from_message(...)`
+
+The state machine now calculates `matched_slot` before applying the old loose exact-hour guard.
+
+If:
+
+- previous state is `ST_CITA_FRANJA`
+- message contains a loose exact hour
+- the hour maps to one of the real `slots_candidatos`
+
+Then the state machine moves directly to:
+
+- `ST_CITA_PENDIENTE`
+- `confirm_appointment_request`
+- `franja_solicitada = matched_slot`
+- `state_reason = exact_hour_inside_available_slot`
+
+The previous fallback remains active:
+
+- loose exact hour without real mappable slot context
+- stays in `ST_CITA_FRANJA`
+- `next_action = ask_confirm_exact_hour_as_slot`
+- `state_reason = requires_exact_hour_franja_confirmation`
+
+Validation:
+
+- New RED contract added:
+  - `test_p6f943_exact_hour_inside_available_slot_maps_to_slot_and_confirms`
+- Targeted exact-hour tests:
+  - `2 passed`
+- State machine suite:
+  - `26 passed`
+- Appointment runtime/carryover targeted suite:
+  - `54 passed`
+- Full suite:
+  - `239 passed`
+
+Phase D result:
+
+Audit-only.
+
+No post-hoc guards were removed.
+
+Reason:
+
+The audit showed that `main.py`, `appointment_request_runtime.py`, and `appointment_context.py` still contain runtime guards used by existing covered flows:
+
+- `requires_exact_hour_franja_confirmation`
+- `ask_confirm_exact_hour_as_slot`
+- pending exact-hour franja confirmation
+- unsupported slot selection
+- exact-hour follow-up after an already registered request
+
+These guards remain necessary until a later dedicated cleanup/refactor block with explicit contract tests.
+
+Safety boundaries preserved:
+
+Still not touched:
+
+- real `/webhook`
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy/session tracking
+
