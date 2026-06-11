@@ -24,9 +24,9 @@ def build_graph():
 
     builder.add_edge(START, "sanitize_input")
     builder.add_edge("sanitize_input", "classify_intent")
-    builder.add_edge("classify_intent", "transition_state")
-    builder.add_edge("transition_state", "resolve_date_context")
-    builder.add_edge("resolve_date_context", "load_kb_context")
+    builder.add_edge("classify_intent", "resolve_date_context")
+    builder.add_edge("resolve_date_context", "transition_state")
+    builder.add_edge("transition_state", "load_kb_context")
     builder.add_edge("load_kb_context", "generate_response")
     builder.add_edge("generate_response", END)
 

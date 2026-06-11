@@ -34,7 +34,7 @@ def node_resolve_date_context(state: ElviraState, now=None) -> ElviraState:
     This node does not decide intent, state, availability, or scheduling.
     It only enriches the state with controlled context for response wording.
     """
-    appointment_date_intents = {"fecha_cita", "hora_cita"}
+    appointment_date_intents = {"cita", "fecha_cita", "hora_cita"}
     appointment_states = {"ST_CITA_FECHA", "ST_CITA_FRANJA", "ST_CITA_PENDIENTE"}
 
     current_state = state.nuevo_estado or state.estado_actual

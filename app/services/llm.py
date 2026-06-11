@@ -126,7 +126,7 @@ def generate_llm_response(state: ElviraState) -> ElviraState:
                 state.respuesta = (
                     f"Se refiere a {date_reference}. "
                     "Ese día no se atienden consultas. "
-                    "¿Le gustaría indicarme otro día entre semana?"
+                    "¿Para qué día entre semana le gustaría agendar su cita?"
                 )
                 return state
 
@@ -139,14 +139,14 @@ def generate_llm_response(state: ElviraState) -> ElviraState:
                 state.respuesta = (
                     f"Se refiere a {date_reference}. "
                     f"Ese día no se atienden consultas{holiday_detail}. "
-                    "¿Le gustaría indicarme otro día entre semana?"
+                    "¿Para qué día entre semana le gustaría agendar su cita?"
                 )
                 return state
 
             state.respuesta = (
                 f"Se refiere a {date_reference}. "
                 "Ese día no se atienden consultas. "
-                "¿Le gustaría indicarme otro día entre semana?"
+                "¿Para qué día entre semana le gustaría agendar su cita?"
             )
             return state
 
@@ -166,7 +166,7 @@ def generate_llm_response(state: ElviraState) -> ElviraState:
             state.respuesta = (
                 f"Se refiere a {date_reference}. "
                 "Ese día no se atienden consultas. "
-                "¿Le gustaría indicarme otro día entre semana?"
+                "¿Para qué día entre semana le gustaría agendar su cita?"
             )
             return state
 
@@ -179,7 +179,7 @@ def generate_llm_response(state: ElviraState) -> ElviraState:
             state.respuesta = (
                 f"Se refiere a {date_reference}. "
                 f"Ese día no se atienden consultas{holiday_detail}. "
-                "¿Le gustaría indicarme otro día entre semana?"
+                "¿Para qué día entre semana le gustaría agendar su cita?"
             )
             return state
 

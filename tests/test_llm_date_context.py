@@ -93,7 +93,7 @@ def test_preferred_time_response_is_deterministic_without_slots():
     assert result.respuesta == (
         "Se refiere a mañana, sábado 9 de mayo. "
         "Ese día no se atienden consultas. "
-        "¿Le gustaría indicarme otro día entre semana?"
+        "¿Para qué día entre semana le gustaría agendar su cita?"
     )
 
 
@@ -182,7 +182,7 @@ def test_preferred_time_response_blocks_colombian_holiday():
     assert result.respuesta == (
         "Se refiere a lunes 18 de mayo. "
         "Ese día no se atienden consultas porque corresponde al festivo de Ascensión de Jesús. "
-        "¿Le gustaría indicarme otro día entre semana?"
+        "¿Para qué día entre semana le gustaría agendar su cita?"
     )
 
 

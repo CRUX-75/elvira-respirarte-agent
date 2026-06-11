@@ -11,6 +11,13 @@ _AMBIGUOUS_SLOT_SELECTION_MESSAGES = {
 }
 
 
+def _has_missing_or_unavailable_appointment_context(state: ElviraState) -> bool:
+    if not state.fecha_solicitada:
+        return True
+
+    return _has_unavailable_appointment_context(state)
+
+
 def _has_unavailable_appointment_context(state: ElviraState) -> bool:
     if not state.fecha_solicitada:
         return False
@@ -62,6 +69,22 @@ def apply_state_transition(state: ElviraState) -> ElviraState:
 
     # CITA — inicio del flujo
     if intent == "cita":
+        if _has_unavailable_appointment_context(state):
+            state.nuevo_estado = "ST_CITA_FECHA"
+            state.next_action = "ask_preferred_date"
+            state.state_reason = "unavailable_date_guard"
+            return state
+
+        if (
+            state.fecha_solicitada
+            and state.es_dia_disponible is True
+            and state.slots_candidatos
+        ):
+            state.nuevo_estado = "ST_CITA_FRANJA"
+            state.next_action = "ask_preferred_time"
+            state.state_reason = "appointment_intent_with_embedded_date"
+            return state
+
         state.nuevo_estado = "ST_CITA_FECHA"
         state.next_action = "ask_preferred_date"
         state.state_reason = "Paciente quiere agendar una cita."
@@ -69,6 +92,12 @@ def apply_state_transition(state: ElviraState) -> ElviraState:
 
     # FECHA CITA — paciente dio fecha o franja
     if intent == "fecha_cita":
+        if _has_missing_or_unavailable_appointment_context(state):
+            state.nuevo_estado = "ST_CITA_FECHA"
+            state.next_action = "ask_preferred_date"
+            state.state_reason = "unavailable_date_guard"
+            return state
+
         state.nuevo_estado = "ST_CITA_FRANJA"
         state.next_action = "ask_preferred_time"
         state.state_reason = "Paciente indicó fecha o franja horaria."

@@ -216,7 +216,7 @@ def test_p6f8_sunday_request_is_blocked_in_full_flow(monkeypatch):
     assert result.respuesta == (
         "Se refiere a mañana, domingo 17 de mayo. "
         "Ese día no se atienden consultas. "
-        "¿Le gustaría indicarme otro día entre semana?"
+        "¿Para qué día entre semana le gustaría agendar su cita?"
     )
 
 
@@ -253,7 +253,7 @@ def test_p6f8_colombian_holiday_request_is_blocked_in_full_flow(monkeypatch):
     assert result.respuesta == (
         "Se refiere a mañana, lunes 18 de mayo. "
         "Ese día no se atienden consultas porque corresponde al festivo de Ascensión de Jesús. "
-        "¿Le gustaría indicarme otro día entre semana?"
+        "¿Para qué día entre semana le gustaría agendar su cita?"
     )
 
 
@@ -288,7 +288,7 @@ def test_p6f8_sunday_word_inside_appointment_date_state_is_treated_as_date(monke
     assert result.respuesta == (
         "Se refiere a domingo 17 de mayo. "
         "Ese día no se atienden consultas. "
-        "¿Le gustaría indicarme otro día entre semana?"
+        "¿Para qué día entre semana le gustaría agendar su cita?"
     )
 
 
@@ -583,3 +583,43 @@ def test_p6f929_first_slot_preference_before_date_asks_for_date_without_greeting
     assert "día o fecha" in result.respuesta
     assert "3:00 p. m. a 5:00 p. m." in result.respuesta
     assert not result.respuesta.lower().startswith("hola")
+
+
+def test_p6f942_embedded_date_in_initial_cita_skips_ask_preferred_date():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from app.graph.state import ElviraState
+    from app.graph.nodes import (
+        node_sanitize_input,
+        node_classify_intent,
+        node_resolve_date_context,
+        node_transition_state,
+    )
+
+    state = ElviraState(
+        telefono="test-p6f942-embedded-date",
+        mensaje_original="quiero reservar una cita para el miercoles",
+        sanitized_input="",
+        estado_actual="ST_INIT",
+    )
+
+    state = node_sanitize_input(state)
+    state = node_classify_intent(state)
+    state = node_resolve_date_context(
+        state,
+        now=datetime(2026, 6, 10, 7, 51, tzinfo=ZoneInfo("America/Bogota")),
+    )
+    state = node_transition_state(state)
+
+    assert state.intent == "cita"
+    assert state.fecha_solicitada == "2026-06-10"
+    assert state.fecha_solicitada_texto == "miércoles 10 de junio"
+    assert state.es_dia_disponible is True
+    assert state.slots_candidatos == ["3:00 p. m.–5:00 p. m."]
+
+    assert state.nuevo_estado == "ST_CITA_FRANJA"
+    assert state.next_action == "ask_preferred_time"
+    assert state.state_reason == "appointment_intent_with_embedded_date"
+
+
