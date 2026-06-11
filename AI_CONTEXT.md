@@ -7201,3 +7201,204 @@ campaigns
 Colombian production number
 
 WHATSAPP_SENDING_ENABLED remains false.
+
+---
+
+## P6-F.9.42 — Pre-LLM Appointment Context Enrichment
+
+Status:
+
+PARTIALLY CLOSED / PHASE A-B-C GREEN / PHASE D PENDING
+
+Reason for block:
+
+A post-beta appointment flow bug showed that the graph was deciding state transitions before deterministic date context was available.
+
+Observed production-like bug:
+
+Patient message:
+
+`quiero reservar una cita para el miercoles`
+
+The date resolver correctly produced:
+
+- fecha_solicitada = 2026-06-10
+- fecha_solicitada_texto = miércoles 10 de junio
+- slots_candidatos = ["3:00 p. m.–5:00 p. m."]
+
+But the state machine still returned:
+
+- next_action = ask_preferred_date
+
+Root cause:
+
+The graph pipeline order was wrong.
+
+Previous order:
+
+classify_intent
+→ transition_state
+→ resolve_date_context
+→ load_kb_context
+
+This allowed the state machine to decide with incomplete context.
+
+Corrected order:
+
+classify_intent
+→ resolve_date_context
+→ transition_state
+→ load_kb_context
+
+Completed phases:
+
+### Phase A — Pipeline Audit
+
+Status: CLOSED
+
+Findings:
+
+- The graph was transitioning before resolving date context.
+- This caused contradictions such as `next_action=ask_preferred_date` while `fecha_solicitada` was already available.
+- Post-hoc guards in `main.py` still exist and should not be expanded blindly.
+- Exact-hour/franja logic still has post-hoc behavior in:
+  - app/main.py
+  - app/services/appointment_request_runtime.py
+  - app/services/appointment_context.py
+  - app/graph/transitions.py
+
+### Phase B — Contract Tests
+
+Status: PARTIALLY CLOSED
+
+Added/validated contract:
+
+Initial appointment intent with embedded valid date must skip ask_preferred_date.
+
+Expected behavior:
+
+- intent = cita
+- fecha_solicitada present
+- es_dia_disponible = true
+- slots_candidatos not empty
+- nuevo_estado = ST_CITA_FRANJA
+- next_action = ask_preferred_time
+- state_reason = appointment_intent_with_embedded_date
+
+Test:
+
+tests/test_state_machine.py::test_p6f942_embedded_date_in_initial_cita_skips_ask_preferred_date
+
+### Phase C — Pipeline Refactor
+
+Status: CLOSED / GREEN
+
+Changed graph order in:
+
+app/graph/graph.py
+
+New graph order:
+
+sanitize_input
+→ classify_intent
+→ resolve_date_context
+→ transition_state
+→ load_kb_context
+→ generate_response
+
+Additional state-machine fix:
+
+app/graph/transitions.py now keeps unavailable dates protected.
+
+Rules preserved:
+
+- valid embedded appointment date advances to ST_CITA_FRANJA
+- unavailable date, weekend, holiday, or missing slots stays in ST_CITA_FECHA
+- no appointment request is persisted from unavailable dates
+
+Copy alignment:
+
+app/services/llm.py now asks explicitly:
+
+`¿Para qué día entre semana le gustaría agendar su cita?`
+
+This keeps ask_preferred_date responses aligned with tests and user intent.
+
+Validation:
+
+- .venv/bin/pytest tests/test_state_machine.py tests/test_llm_date_context.py -q → 32 passed
+- .venv/bin/pytest tests/test_date_resolver.py tests/test_intent.py tests/test_state_machine.py tests/test_llm_date_context.py -q → 62 passed
+- pytest -q → 238 passed
+
+Changed files in this block:
+
+- app/graph/graph.py
+- app/graph/nodes.py
+- app/graph/transitions.py
+- app/services/llm.py
+- tests/test_llm_date_context.py
+- tests/test_state_machine.py
+
+Commit to create if not already committed:
+
+git add app/graph/graph.py app/graph/nodes.py app/graph/transitions.py app/services/llm.py tests/test_llm_date_context.py tests/test_state_machine.py
+git commit -m "Fix embedded appointment date transition"
+
+### Phase D — Remove or De-emphasize Post-Hoc Guards
+
+Status: PENDING
+
+Do not start Phase D globally yet.
+
+Reason:
+
+There are still appointment persistence and exact-hour behaviors depending on current guards. Removing them prematurely can reopen bugs.
+
+Next debugging target:
+
+P6-F.9.43 — Exact hour inside available slot maps to franja and persists
+
+Follow the same A/B/C/D discipline:
+
+1. Phase A — Audit exact-hour path
+2. Phase B — Write contract test RED
+3. Phase C — Minimal refactor/fix
+4. Phase D — Remove or de-emphasize only the specific post-hoc guard made obsolete by the fix
+
+Next bug to solve:
+
+When patient is in ST_CITA_FRANJA with valid appointment_context and slots_candidatos, and says:
+
+`A las 3`
+
+If 3:00 p. m. falls inside:
+
+`3:00 p. m.–5:00 p. m.`
+
+Expected result:
+
+- intent = hora_cita
+- nuevo_estado = ST_CITA_PENDIENTE
+- next_action = confirm_appointment_request
+- franja_solicitada = "3:00 p. m.–5:00 p. m."
+- appointment_request_decision.should_persist = true
+- appointment_request != null
+
+Important boundary:
+
+Do not implement P6-F.9.43 before P6-F.9.42 is committed cleanly.
+
+Do not touch:
+
+- real WhatsApp sending
+- Google Sheets
+- Telegram
+- n8n
+- Calendar
+- doctor confirmation automation
+- therapy/session package tracking
+
+Runtime safety remains:
+
+WHATSAPP_SENDING_ENABLED=false
+
