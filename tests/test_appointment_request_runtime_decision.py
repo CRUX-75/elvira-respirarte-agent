@@ -739,3 +739,30 @@ def test_persists_explicit_franja_selection_from_state_context():
     assert decision.franja_solicitada == "3:00 p. m.–5:00 p. m."
     assert decision.hora_solicitada_texto == "la primera franja"
     assert decision.source_interaction_id == "wamid.test-confirmed-exact-hour-franja"
+
+
+def test_p6f944_runtime_allows_exact_hour_inside_available_slot_from_state_machine():
+    decision = decide_appointment_request_persistence(
+        state=make_state(
+            intent="hora_cita",
+            nuevo_estado="ST_CITA_PENDIENTE",
+            next_action="confirm_appointment_request",
+            fecha_solicitada="2026-06-17",
+            slots_candidatos=["3:00 p. m.–5:00 p. m."],
+            mensaje_original="a las 3",
+            state_reason="exact_hour_inside_available_slot",
+            franja_solicitada="3:00 p. m.–5:00 p. m.",
+            is_weekend=False,
+            is_colombia_holiday=False,
+            es_dia_disponible=True,
+        ),
+        telefono="573001112233",
+        nombre="Paciente Test",
+        source_interaction_id="wamid.test-p6f944",
+    )
+
+    assert decision.should_persist is True
+    assert decision.reason == "allowed_hora_cita_ready_for_human_review"
+    assert decision.fecha_solicitada == "2026-06-17"
+    assert decision.franja_solicitada == "3:00 p. m.–5:00 p. m."
+    assert decision.hora_solicitada_texto == "a las 3"
