@@ -7130,3 +7130,74 @@ Next recommended block:
 
 P6-F.9.37 — BUG-1 Pure greeting from ST_INIT must not list full portfolio
 
+
+## Checkpoint — P6-F.9.42 Pre-LLM Appointment Context Enrichment
+
+Status: PLANNED / SDD FIRST / NO RUNTIME CHANGES YET
+
+After P6-F.9.41, Swagger validation exposed a broader architectural issue in the appointment flow.
+
+Key observation:
+- The deterministic resolver can already populate `fecha_solicitada`, `fecha_solicitada_texto`, and `slots_candidatos`.
+- However, the state machine / response layer can still keep `next_action=ask_preferred_date`.
+- This creates invalid states where Elvira asks for information that is already available.
+
+Representative invalid payload:
+
+```text
+intent = cita
+next_action = ask_preferred_date
+fecha_solicitada = 2026-06-10
+fecha_solicitada_texto = miércoles 10 de junio
+slots_candidatos = ["3:00 p. m.–5:00 p. m."]
+
+Architectural diagnosis:
+
+This is not primarily a memory problem.
+The issue is pipeline ordering.
+Appointment context must be loaded and enriched before the final state transition / next_action decision and before the LLM response.
+
+Target pipeline:
+
+/webhook receives message
+→ load patient state
+→ load active appointment context
+→ merge appointment context into ElviraState
+→ sanitize input
+→ resolve deterministic context
+→ classify intent using enriched state
+→ state machine decides next_state + next_action
+→ appointment_request_decision
+→ LLM receives complete final state
+→ response generated
+→ new context captured
+→ persist state/context/appointment request
+→ response returned
+
+Critical invariants:
+
+If fecha_solicitada != null and es_dia_disponible == true, final next_action must not be ask_preferred_date.
+If an initial intent=cita message contains a valid requested date, Elvira must not ask for the date again.
+If ST_CITA_FRANJA has a valid date and slots, an exact hour inside a candidate slot must map to that slot and persist an AppointmentRequest.
+Natural confirmations like sí, ok, me sirve, or regístrela in ST_CITA_FRANJA must use pending appointment context instead of being treated as generic conversation.
+The LLM must not repair state. It should only verbalize a final consistent state.
+
+Next block:
+P6-F.9.42 — Pre-LLM Appointment Context Enrichment Architecture.
+
+Start with Phase A pipeline audit:
+
+grep -R "appointment_context\|load.*context\|restore.*context\|node_resolve_date_context\|node_transition_state\|process_message\|appointment_request_decision\|ask_preferred_date\|ask_preferred_time\|generate.*response\|llm" -n app tests
+
+Do not touch:
+
+real WhatsApp sending
+production DB data
+Google Sheets
+Telegram
+n8n
+Calendar
+campaigns
+Colombian production number
+
+WHATSAPP_SENDING_ENABLED remains false.
