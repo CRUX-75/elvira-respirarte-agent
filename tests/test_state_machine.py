@@ -616,7 +616,7 @@ def test_p6f942_embedded_date_in_initial_cita_skips_ask_preferred_date():
     assert state.fecha_solicitada == "2026-06-10"
     assert state.fecha_solicitada_texto == "miércoles 10 de junio"
     assert state.es_dia_disponible is True
-    assert state.slots_candidatos == ["3:00 p. m.–5:00 p. m."]
+    assert state.slots_candidatos == ["3:00 p. m.–6:00 p. m."]
 
     assert state.nuevo_estado == "ST_CITA_FRANJA"
     assert state.next_action == "ask_preferred_time"

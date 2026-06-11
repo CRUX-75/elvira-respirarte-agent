@@ -26,7 +26,7 @@ def test_calendar_service_builds_one_slot_for_wednesday():
     slots = service.build_default_slots(date(2026, 5, 13))  # Wednesday
 
     assert len(slots) == 1
-    assert slots[0].label == "3:00 p. m.–5:00 p. m."
+    assert slots[0].label == "3:00 p. m.–6:00 p. m."
     assert slots[0].available is False
 
 

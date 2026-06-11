@@ -83,7 +83,7 @@ class CalendarService:
         Current policy:
         - Two-hour visible patient slots.
         - L/M/J/V: 3:00 p. m.–5:00 p. m. and 5:00 p. m.–7:00 p. m.
-        - Wednesday: 3:00 p. m.–5:00 p. m. only.
+        - Wednesday: 3:00 p. m.–6:00 p. m. only.
         - Weekends are not handled here yet.
 
         This method only builds candidates. It does not confirm availability.
@@ -93,7 +93,7 @@ class CalendarService:
 
         # Monday=0, Tuesday=1, Wednesday=2, Thursday=3, Friday=4
         if weekday == 2:
-            ranges = [(time(15, 0), time(17, 0))]
+            ranges = [(time(15, 0), time(18, 0))]
         elif weekday in {0, 1, 3, 4}:
             ranges = [(time(15, 0), time(17, 0)), (time(17, 0), time(19, 0))]
         else:
