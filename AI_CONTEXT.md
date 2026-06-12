@@ -942,3 +942,65 @@ Next phase:
 
 P6-F.9.39 — KB-Driven Slot Generation
 
+
+---
+
+## P6-F.9.39 Closure Note — KB-Driven Slot Generation
+
+Status:
+
+GREEN
+
+Objective:
+
+Move appointment slot generation from hardcoded runtime assumptions toward KB-driven operational data.
+
+Implemented:
+
+* `CalendarService.build_slots_from_schedule_rows(...)` now builds appointment slot candidates from KB schedule rows.
+* `date_resolver.resolve_requested_date(...)` now accepts optional `schedule_rows`.
+* When `schedule_rows` is provided, `date_resolver` uses `CalendarService.build_slots_from_schedule_rows(...)`.
+* When `schedule_rows` is not provided, `date_resolver` falls back to `CalendarService.build_default_slots(...)`.
+* `node_resolve_date_context(...)` now loads KB schedule rows and passes them into `resolve_requested_date(...)`.
+* KB schedule loading is protected by `settings.kb_runtime_enabled`.
+* If `KB_RUNTIME_ENABLED=false`, the node does not attempt DB access.
+* If KB schedule loading fails, the node logs a warning and falls back safely.
+
+Architecture decision:
+
+The deterministic scheduling flow is now:
+
+FECHA → KB_Horarios → SLOTS → CONTEXT
+
+The LLM does not decide availability or appointment slots.
+
+Validation added:
+
+* CalendarService unit test proving KB row values override hardcoded defaults.
+* Date resolver test proving `schedule_rows` are used instead of default slots.
+* Node integration test proving `node_resolve_date_context` passes KB schedule rows into `resolve_requested_date`.
+
+Validated locally:
+
+* `tests/test_calendar_service.py`
+* `tests/test_date_resolver.py`
+* `tests/test_kb_runtime_integration.py`
+* full suite: 251 passed in 7.99s
+
+Safety:
+
+* Real `/webhook` not touched.
+* Real WhatsApp sending not enabled.
+* `WHATSAPP_SENDING_ENABLED=false`.
+* Google Sheets, Telegram, n8n, Calendar, campaigns and doctor confirmation automation remain out of scope.
+* Swagger validation still pending for this phase.
+
+Next phase:
+
+P6-F.9.40 — Slot Selection Rules
+
+Known follow-up:
+
+* Single-slot soft confirmation must be handled contractually in P6-F.9.40.
+* Example from Swagger after Wednesday single-slot context: `si, esa franja` should select the only available slot, but this must be implemented as a slot-selection rule, not as a symptom patch.
+

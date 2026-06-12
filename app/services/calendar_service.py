@@ -1,6 +1,6 @@
 from dataclasses import dataclass
-from datetime import date, datetime, time
-from typing import Protocol
+from datetime import date, datetime, time, timedelta
+from typing import Any, Protocol
 
 
 class CalendarServiceNotConfigured(RuntimeError):
@@ -60,6 +60,61 @@ def _format_patient_time(value: time) -> str:
     return f"{hour_12}:{value.minute:02d} {period}"
 
 
+def _is_available_schedule_row(row: dict[str, Any]) -> bool:
+    value = str(row.get("is_available") or "").strip().lower()
+    return value in {"true", "yes", "available", "disponible"}
+
+
+def _parse_time_value(value: Any) -> time | None:
+    if not value:
+        return None
+
+    text = str(value).strip()
+
+    if text in {"—", "-", ""}:
+        return None
+
+    try:
+        hour_text, minute_text = text.split(":", 1)
+        return time(int(hour_text), int(minute_text))
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_positive_int(value: Any) -> int | None:
+    if value is None:
+        return None
+
+    try:
+        parsed = int(str(value).strip())
+    except ValueError:
+        return None
+
+    if parsed <= 0:
+        return None
+
+    return parsed
+
+
+def _schedule_row_matches_date(row: dict[str, Any], requested_date: date) -> bool:
+    day_type = str(row.get("day_type") or "").strip().lower()
+    weekday = requested_date.weekday()
+
+    if day_type == "weekday":
+        return weekday in {0, 1, 3, 4}
+
+    if day_type == "wednesday":
+        return weekday == 2
+
+    if day_type == "saturday":
+        return weekday == 5
+
+    if day_type == "sunday":
+        return weekday == 6
+
+    return False
+
+
 class CalendarService:
     """
     Internal deterministic calendar service.
@@ -75,6 +130,57 @@ class CalendarService:
 
     def is_configured(self) -> bool:
         return self.provider is not None
+
+    def build_slots_from_schedule_rows(
+        self,
+        requested_date: date,
+        schedule_rows: list[dict[str, Any]],
+    ) -> list[CalendarSlot]:
+        """Build appointment slot candidates from KB schedule rows."""
+
+        matching_rows = [
+            row
+            for row in schedule_rows
+            if _schedule_row_matches_date(row, requested_date)
+        ]
+
+        slots: list[CalendarSlot] = []
+
+        for row in matching_rows:
+            if not _is_available_schedule_row(row):
+                continue
+
+            start = _parse_time_value(row.get("start_time"))
+            end = _parse_time_value(row.get("end_time"))
+            duration_minutes = _parse_positive_int(row.get("slot_duration_minutes"))
+
+            if not start or not end or not duration_minutes:
+                continue
+
+            current_start = datetime.combine(requested_date, start)
+            end_at = datetime.combine(requested_date, end)
+
+            while current_start < end_at:
+                current_end = current_start + timedelta(minutes=duration_minutes)
+
+                if current_end > end_at:
+                    break
+
+                start_label = _format_patient_time(current_start.time())
+                end_label = _format_patient_time(current_end.time())
+
+                slots.append(
+                    CalendarSlot(
+                        start_at=current_start,
+                        end_at=current_end,
+                        label=f"{start_label}–{end_label}",
+                        available=False,
+                    )
+                )
+
+                current_start = current_end
+
+        return slots
 
     def build_default_slots(self, requested_date: date) -> list[CalendarSlot]:
         """
@@ -118,6 +224,12 @@ class CalendarService:
         """
 
         slots = self.build_default_slots(requested_date)
+
+        return CalendarAvailabilityResult(
+            requested_date=requested_date,
+            slots=slots,
+        )
+
 
         return CalendarAvailabilityResult(
             requested_date=requested_date,

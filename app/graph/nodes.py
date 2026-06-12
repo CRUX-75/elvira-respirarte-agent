@@ -10,6 +10,31 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
+def _load_schedule_rows_for_date_resolution() -> list[dict] | None:
+    """Load KB schedule rows for deterministic appointment slot generation."""
+
+    if not settings.kb_runtime_enabled:
+        return None
+
+    try:
+        schedule_reader = globals().get("get_all_schedules")
+        db_engine = globals().get("engine")
+
+        if schedule_reader is None or db_engine is None:
+            from app.db.session import engine as runtime_engine
+            from app.repositories.kb_schedules import (
+                get_all_schedules as runtime_get_all_schedules,
+            )
+
+            schedule_reader = runtime_get_all_schedules
+            db_engine = runtime_engine
+
+        return schedule_reader(db_engine)
+    except Exception as exc:
+        logger.warning("KB schedule rows unavailable for date resolution: %s", exc)
+        return None
+
+
 def node_sanitize_input(state: ElviraState) -> ElviraState:
     state.sanitized_input = normalize_text(state.mensaje_original)
     return state
@@ -45,7 +70,12 @@ def node_resolve_date_context(state: ElviraState, now=None) -> ElviraState:
     try:
         from app.services.date_resolver import resolve_requested_date
 
-        result = resolve_requested_date(state.mensaje_original, now=now)
+        schedule_rows = _load_schedule_rows_for_date_resolution()
+        result = resolve_requested_date(
+            state.mensaje_original,
+            now=now,
+            schedule_rows=schedule_rows,
+        )
 
         state.fecha_actual_colombia = result.fecha_actual_colombia.isoformat()
         state.fecha_solicitada = (
