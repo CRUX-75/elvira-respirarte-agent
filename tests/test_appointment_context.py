@@ -344,3 +344,35 @@ def test_apply_pending_exact_hour_confirmation_ignores_vague_registered_franja_w
     assert state.fecha_solicitada is None
     assert state.franja_solicitada is None
 
+
+
+def test_apply_appointment_context_restores_missing_slots_when_fecha_already_present():
+    state = SimpleNamespace(
+        intent="hora_cita",
+        nuevo_estado="ST_CITA_PENDIENTE",
+        fecha_solicitada="2026-05-29",
+        fecha_solicitada_texto="viernes 29 de mayo",
+        slots_candidatos=[],
+        es_dia_disponible=True,
+        is_weekend=False,
+        is_colombia_holiday=False,
+        colombia_holiday_name=None,
+    )
+
+    context = {
+        "fecha_solicitada": "2026-05-29",
+        "fecha_solicitada_texto": "viernes 29 de mayo",
+        "slots_candidatos": ["3:00 p. m.–5:00 p. m.", "5:00 p. m.–7:00 p. m."],
+        "es_dia_disponible": True,
+        "is_weekend": False,
+        "is_colombia_holiday": False,
+        "colombia_holiday_name": None,
+    }
+
+    result = apply_appointment_context_to_state(state, context)
+
+    assert result.fecha_solicitada == "2026-05-29"
+    assert result.slots_candidatos == [
+        "3:00 p. m.–5:00 p. m.",
+        "5:00 p. m.–7:00 p. m.",
+    ]

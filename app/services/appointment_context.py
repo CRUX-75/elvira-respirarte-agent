@@ -36,7 +36,7 @@ def capture_appointment_context_from_state(state: Any) -> dict[str, Any] | None:
 
 
 def apply_appointment_context_to_state(state: Any, context: dict[str, Any] | None) -> Any:
-    """Restore stored appointment context when the current turn lacks date context."""
+    """Restore missing appointment context fields for appointment time turns."""
 
     if not context:
         return state
@@ -50,13 +50,21 @@ def apply_appointment_context_to_state(state: Any, context: dict[str, Any] | Non
     }:
         return state
 
-    if getattr(state, "fecha_solicitada", None):
+    state_fecha = getattr(state, "fecha_solicitada", None)
+    context_fecha = context.get("fecha_solicitada")
+
+    if not state_fecha and not context_fecha:
         return state
 
-    if not context.get("fecha_solicitada"):
+    if state_fecha and context_fecha and state_fecha != context_fecha:
         return state
 
     for field in APPOINTMENT_CONTEXT_FIELDS:
+        current_value = getattr(state, field, None)
+
+        if current_value not in (None, [], ""):
+            continue
+
         if field in context:
             setattr(state, field, context.get(field))
 

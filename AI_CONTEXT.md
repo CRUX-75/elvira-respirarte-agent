@@ -7512,3 +7512,324 @@ Still not touched:
 - doctor confirmation automation
 - therapy/session tracking
 
+
+---
+
+## 2026-06-12 — P6-F.9.35 / P6-F.9.36 Post-Beta Appointment Flow Checkpoint
+
+### Current repository state
+
+- Branch: `main`
+- Latest known test status: `246 passed`
+- `WHATSAPP_SENDING_ENABLED=false`
+- Real WhatsApp sending must remain disabled.
+- Do not touch real patients.
+- Do not enable production sending until explicit checklist/review.
+
+### Development workflow preference
+
+For the next session:
+
+- Work step by step.
+- Use SDD/spec-first for each block.
+- Use `sed`, `grep`, `cat`, `pytest`, Swagger/logs.
+- Do not ask for `git diff`; if inspection is needed, use `sed` or `grep`.
+- Do not use Python heredocs for documentation patches.
+- Prefer small copy-paste friendly Bash blocks.
+- Keep scope narrow and commit only after tests/validation.
+
+---
+
+## P6-F.9.35 — Post-beta 24h analysis summary
+
+A controlled beta was analyzed using LangSmith traces and Swagger/runtime outputs with 3 real numbers:
+
+- Nabit
+- Dra. D'Aleman
+- third test number
+
+The appointment flow worked in several core cases, but multiple post-beta issues were identified and classified.
+
+### BUG-4 — Closed
+
+Problem:
+
+Messages that were actually complaints/questions but contained numbers were being interpreted as slot selections.
+
+Example:
+
+```txt
+pero usted dijo que solo habia atencion los miercoles de 3 a 6
+
+Risk:
+
+The system could create an AppointmentRequest from a complaint/question because resolve_requested_slot_from_message matched numbers as if they were time-slot selections.
+
+Fix implemented:
+
+Added _NON_SELECTION_SIGNALS inside resolve_requested_slot_from_message.
+Location: app/services/appointment_request_runtime.py
+Result: complaints/questions containing numbers no longer match as slot selections and no longer create AppointmentRequest.
+
+Status: CLOSED.
+
+BUG-3 — Closed
+
+Problem:
+
+The exact-hour/franja clarification response was hardcoded with generic weekday slots:
+
+3:00 p. m. a 5:00 p. m.
+5:00 p. m. a 7:00 p. m.
+
+This was wrong when runtime slots_candidatos contained a different real candidate slot.
+
+Fix implemented:
+
+_build_exact_hour_franja_confirmation_response is now dynamic.
+It uses real franja or slots_candidatos.
+It no longer blindly prints generic L/M/J/V slots.
+
+Status: CLOSED.
+
+Product decision — Wednesday special logic removed
+
+Decision:
+
+The previous special Wednesday logic was removed.
+
+Current product rule:
+
+All weekdays now share the same two visible appointment slots:
+- 3:00 p. m.–5:00 p. m.
+- 5:00 p. m.–7:00 p. m.
+
+This means:
+
+No special Wednesday single-slot rule anymore.
+Wednesday is aligned with the rest of weekdays.
+This simplifies deterministic scheduling and avoids inconsistent copy.
+
+Files already modified in the previous session:
+
+app/services/calendar_service.py
+data/kb/datakbKB_Horarios.csv
+Pending production KB sync
+
+PostgreSQL runtime KB is still outdated and may still show old Wednesday text such as:
+
+Miércoles: 15:00–18:00
+Solo Slot 1: 15:00–17:00
+
+This must be updated manually in pgweb → Query tab.
+
+Run:
+
+UPDATE kb_schedules
+SET
+    day_name = 'Lunes a viernes incluyendo miércoles',
+    end_time = '19:00',
+    max_patients = 2,
+    notes = 'Máximo 2 pacientes por día. Franja visible al paciente: 2 horas. Slot 1: 15:00–17:00. Slot 2: 17:00–19:00. Buffer de 60 min entre citas por desplazamiento en Bogotá.'
+WHERE schedule_id = 'HOR-02';
+
+UPDATE kb_rules
+SET
+    rule_description = 'Cada cita ocupa una franja de 2 horas. Máximo 2 citas por día todos los días hábiles. Slots visibles L/M/X/J/V: 15:00–17:00 y 17:00–19:00. Elvira puede presentar estas franjas como opciones de preferencia, pero no confirma la cita.'
+WHERE rule_id = 'RULE-008';
+
+After running the SQL:
+
+Validate in Swagger that kb_context no longer shows the old Wednesday-specific rule.
+
+Expected KB behavior:
+
+Lunes a viernes incluyendo miércoles
+15:00–19:00
+Slot 1: 15:00–17:00
+Slot 2: 17:00–19:00
+Critical pending bug — "la de las 5"
+Problem
+
+Message:
+
+la de las 5
+
+Current bad runtime behavior:
+
+state_reason = registered_request_exact_hour_followup
+appointment_request_decision.should_persist = false
+reason = skipped_unsupported_slot_selection
+appointment_request = null
+
+But response says something like:
+
+Su solicitud ya quedó registrada...
+
+This is wrong and critical.
+
+Core rule violated:
+
+Elvira must never say "queda registrada" unless an AppointmentRequest was actually created.
+Root cause
+
+In app/services/appointment_request_runtime.py, inside resolve_requested_slot_from_message, second_patterns does not capture:
+
+la de las 5
+
+Existing pattern like:
+
+r"\b(a las )?5\b"
+
+is not enough for the phrase:
+
+la de las 5
+Required fix
+
+Open:
+
+app/services/appointment_request_runtime.py
+
+Find:
+
+first_patterns
+second_patterns
+
+Add patterns such as:
+
+r"\bde las \d\b"
+r"\bla de las \d\b"
+
+and equivalent word-based patterns if needed.
+
+For the current product rule:
+
+3:00 p. m.–5:00 p. m. = first slot
+5:00 p. m.–7:00 p. m. = second slot
+
+Expected result:
+
+mensaje = "la de las 5"
+slots_candidatos = ["3:00 p. m.–5:00 p. m.", "5:00 p. m.–7:00 p. m."]
+matched_slot = "5:00 p. m.–7:00 p. m."
+appointment_request_decision.should_persist = true
+appointment_request != null
+
+Recommended next block:
+
+P6-F.9.36 — Fix "la de las 5" + KB validation + commit
+
+Suggested order:
+
+Inspect with:
+grep -n "first_patterns\|second_patterns\|registered_request_exact_hour_followup\|skipped_unsupported_slot_selection" app/services/appointment_request_runtime.py
+sed -n '1,260p' app/services/appointment_request_runtime.py
+Add RED test for "la de las 5".
+
+Likely test files:
+
+tests/test_appointment_request_runtime_decision.py
+tests/test_stateful_appointment_context_carryover.py
+Patch resolve_requested_slot_from_message.
+Run:
+pytest -q tests/test_appointment_request_runtime_decision.py
+pytest -q tests/test_stateful_appointment_context_carryover.py
+pytest -q
+Validate Swagger stateful flow.
+Run pgweb KB SQL update.
+Validate Swagger kb_context.
+Commit pending changes.
+Pending uncommitted files from previous session
+
+At session close, these files were modified but not committed:
+
+M app/main.py
+M app/services/appointment_request_runtime.py
+M tests/test_appointment_request_runtime_decision.py
+M tests/test_stateful_appointment_context_carryover.py
+
+Before committing, ensure:
+
+pytest -q
+
+is still green.
+
+Suggested commit message after fixing "la de las 5" and validating KB:
+
+Fix exact-hour slot followup and sync appointment KB rules
+Backlog post-beta
+BUG-1 — Still open
+
+Problem:
+
+A greeting from ST_INIT can launch the full portfolio unexpectedly.
+
+Example:
+
+Hola buen día
+
+Bad behavior:
+
+Elvira may list services without being asked.
+
+Severity:
+
+Medium
+
+Do not prioritize before fixing "la de las 5".
+
+FEAT-1 — Optional / low priority
+
+Feature:
+
+Capture the type of therapy/service mentioned by the patient during appointment flow.
+
+Example:
+
+quiero una cita para terapia respiratoria
+
+Possible future behavior:
+
+servicio_solicitado = "Terapia Respiratoria"
+
+Severity:
+
+Low
+
+Not required for the immediate stabilization block.
+
+Current architectural rule
+
+Keep this architecture intact:
+
+KB = source of truth
+Python = deterministic validation
+State machine = safe transitions
+LLM = wording / limited interpretation only
+DB = auditable persistence
+
+The LLM must not decide:
+
+availability
+schedules
+slot validity
+persistence
+final appointment confirmation
+
+Elvira only registers appointment requests for human review. Dra. D'Aleman confirms final appointments.
+
+Out of scope for the next block
+
+Do not touch:
+
+Google Sheets
+Telegram
+n8n
+Calendar
+campaigns
+real WhatsApp sending
+WHATSAPP_SENDING_ENABLED=true
+doctor confirmation automation
+therapy/session packages
+real patients
+
