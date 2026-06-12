@@ -1004,3 +1004,79 @@ Known follow-up:
 * Single-slot soft confirmation must be handled contractually in P6-F.9.40.
 * Example from Swagger after Wednesday single-slot context: `si, esa franja` should select the only available slot, but this must be implemented as a slot-selection rule, not as a symptom patch.
 
+
+---
+
+## P6-F.9.39 Swagger Validation — KB-Driven Slot Generation
+
+Status:
+
+VALIDATED IN SWAGGER
+
+Validated endpoint:
+
+* `/test/message-stateful`
+
+Safety:
+
+* Real `/webhook` not used.
+* Real WhatsApp sending remained disabled.
+* `delivery_status=sending_skipped`.
+* No real patients contacted.
+
+Validated case — Wednesday:
+
+Flow:
+
+* `para una cita por favor`
+* `para el dia miercoles me queda bien`
+
+Result:
+
+* `intent=fecha_cita`
+* `nuevo_estado=ST_CITA_FRANJA`
+* `fecha_solicitada=2026-06-17`
+* `fecha_solicitada_texto=miércoles 17 de junio`
+* `es_dia_disponible=true`
+* `slots_candidatos=["3:00 p. m.–6:00 p. m."]`
+* `appointment_request=null`
+* `delivery_status=sending_skipped`
+
+Validated case — Sunday:
+
+Flow:
+
+* `necesito una cita`
+* `para el fin de semana, domingo`
+
+Result:
+
+* `intent=fecha_cita`
+* `fecha_solicitada=2026-06-14`
+* `fecha_solicitada_texto=domingo 14 de junio`
+* `es_dia_disponible=false`
+* `is_weekend=true`
+* `slots_candidatos=[]`
+* `appointment_request=null`
+* `delivery_status=sending_skipped`
+
+Conclusion:
+
+P6-F.9.39 is validated. Slot generation now correctly uses KB schedule context in production Swagger validation.
+
+Out-of-scope issue found:
+
+Exact-hour clarification still uses generic weekday copy in a Wednesday single-slot context.
+
+Example:
+
+* User: `si por favor, es posible que lleguen a las 4?`
+* Runtime context correctly preserved `slots_candidatos=["3:00 p. m.–6:00 p. m."]`
+* Response incorrectly mentioned generic slots `3:00 p. m.–5:00 p. m.` and `5:00 p. m.–7:00 p. m.`
+
+This belongs to:
+
+P6-F.9.41 — Exact-Hour Franja Clarification
+
+Do not patch it inside P6-F.9.39.
+
