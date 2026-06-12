@@ -88,7 +88,7 @@ def test_apply_appointment_context_to_state_restores_missing_fecha_context():
     assert result.colombia_holiday_name is None
 
 
-def test_apply_appointment_context_does_not_override_existing_fecha():
+def test_apply_appointment_context_overrides_contradictory_hora_cita_state():
     state = SimpleNamespace(
         intent="hora_cita",
         nuevo_estado="ST_CITA_PENDIENTE",
@@ -97,14 +97,14 @@ def test_apply_appointment_context_does_not_override_existing_fecha():
         slots_candidatos=["existing"],
         es_dia_disponible=False,
         is_weekend=True,
-        is_colombia_holiday=False,
-        colombia_holiday_name=None,
+        is_colombia_holiday=True,
+        colombia_holiday_name="Corpus Christi",
     )
 
     context = {
         "fecha_solicitada": "2026-05-29",
         "fecha_solicitada_texto": "viernes 29 de mayo",
-        "slots_candidatos": ["3:00 p. m.–5:00 p. m."],
+        "slots_candidatos": ["3:00 p. m.–5:00 p. m.", "5:00 p. m.–7:00 p. m."],
         "es_dia_disponible": True,
         "is_weekend": False,
         "is_colombia_holiday": False,
@@ -113,9 +113,16 @@ def test_apply_appointment_context_does_not_override_existing_fecha():
 
     result = apply_appointment_context_to_state(state, context)
 
-    assert result.fecha_solicitada == "2026-05-30"
-    assert result.fecha_solicitada_texto == "sábado 30 de mayo"
-    assert result.slots_candidatos == ["existing"]
+    assert result.fecha_solicitada == "2026-05-29"
+    assert result.fecha_solicitada_texto == "viernes 29 de mayo"
+    assert result.slots_candidatos == [
+        "3:00 p. m.–5:00 p. m.",
+        "5:00 p. m.–7:00 p. m.",
+    ]
+    assert result.es_dia_disponible is True
+    assert result.is_weekend is False
+    assert result.is_colombia_holiday is False
+    assert result.colombia_holiday_name is None
 
 
 def test_apply_appointment_context_ignores_invalid_context_without_fecha():
