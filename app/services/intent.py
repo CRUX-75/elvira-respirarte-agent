@@ -1,4 +1,5 @@
 import re
+from app.services.slot_confirmation_guard import is_simple_affirmative_slot_confirmation
 from app.graph.state import Intent
 
 
@@ -12,6 +13,7 @@ def normalize_text(text: str) -> str:
     text = text.replace("maniana", "manana")
     text = re.sub(r"\s+", " ", text)
     return text
+
 
 
 def classify_intent(message: str, current_state: str = "ST_INIT") -> Intent:
@@ -89,6 +91,9 @@ def classify_intent(message: str, current_state: str = "ST_INIT") -> Intent:
         # Therefore short phrases like "de 3 a 5", "la primera" or "me sirve"
         # must be interpreted as appointment time selection, not as general intent.
         if current_state == "ST_CITA_FRANJA":
+            if is_simple_affirmative_slot_confirmation(msg):
+                return "hora_cita"
+
             slot_selection_patterns = [
                 r"\bde\s+\d{1,2}\s+a\s+\d{1,2}\b",
                 r"\b\d{1,2}\s+a\s+\d{1,2}\b",

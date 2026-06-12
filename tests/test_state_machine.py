@@ -655,3 +655,96 @@ def test_p6f943_exact_hour_inside_available_slot_maps_to_slot_and_confirms():
     assert state.next_action == "confirm_appointment_request"
     assert state.franja_solicitada == "3:00 p. m.–5:00 p. m."
     assert state.state_reason == "exact_hour_inside_available_slot"
+
+
+def test_p6f946_affirmative_single_slot_confirmation_bypasses_general_intent():
+    from app.graph.state import ElviraState
+    from app.graph.nodes import (
+        node_sanitize_input,
+        node_classify_intent,
+        node_transition_state,
+    )
+
+    state = ElviraState(
+        telefono="test-p6f946-affirmative-single-slot",
+        mensaje_original="si por favor, estoy de suerte",
+        sanitized_input="",
+        estado_actual="ST_CITA_FRANJA",
+        fecha_solicitada="2026-06-17",
+        fecha_solicitada_texto="miércoles 17 de junio",
+        slots_candidatos=["3:00 p. m.–6:00 p. m."],
+        es_dia_disponible=True,
+        is_weekend=False,
+        is_colombia_holiday=False,
+    )
+
+    state = node_sanitize_input(state)
+    state = node_classify_intent(state)
+    state = node_transition_state(state)
+
+    assert state.intent == "hora_cita"
+    assert state.nuevo_estado == "ST_CITA_PENDIENTE"
+    assert state.next_action == "confirm_appointment_request"
+    assert state.franja_solicitada == "3:00 p. m.–6:00 p. m."
+    assert state.state_reason == "affirmative_slot_confirmation_guard"
+
+
+def test_p6f946_short_affirmative_single_slot_confirmation_confirms_slot():
+    from app.graph.state import ElviraState
+    from app.graph.nodes import (
+        node_sanitize_input,
+        node_classify_intent,
+        node_transition_state,
+    )
+
+    state = ElviraState(
+        telefono="test-p6f946-short-affirmative-single-slot",
+        mensaje_original="claro",
+        sanitized_input="",
+        estado_actual="ST_CITA_FRANJA",
+        fecha_solicitada="2026-06-17",
+        fecha_solicitada_texto="miércoles 17 de junio",
+        slots_candidatos=["3:00 p. m.–6:00 p. m."],
+        es_dia_disponible=True,
+        is_weekend=False,
+        is_colombia_holiday=False,
+    )
+
+    state = node_sanitize_input(state)
+    state = node_classify_intent(state)
+    state = node_transition_state(state)
+
+    assert state.intent == "hora_cita"
+    assert state.nuevo_estado == "ST_CITA_PENDIENTE"
+    assert state.next_action == "confirm_appointment_request"
+    assert state.franja_solicitada == "3:00 p. m.–6:00 p. m."
+    assert state.state_reason == "affirmative_slot_confirmation_guard"
+
+
+def test_p6f946_affirmative_confirmation_guard_requires_slot_context():
+    from app.graph.state import ElviraState
+    from app.graph.nodes import (
+        node_sanitize_input,
+        node_classify_intent,
+        node_transition_state,
+    )
+
+    state = ElviraState(
+        telefono="test-p6f946-affirmative-without-slot-context",
+        mensaje_original="si por favor",
+        sanitized_input="",
+        estado_actual="ST_CITA_FRANJA",
+        fecha_solicitada=None,
+        fecha_solicitada_texto=None,
+        slots_candidatos=[],
+        es_dia_disponible=False,
+        is_weekend=False,
+        is_colombia_holiday=False,
+    )
+
+    state = node_sanitize_input(state)
+    state = node_classify_intent(state)
+    state = node_transition_state(state)
+
+    assert state.state_reason != "affirmative_slot_confirmation_guard"
+    assert state.franja_solicitada is None
