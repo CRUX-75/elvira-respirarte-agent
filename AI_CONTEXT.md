@@ -864,3 +864,81 @@ Current true project status:
 * `/test/message-stateful` remains the safe validation surface.
 * Full test suite was last confirmed locally with 247 passed before the architecture reset.
 * Next block is P6-F.9.37 spec-first implementation.
+
+---
+
+## P6-F.9.38 Closure Note — Appointment Context Authoritative Restore
+
+Status:
+
+GREEN WITH KNOWN FOLLOW-UP
+
+Implemented:
+
+* `apply_appointment_context_to_state` now restores `appointment_context` as the authoritative operational package for `hora_cita` turns.
+* The function no longer rejects context when the transient state contains a different `fecha_solicitada`.
+* The function no longer restores only missing fields.
+* For `hora_cita`, all fields in `APPOINTMENT_CONTEXT_FIELDS` are applied from stored context when valid context exists.
+
+Validated locally:
+
+* `tests/test_appointment_context.py`
+* `tests/test_stateful_appointment_context_carryover.py`
+* `tests/test_appointment_request_runtime_decision.py`
+* `tests/test_stateful_appointment_request_wiring.py`
+* `tests/test_webhook_persistence.py`
+* full suite: 248 passed
+
+Validated in Swagger through `/test/message-stateful` only:
+
+Tuesday flow:
+
+* `Quiero pedir una cita`
+* `para el martes`
+* `la de las 5`
+
+Result:
+
+* `fecha_solicitada=2026-06-16`
+* `es_dia_disponible=true`
+* `slots_candidatos=["3:00 p. m.–5:00 p. m.", "5:00 p. m.–7:00 p. m."]`
+* `appointment_request_decision.should_persist=true`
+* `appointment_request != null`
+* `franja_solicitada="5:00 p. m.–7:00 p. m."`
+* `delivery_status=sending_skipped`
+
+Wednesday context validation:
+
+* `Quiero pedir una cita`
+* `para el miercoles`
+
+Result:
+
+* `fecha_solicitada=2026-06-17`
+* `es_dia_disponible=true`
+* `slots_candidatos=["3:00 p. m.–6:00 p. m."]`
+* `appointment_request=null`
+* `delivery_status=sending_skipped`
+
+Known follow-up for P6-F.9.40:
+
+* Single-slot soft confirmation is not yet accepted in Swagger.
+* Example: `si, esa franja` after Wednesday single-slot context returned `skipped_unsupported_slot_selection`.
+* This belongs to `P6-F.9.40 — Slot Selection Rules`, not to P6-F.9.38.
+* Do not patch it as an isolated symptom.
+* Implement it through the slot selection contract:
+  * single-slot days accept soft confirmation
+  * multi-slot days require explicit selection
+
+Safety:
+
+* Real `/webhook` not touched.
+* Real WhatsApp sending not enabled.
+* `WHATSAPP_SENDING_ENABLED=false`.
+* Real patients not contacted.
+* Google Sheets, Telegram, n8n, Calendar, campaigns and doctor confirmation automation remain out of scope.
+
+Next phase:
+
+P6-F.9.39 — KB-Driven Slot Generation
+
