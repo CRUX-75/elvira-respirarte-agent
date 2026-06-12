@@ -1,10 +1,10 @@
 import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from app.services.calendar_service import CalendarService
-
 
 BOGOTA_TIMEZONE = "America/Bogota"
 
@@ -145,6 +145,7 @@ def resolve_requested_date(
     *,
     now: datetime | None = None,
     calendar_service: CalendarService | None = None,
+    schedule_rows: list[dict[str, Any]] | None = None,
 ) -> RelativeDateResolution:
     normalized_message = _normalize_text(message)
     fecha_actual_colombia = get_today_colombia(now)
@@ -195,7 +196,10 @@ def resolve_requested_date(
     is_colombia_holiday = colombia_holiday_name is not None
 
     service = calendar_service or CalendarService()
-    slots = service.build_default_slots(requested_date)
+    if schedule_rows is not None:
+        slots = service.build_slots_from_schedule_rows(requested_date, schedule_rows)
+    else:
+        slots = service.build_default_slots(requested_date)
     slot_labels = [slot.label for slot in slots]
 
     if is_weekend or is_colombia_holiday:

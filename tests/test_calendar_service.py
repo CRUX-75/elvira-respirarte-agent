@@ -46,3 +46,30 @@ def test_calendar_service_check_availability_returns_scaffold_result():
     assert result.requested_date == date(2026, 5, 11)
     assert result.source == "internal_scaffold"
     assert len(result.slots) == 2
+
+
+def test_build_slots_from_schedule_rows_uses_wednesday_kb_row_values():
+    service = CalendarService()
+
+    schedule_rows = [
+        {
+            "schedule_id": "HOR-02",
+            "day_type": "wednesday",
+            "day_name": "Miércoles",
+            "modality": "Domiciliaria",
+            "start_time": "14:00",
+            "end_time": "17:00",
+            "slot_duration_minutes": "180",
+            "max_patients": "1",
+            "location_type": "Domicilio paciente",
+            "is_available": "true",
+            "notes": "Test KB override for Wednesday.",
+        }
+    ]
+
+    slots = service.build_slots_from_schedule_rows(
+        date(2026, 5, 13),
+        schedule_rows,
+    )
+
+    assert [slot.label for slot in slots] == ["2:00 p. m.–5:00 p. m."]

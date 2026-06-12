@@ -328,6 +328,7 @@ def test_node_resolve_date_context_adds_deterministic_fields_for_appointment_dat
         next_action="ask_appointment_time",
     )
 
+
     result = node_resolve_date_context(
         state,
         now=datetime(2026, 5, 8, 12, 0, tzinfo=ZoneInfo("America/Bogota")),
@@ -357,6 +358,7 @@ def test_node_resolve_date_context_skips_non_appointment_date_intent():
         intent="general",
         next_action="answer_general",
     )
+
 
     result = node_resolve_date_context(state)
 
@@ -422,3 +424,83 @@ def test_kb_context_appointment_time_preference_loads_schedules_and_rules_not_se
     rules_by_type_mock.assert_called_once_with(engine, "agendamiento")
     search_rules_mock.assert_not_called()
     active_rules_mock.assert_not_called()
+
+
+def test_node_resolve_date_context_passes_kb_schedule_rows_to_date_resolver(monkeypatch):
+    from datetime import date, datetime
+    from zoneinfo import ZoneInfo
+
+    from app.graph import nodes
+    from app.graph.nodes import node_resolve_date_context
+    from app.graph.state import ElviraState
+    from app.services.date_resolver import RelativeDateResolution
+
+    schedule_rows = [
+        {
+            "schedule_id": "HOR-01",
+            "day_type": "weekday",
+            "day_name": "Lunes a viernes excepto miércoles",
+            "modality": "Domiciliaria",
+            "start_time": "14:00",
+            "end_time": "18:00",
+            "slot_duration_minutes": "120",
+            "max_patients": "2",
+            "location_type": "Domicilio paciente",
+            "is_available": "true",
+            "notes": "Test KB override.",
+        }
+    ]
+    captured_kwargs = {}
+    monkeypatch.setattr(nodes.settings, "kb_runtime_enabled", True)
+
+
+    def fake_get_all_schedules(engine):
+        assert engine == "fake-engine"
+        return schedule_rows
+
+    def fake_resolve_requested_date(message, **kwargs):
+        captured_kwargs.update(kwargs)
+        return RelativeDateResolution(
+            fecha_actual_colombia=date(2026, 5, 8),
+            fecha_solicitada=date(2026, 5, 12),
+            fecha_solicitada_texto="martes 12 de mayo",
+            dia_semana_solicitado="martes",
+            es_dia_disponible=True,
+            slots_candidatos=["2:00 p. m.–4:00 p. m.", "4:00 p. m.–6:00 p. m."],
+            is_weekend=False,
+            is_colombia_holiday=False,
+            colombia_holiday_name=None,
+        )
+
+    monkeypatch.setattr(nodes, "engine", "fake-engine", raising=False)
+    monkeypatch.setattr(nodes, "get_all_schedules", fake_get_all_schedules, raising=False)
+
+    from app.services import date_resolver
+
+    monkeypatch.setattr(
+        date_resolver,
+        "resolve_requested_date",
+        fake_resolve_requested_date,
+    )
+
+    state = ElviraState(
+        telefono="573001112233",
+        mensaje_original="El martes en la tarde",
+        sanitized_input="el martes en la tarde",
+        estado_actual="ST_CITA_FECHA",
+        nuevo_estado="ST_CITA_FRANJA",
+        intent="fecha_cita",
+        next_action="ask_preferred_time",
+    )
+
+
+    result = node_resolve_date_context(
+        state,
+        now=datetime(2026, 5, 8, 12, 0, tzinfo=ZoneInfo("America/Bogota")),
+    )
+
+    assert captured_kwargs["schedule_rows"] == schedule_rows
+    assert result.slots_candidatos == [
+        "2:00 p. m.–4:00 p. m.",
+        "4:00 p. m.–6:00 p. m.",
+    ]

@@ -223,3 +223,35 @@ def test_same_weekday_reference_with_que_viene_resolves_to_next_week():
     assert result.fecha_solicitada.isoformat() == "2026-06-17"
     assert result.fecha_solicitada_texto == "miércoles 17 de junio"
     assert result.dia_semana_solicitado == "miércoles"
+
+
+def test_resolver_uses_kb_schedule_rows_instead_of_default_slots():
+    schedule_rows = [
+        {
+            "schedule_id": "HOR-01",
+            "day_type": "weekday",
+            "day_name": "Lunes a viernes excepto miércoles",
+            "modality": "Domiciliaria",
+            "start_time": "14:00",
+            "end_time": "18:00",
+            "slot_duration_minutes": "120",
+            "max_patients": "2",
+            "location_type": "Domicilio paciente",
+            "is_available": "true",
+            "notes": "Test KB override for normal weekday.",
+        }
+    ]
+
+    result = resolve_requested_date(
+        "El martes en la tarde.",
+        now=datetime(2026, 5, 8, 10, 0, tzinfo=BOGOTA),
+        schedule_rows=schedule_rows,
+    )
+
+    assert result.fecha_solicitada.isoformat() == "2026-05-12"
+    assert result.dia_semana_solicitado == "martes"
+    assert result.es_dia_disponible is True
+    assert result.slots_candidatos == [
+        "2:00 p. m.–4:00 p. m.",
+        "4:00 p. m.–6:00 p. m.",
+    ]
