@@ -96,6 +96,22 @@ def resolve_requested_slot_from_message(
     if not normalized:
         return None
 
+
+    # BUG-4 fix: bloquear reclamos, preguntas y negaciones
+    _NON_SELECTION_SIGNALS = (
+        r"^pero\b",
+        r"^por que\b",
+        r"^porque\b",
+        r"usted dijo",
+        r"me dijo",
+        r"me dice",
+        r"ahora me dice",
+        r"antes dijo",
+        r"no entiendo",
+        r"\?",
+    )
+    if any(re.search(p, normalized) for p in _NON_SELECTION_SIGNALS):
+        return None
     first_slot = slots[0] if len(slots) >= 1 else None
     second_slot = slots[1] if len(slots) >= 2 else None
 

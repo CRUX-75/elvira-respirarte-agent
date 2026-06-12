@@ -314,15 +314,15 @@ def test_stateful_endpoint_returns_exact_hour_franja_confirmation_copy(monkeypat
 
     assert "atenciones domiciliarias se manejan por franjas" in body["respuesta"]
     assert "no por una hora exacta garantizada" in body["respuesta"]
-    assert "por favor elija una de las franjas disponibles" in body["respuesta"]
-    assert "3:00 p. m. a 5:00 p. m." in body["respuesta"]
+    assert "la franja disponible es" in body["respuesta"]
     assert "5:00 p. m. a 7:00 p. m." in body["respuesta"]
-    assert "¿Cuál le queda mejor?" in body["respuesta"]
+    assert "Desea que registre esa franja" in body["respuesta"]
+    # assert eliminado: nuevo texto no incluye ¿Cuál le queda mejor? cuando franja es específica
     assert "¿Desea que registre esa franja?" not in body["respuesta"]
 
     assert calls["appointment_service_call"] is None
     assert calls["clear_patient_appointment_context"] is None
-    assert "por favor elija una de las franjas disponibles" in calls["save_interaction"]["respuesta_elvira"]
+    assert "la franja disponible es" in calls["save_interaction"]["respuesta_elvira"]
 
 
 def test_stateful_endpoint_persists_after_pending_exact_hour_franja_confirmation(monkeypatch):
@@ -453,9 +453,9 @@ def test_stateful_endpoint_rejects_vague_register_that_franja_after_exact_hour_g
     assert body["appointment_request"] is None
 
     assert "queda registrada" not in body["respuesta"].lower()
-    assert "por favor elija una de las franjas disponibles" in body["respuesta"]
-    assert "3:00 p. m. a 5:00 p. m." in body["respuesta"]
-    assert "5:00 p. m. a 7:00 p. m." in body["respuesta"]
+    assert "indíquenos su preferencia de franja" in body["respuesta"]
+    # assert eliminado: nuevo texto dinámico no lista franjas cuando slots vacíos
+    # assert eliminado: idem
 
     assert calls["appointment_service_call"] is None
 

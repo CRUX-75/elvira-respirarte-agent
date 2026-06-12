@@ -1,6 +1,7 @@
 from app.graph.state import ElviraState
 from app.services.appointment_request_runtime import (
     decide_appointment_request_persistence,
+    resolve_requested_slot_from_message,
 )
 
 
@@ -766,3 +767,32 @@ def test_p6f944_runtime_allows_exact_hour_inside_available_slot_from_state_machi
     assert decision.fecha_solicitada == "2026-06-17"
     assert decision.franja_solicitada == "3:00 p. m.–5:00 p. m."
     assert decision.hora_solicitada_texto == "a las 3"
+
+
+def test_resolve_slot_blocks_complaint_message():
+    """BUG-4: un reclamo con números no debe ser interpretado como selección de slot."""
+    slots = ["3:00 p. m.–6:00 p. m."]
+    result = resolve_requested_slot_from_message(
+        "pero usted dijo que solo habia atencion los miercoles de 3 a 6 y ahora me dice que es de 3 a 7?",
+        slots,
+    )
+    assert result is None, "Un reclamo no debe seleccionar ningún slot"
+
+
+def test_resolve_slot_blocks_question_with_numbers():
+    """BUG-4: una pregunta con números no debe ser interpretada como selección."""
+    slots = ["3:00 p. m.–5:00 p. m.", "5:00 p. m.–7:00 p. m."]
+    result = resolve_requested_slot_from_message(
+        "por que me dice que es de 3 a 7?",
+        slots,
+    )
+    assert result is None, "Una pregunta no debe seleccionar ningún slot"
+
+
+def test_resolve_slot_still_works_for_valid_selection():
+    """BUG-4 regresión: selecciones válidas siguen funcionando después del fix."""
+    slots = ["3:00 p. m.–5:00 p. m.", "5:00 p. m.–7:00 p. m."]
+    assert resolve_requested_slot_from_message("la primera", slots) == "3:00 p. m.–5:00 p. m."
+    assert resolve_requested_slot_from_message("la segunda", slots) == "5:00 p. m.–7:00 p. m."
+    assert resolve_requested_slot_from_message("a las 3", slots) == "3:00 p. m.–5:00 p. m."
+    assert resolve_requested_slot_from_message("a las 5", slots) == "5:00 p. m.–7:00 p. m."

@@ -423,12 +423,35 @@ def test_message(message: IncomingMessage):
 
 
 
-def _build_exact_hour_franja_confirmation_response(franja: str | None) -> str:
+def _build_exact_hour_franja_confirmation_response(
+    franja: str | None,
+    slots: list[str] | None = None,
+) -> str:
+    if franja:
+        slot_fmt = franja.replace("–", " a ")
+        return (
+            "Con gusto. Le aclaro que las atenciones domiciliarias se manejan por franjas, "
+            f"no por una hora exacta garantizada. Para esa hora, la franja disponible es "
+            f"de {slot_fmt}. ¿Desea que registre esa franja como preferencia?"
+        )
+    if slots and len(slots) == 1:
+        slot_fmt = slots[0].replace("–", " a ")
+        return (
+            "Con gusto. Le aclaro que las atenciones domiciliarias se manejan por franjas, "
+            f"no por una hora exacta garantizada. Para continuar, la franja disponible es "
+            f"de {slot_fmt}. ¿Desea que registre esa franja como preferencia?"
+        )
+    if slots and len(slots) >= 2:
+        s1 = slots[0].replace("–", " a ")
+        s2 = slots[1].replace("–", " a ")
+        return (
+            "Con gusto. Le aclaro que las atenciones domiciliarias se manejan por franjas, "
+            f"no por una hora exacta garantizada. Para continuar, elija una de las franjas "
+            f"disponibles: de {s1} o de {s2}. ¿Cuál le queda mejor?"
+        )
     return (
         "Con gusto. Le aclaro que las atenciones domiciliarias se manejan por franjas, "
-        "no por una hora exacta garantizada. Para continuar, por favor elija una de "
-        "las franjas disponibles: de 3:00 p. m. a 5:00 p. m. o de "
-        "5:00 p. m. a 7:00 p. m. ¿Cuál le queda mejor?"
+        "no por una hora exacta garantizada. Por favor indíquenos su preferencia de franja."
     )
 
 def _force_exact_hour_franja_confirmation_state_guard_response(result):
