@@ -1949,3 +1949,114 @@ Standing boundaries:
 * Do not enable real sending again without a named controlled phase.
 * Keep all future production tests operator-supervised.
 
+
+---
+
+## P6-F.9.48.1 Closure Note — Production Evidence Review
+
+Status:
+
+CLOSED / PRODUCTION DB EVIDENCE VALIDATED
+
+Context:
+
+After the owner-accepted P6-F.9.46 production Meta webhook run, production database evidence was reviewed to confirm that the real WhatsApp conversation was persisted correctly.
+
+Validated patient evidence:
+
+* Controlled production phone: `4917655660163`
+* Final patient state: `ST_CITA_PENDIENTE`
+* Patient `updated_at` aligned with the production run timestamp.
+
+Validated interaction evidence:
+
+The real production WhatsApp flow was persisted in `interactions` with real Meta `wamid` values and `delivery_status=sent`.
+
+Validated flow:
+
+1. `Hola, quisiera agendar una cita con la doctora`
+   * intent: `cita`
+   * transition: `ST_CITA_PENDIENTE -> ST_CITA_FECHA`
+   * next_action: `ask_preferred_date`
+
+2. `Para el día lunes`
+   * intent: `fecha_cita`
+   * state_reason: `unavailable_date_guard`
+   * Monday 2026-06-15 was correctly treated as Colombia holiday:
+     `Sagrado Corazón de Jesús`
+   * transition: `ST_CITA_FECHA -> ST_CITA_FECHA`
+
+3. `Entiendo, entonces el martes`
+   * intent: `fecha_cita`
+   * transition: `ST_CITA_FECHA -> ST_CITA_FRANJA`
+   * next_action: `ask_preferred_time`
+   * Tuesday slots were presented:
+     * `3:00 p. m. - 5:00 p. m.`
+     * `5:00 p. m. - 7:00 p. m.`
+
+4. `La de las 5`
+   * intent: `hora_cita`
+   * transition: `ST_CITA_FRANJA -> ST_CITA_PENDIENTE`
+   * next_action: `confirm_appointment_request`
+   * response registered the request and left final confirmation to Dra. D'Aleman.
+
+Validated processed message evidence:
+
+* All four real Meta inbound messages were stored in `processed_messages`.
+* Real `wamid...` values were preserved.
+* Processing timestamps aligned with the run:
+  * `2026-06-13T14:02:35Z`
+  * `2026-06-13T14:02:55Z`
+  * `2026-06-13T14:03:12Z`
+  * `2026-06-13T14:03:30Z`
+
+Validated AppointmentRequest evidence:
+
+* AppointmentRequest was created:
+  * `SOL-20260613-090329-503926-0163`
+* This confirms that the production `/webhook` path reached the AppointmentRequest persistence layer during the real run.
+
+Important schema note:
+
+The production `interactions` table uses:
+
+* `mensaje`
+* `respuesta`
+* `nuevo_estado`
+
+It does not use:
+
+* `mensaje_usuario`
+* `estado_nuevo`
+
+Operational conclusion:
+
+P6-F.9.48.1 confirms that production persistence worked end-to-end:
+
+Meta inbound message
+-> production `/webhook`
+-> interaction persistence
+-> processed message deduplication record
+-> patient state update
+-> AppointmentRequest creation
+
+Current safety state:
+
+* Operator restored `WHATSAPP_SENDING_ENABLED=false` after the production run.
+* No uncontrolled patient activation is open.
+* Future production tests must remain controlled and explicitly named.
+
+Next recommended block:
+
+P6-F.9.48.2 — AppointmentRequest Detail Verification And Cleanup Decision
+
+Purpose:
+
+Verify the final AppointmentRequest fields for `SOL-20260613-090329-503926-0163`, especially:
+
+* `estado_solicitud`
+* `fecha_solicitada`
+* `franja_solicitada`
+* duplicate active request behavior
+* whether any cleanup/reset is needed for the controlled test patient before future tests.
+
