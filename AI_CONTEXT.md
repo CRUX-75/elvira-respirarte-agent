@@ -1324,3 +1324,123 @@ Out of scope:
 - No real patient traffic.
 - Keep `WHATSAPP_SENDING_ENABLED=false`.
 
+
+---
+
+## P6-F.9.42 Closure Note — AppointmentRequest Persistence Final Validation
+
+Status:
+
+GREEN / VALIDATED IN SWAGGER / DB VALIDATED
+
+Objective:
+
+Validate final AppointmentRequest persistence behavior before moving toward production readiness.
+
+Local validation:
+
+* Targeted persistence/service/repository/context tests GREEN:
+  * `34 passed in 2.98s`
+* Full suite GREEN:
+  * `256 passed in 10.61s`
+* Working tree was clean before documentation update.
+
+Swagger validation:
+
+Endpoint:
+
+* `/test/message-stateful`
+
+Safety:
+
+* Real `/webhook` not used.
+* Real WhatsApp sending remained disabled.
+* `WHATSAPP_SENDING_ENABLED=false`.
+* `delivery_status=sending_skipped`.
+* No real patients contacted.
+
+Validated happy path:
+
+Phone:
+
+* `573009420001`
+
+Flow:
+
+* `Quiero pedir una cita`
+* `para el miercoles`
+* `sí, esa franja`
+
+Final validated result:
+
+* `nuevo_estado = ST_CITA_PENDIENTE`
+* `persisted_state = ST_CITA_PENDIENTE`
+* `intent = hora_cita`
+* `next_action = confirm_appointment_request`
+* `appointment_request_decision.should_persist = true`
+* `appointment_request_decision.reason = allowed_hora_cita_ready_for_human_review`
+* `appointment_request_decision.estado_solicitud = pendiente_confirmacion`
+* `appointment_request_decision.fecha_solicitada = 2026-06-17`
+* `appointment_request_decision.franja_solicitada = 3:00 p. m.–6:00 p. m.`
+* `appointment_request != null`
+* `appointment_request.id_solicitud = SOL-20260613-080057-585753-0001`
+* `appointment_request.estado_solicitud = pendiente_confirmacion`
+* `appointment_request.fecha_solicitada = 2026-06-17`
+* `appointment_request.franja_solicitada = 3:00 p. m.–6:00 p. m.`
+
+DB validation:
+
+Confirmed:
+
+* `patients.estado_actual = ST_CITA_PENDIENTE`
+* `appointment_requests.id_solicitud = SOL-20260613-080057-585753-0001`
+* Active request count remained `1`, confirming no duplicate active AppointmentRequests were created for the same patient.
+
+Persistence behavior validated:
+
+* AppointmentRequest is created only after a valid slot/franja selection.
+* Successful persistence stores the request with `estado_solicitud = pendiente_confirmacion`.
+* Patient state persists as `ST_CITA_PENDIENTE`.
+* Appointment context is cleared after successful persistence.
+* Duplicate active requests are prevented by `AppointmentRequestService.create_or_reuse_active_request(...)`.
+
+Known non-blocking debt:
+
+* Top-level response field `franja_solicitada = null` may still appear in debug response after persistence.
+* This is cosmetic response-shape debt only.
+* Operational fields are correct in:
+  * `appointment_request_decision.franja_solicitada`
+  * `appointment_request.franja_solicitada`
+* Do not block production readiness on this.
+
+Architecture debt documented but not addressed in this phase:
+
+* `/test/message-stateful` still duplicates parts of `_apply_appointment_request_runtime(...)`.
+* A future cleanup may centralize runtime logic fully through the shared helper.
+* This was intentionally left untouched because P6-F.9.42 was validation-only.
+
+Out of scope respected:
+
+* No graph refactor.
+* No `restore_appointment_context` node.
+* No Google Sheets.
+* No Telegram.
+* No n8n.
+* No Calendar.
+* No campaigns.
+* No doctor confirmation automation.
+* No real WhatsApp sending.
+* No real patients.
+
+Conclusion:
+
+P6-F.9.42 is CLOSED.
+
+Next recommended block:
+
+P6-F.9.43 — Production Readiness Checklist / Controlled Activation Preparation
+
+Purpose:
+
+Prepare the controlled production activation checklist before touching the real WhatsApp Cloud API webhook or enabling real outbound sending.
+
