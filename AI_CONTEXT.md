@@ -1200,3 +1200,85 @@ Objective:
 
 Ensure exact-hour clarification responses use the real `slots_candidatos` from context instead of hardcoded generic weekday slots, especially for Wednesday single-slot context.
 
+
+## Checkpoint — P6-F.9.41 CLOSED / GREEN / SWAGGER VALIDATED
+
+P6-F.9.41 is now CLOSED after production-style Swagger validation through `/test/message-stateful` with `WHATSAPP_SENDING_ENABLED=false`.
+
+Validated flow:
+
+1. Patient starts appointment request from `ST_INIT`.
+2. Patient asks for Wednesday.
+3. System resolves Wednesday 2026-06-17 as available.
+4. KB-driven Wednesday single-slot availability is correctly used:
+   - `slots_candidatos = ["3:00 p. m.–6:00 p. m."]`
+5. Patient confirms the only available franja while also asking about exact hour:
+   - `"si por favor esa franja, podrian venir a las 4?"`
+6. System correctly interprets the message as a valid single-slot confirmation, not as a new ambiguous exact-hour request.
+
+Final validated Swagger result:
+
+- `intent = hora_cita`
+- `nuevo_estado = ST_CITA_PENDIENTE`
+- `next_action = confirm_appointment_request`
+- `persisted_state = ST_CITA_PENDIENTE`
+- `appointment_request_decision.should_persist = true`
+- `appointment_request_decision.reason = allowed_hora_cita_ready_for_human_review`
+- `appointment_request_decision.estado_solicitud = pendiente_confirmacion`
+- `appointment_request_decision.fecha_solicitada = 2026-06-17`
+- `appointment_request_decision.franja_solicitada = 3:00 p. m.–6:00 p. m.`
+- `appointment_request != null`
+- `appointment_request.estado_solicitud = pendiente_confirmacion`
+- `delivery_status = sending_skipped`
+
+Important product interpretation:
+
+- Elvira may register the available franja as patient preference.
+- Elvira must not promise exact arrival at 4:00 p. m.
+- The wording “La Dra. D'Aleman le confirmará la cita” is acceptable for now because final confirmation, including exact arrival feasibility, remains with the doctor.
+
+Validated local test state:
+
+- Full suite GREEN: `256 passed`
+- Closed blocks:
+  - P6-F.9.38 ✅
+  - P6-F.9.39 ✅
+  - P6-F.9.40 ✅
+  - P6-F.9.41 ✅
+
+Architecture note discovered during P6-F.9.41:
+
+A deeper ordering issue exists between LangGraph transition logic and persisted appointment context restoration.
+
+Current risk:
+
+- `transition_state` can run before persisted `appointment_context` is available.
+- This can produce cases where the final JSON shows restored `slots_candidatos`, but the state transition was already decided earlier without those slots.
+- This should not be patched repeatedly with phrase-specific logic.
+
+Future architecture debt:
+
+- A clean future refactor should move appointment context restoration before `transition_state`.
+- Candidate future graph order:
+  - `sanitize_input`
+  - `classify_intent`
+  - `restore_appointment_context`
+  - `resolve_date_context`
+  - `transition_state`
+  - `load_kb_context`
+  - `generate_response`
+- The graph should receive all deterministic state needed for transition decisions before transition logic runs.
+- The graph itself should not query PostgreSQL; `main.py` should inject persisted context into the initial state.
+
+Next planned block:
+
+P6-F.9.42 — AppointmentRequest Persistence Final Validation
+
+Scope reminder:
+
+- Keep `WHATSAPP_SENDING_ENABLED=false`.
+- Do not touch real `/webhook` activation.
+- Do not touch real patients.
+- Do not add Google Sheets, Telegram, n8n, Calendar, campaigns, or doctor confirmation automation yet.
+- Focus only on final validation of AppointmentRequest persistence behavior before moving toward production readiness.
+
