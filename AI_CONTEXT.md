@@ -2793,3 +2793,89 @@ P6-F.9.57 — Human Review API Endpoint Tests
 Purpose:
 
 Create tests for the internal endpoint boundary before implementing it.
+
+
+---
+
+## P6-F.9.57 / P6-F.9.58 Closure Note — Human Review API Endpoint Tests And Minimal Implementation
+
+Status:
+
+GREEN / INTERNAL API ENDPOINT IMPLEMENTED
+
+Context:
+
+P6-F.9.57 created RED tests for the internal human review endpoint.
+
+Initial expected RED result:
+
+* `404 Not Found`
+
+Reason:
+
+The endpoint `/internal/human-review/actions` did not exist yet.
+
+P6-F.9.58 then implemented the minimal endpoint directly in `app/main.py`, consistent with the current FastAPI structure where routes are mounted directly in `main.py`.
+
+Implemented endpoint:
+
+* `POST /internal/human-review/actions`
+
+Implemented helpers:
+
+* `get_internal_admin_token()`
+* `create_human_review_repository()`
+* `_validate_internal_admin_token(...)`
+
+Implemented security boundary:
+
+* Endpoint requires `X-Internal-Admin-Token`.
+* Missing or invalid token returns `401`.
+* Token is read through `get_internal_admin_token()`.
+
+Implemented service wiring:
+
+* Request body maps to `HumanReviewAction`.
+* Endpoint creates `HumanReviewService`.
+* Endpoint uses `PostgresAppointmentRequestRepository(engine)`.
+* Response returns `HumanReviewResult.model_dump()`.
+
+Validated API behavior:
+
+* Missing internal admin token is rejected.
+* Invalid internal admin token is rejected.
+* Valid confirm action returns structured success.
+* Invalid business action returns structured business error.
+* Endpoint does not send WhatsApp messages.
+* Endpoint only returns `should_notify_patient` and `patient_message`.
+
+Boundary respected:
+
+* No Google Sheets.
+* No Telegram.
+* No n8n.
+* No Calendar.
+* No doctor confirmation automation.
+* No patient notification sending.
+* No WhatsApp sending.
+* No production activation.
+
+Important note:
+
+The endpoint is internal/admin-facing only.
+
+It must not be exposed for uncontrolled public usage without a real internal admin token configured.
+
+Next recommended phase:
+
+P6-F.9.59 — Human Review API Config Hardening
+
+Purpose:
+
+Add a real `internal_admin_token` field to settings/config instead of relying only on `getattr(settings, "internal_admin_token", None)`, and document required environment variable for production readiness.
+
+Boundary:
+
+No external adapters.
+
+No patient notification sending.

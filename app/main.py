@@ -1,6 +1,6 @@
 from dataclasses import asdict
 
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query, HTTPException, Header
 from fastapi.responses import PlainTextResponse
 
 from app.models.message import IncomingMessage
@@ -36,6 +36,8 @@ from app.services.appointment_request_runtime import (
     is_exact_hour_without_explicit_franja_confirmation,
 )
 from app.services.appointment_request_service import AppointmentRequestService
+from app.models.human_review import HumanReviewAction
+from app.services.human_review_service import HumanReviewService
 from app.db.session import engine
 from app.config import settings
 from app.services.readiness import build_ready_report
@@ -80,6 +82,42 @@ def verify_webhook(
     raise HTTPException(status_code=403, detail="Verification failed")
 
 
+
+
+def get_internal_admin_token() -> str | None:
+    return getattr(settings, "internal_admin_token", None)
+
+
+def create_human_review_repository():
+    return PostgresAppointmentRequestRepository(engine)
+
+
+def _validate_internal_admin_token(token: str | None) -> None:
+    expected_token = get_internal_admin_token()
+
+    if not expected_token or token != expected_token:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or missing internal admin token",
+        )
+
+
+@app.post("/internal/human-review/actions")
+def apply_human_review_action(
+    action: HumanReviewAction,
+    x_internal_admin_token: str | None = Header(
+        default=None,
+        alias="X-Internal-Admin-Token",
+    ),
+):
+    _validate_internal_admin_token(x_internal_admin_token)
+
+    repository = create_human_review_repository()
+    service = HumanReviewService(repository=repository)
+
+    result = service.apply_action(action)
+
+    return result.model_dump()
 @app.post("/webhook")
 async def receive_webhook(payload: WhatsAppPayload):
     try:
