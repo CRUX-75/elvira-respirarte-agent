@@ -192,3 +192,107 @@ def test_find_active_by_telefono_returns_none_when_no_request_exists(repository)
     found = repository.find_active_by_telefono("+570000000000")
 
     assert found is None
+
+
+def test_human_review_service_confirms_request_with_postgres_repository(repository):
+    from app.models.human_review import HumanReviewAction
+    from app.services.human_review_service import HumanReviewService
+
+    request = make_request(
+        id_solicitud="sol-human-review-confirm-001",
+        estado_solicitud="pendiente_confirmacion",
+        fecha_solicitada="2026-06-17",
+        franja_solicitada="3:00 p. m.–6:00 p. m.",
+    )
+    repository.save(request)
+
+    service = HumanReviewService(repository=repository)
+
+    result = service.apply_action(
+        HumanReviewAction(
+            id_solicitud="sol-human-review-confirm-001",
+            action="confirm",
+            actor="dra_daleman",
+            confirmed_date="2026-06-17",
+            confirmed_franja="3:00 p. m.–6:00 p. m.",
+        )
+    )
+
+    assert result.success is True
+    assert result.previous_status == "pendiente_confirmacion"
+    assert result.new_status == "confirmada"
+    assert result.should_notify_patient is True
+    assert result.patient_message is not None
+
+    found = repository.get_by_id("sol-human-review-confirm-001")
+
+    assert found is not None
+    assert found.estado_solicitud == "confirmada"
+    assert found.fecha_confirmada == "2026-06-17"
+    assert found.franja_confirmada == "3:00 p. m.–6:00 p. m."
+    assert found.updated_by == "dra_daleman"
+
+
+def test_human_review_service_cancels_request_with_postgres_repository(repository):
+    from app.models.human_review import HumanReviewAction
+    from app.services.human_review_service import HumanReviewService
+
+    request = make_request(
+        id_solicitud="sol-human-review-cancel-001",
+        estado_solicitud="pendiente_confirmacion",
+    )
+    repository.save(request)
+
+    service = HumanReviewService(repository=repository)
+
+    result = service.apply_action(
+        HumanReviewAction(
+            id_solicitud="sol-human-review-cancel-001",
+            action="cancel",
+            actor="dra_daleman",
+            reason="No hay disponibilidad en la ruta",
+        )
+    )
+
+    assert result.success is True
+    assert result.previous_status == "pendiente_confirmacion"
+    assert result.new_status == "cancelada"
+    assert result.should_notify_patient is True
+    assert result.patient_message is not None
+
+    found = repository.get_by_id("sol-human-review-cancel-001")
+
+    assert found is not None
+    assert found.estado_solicitud == "cancelada"
+    assert found.motivo_cancelacion == "No hay disponibilidad en la ruta"
+    assert found.updated_by == "dra_daleman"
+
+
+def test_human_review_service_rejects_forbidden_transition_with_postgres_repository(repository):
+    from app.models.human_review import HumanReviewAction
+    from app.services.human_review_service import HumanReviewService
+
+    request = make_request(
+        id_solicitud="sol-human-review-forbidden-001",
+        estado_solicitud="cancelada",
+    )
+    repository.save(request)
+
+    service = HumanReviewService(repository=repository)
+
+    result = service.apply_action(
+        HumanReviewAction(
+            id_solicitud="sol-human-review-forbidden-001",
+            action="confirm",
+            actor="dra_daleman",
+        )
+    )
+
+    assert result.success is False
+    assert result.error_code == "forbidden_transition"
+
+    found = repository.get_by_id("sol-human-review-forbidden-001")
+
+    assert found is not None
+    assert found.estado_solicitud == "cancelada"
+    assert found.updated_by is None

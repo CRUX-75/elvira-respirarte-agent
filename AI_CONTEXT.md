@@ -2611,3 +2611,78 @@ P6-F.9.55 — Human Review PostgreSQL Repository Integration Test
 Purpose:
 
 Validate HumanReviewService against the real PostgresAppointmentRequestRepository contract using the existing SQLite-style repository test infrastructure, without adding external adapters or endpoints.
+
+
+---
+
+## P6-F.9.55 Closure Note — Human Review PostgreSQL Repository Integration Test
+
+Status:
+
+GREEN / REPOSITORY INTEGRATION VALIDATED
+
+Objective:
+
+Validate `HumanReviewService` against the real `PostgresAppointmentRequestRepository` contract using the existing SQLite-style repository test infrastructure.
+
+Context:
+
+P6-F.9.54 aligned `HumanReviewService` with the real repository contract:
+
+* `repository.get_by_id(id_solicitud)`
+* `repository.update(request)`
+
+P6-F.9.55 validates that this alignment works with the concrete repository implementation.
+
+Implemented tests:
+
+* `test_human_review_service_confirms_request_with_postgres_repository`
+* `test_human_review_service_cancels_request_with_postgres_repository`
+* `test_human_review_service_rejects_forbidden_transition_with_postgres_repository`
+
+Validated behavior:
+
+* HumanReviewService can confirm an AppointmentRequest through PostgresAppointmentRequestRepository.
+* Confirm action persists:
+  * `estado_solicitud = confirmada`
+  * `fecha_confirmada`
+  * `franja_confirmada`
+  * `updated_by`
+* HumanReviewService can cancel an AppointmentRequest through PostgresAppointmentRequestRepository.
+* Cancel action persists:
+  * `estado_solicitud = cancelada`
+  * `motivo_cancelacion`
+  * `updated_by`
+* Forbidden transition from `cancelada` to `confirmada` is rejected.
+* Forbidden transition does not mutate the stored AppointmentRequest.
+
+Boundary respected:
+
+* No Google Sheets.
+* No Telegram.
+* No n8n.
+* No Calendar.
+* No API endpoint.
+* No doctor confirmation automation.
+* No real WhatsApp sending.
+* No production DB touched.
+
+Conclusion:
+
+HumanReviewService is now validated against the real repository contract using local test infrastructure.
+
+Next recommended phase:
+
+P6-F.9.56 — Human Review API Boundary Spec
+
+Purpose:
+
+Define, before implementation, whether a future internal backend endpoint is needed for doctor review actions, and what its request/response contract should be.
+
+Boundary:
+
+Spec only first.
+
+No external adapters.
+
+No real sending.
