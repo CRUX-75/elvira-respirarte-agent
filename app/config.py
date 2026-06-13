@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     kb_runtime_enabled: bool = False
     internal_admin_token: str | None = None
 
+    google_sheets_enabled: bool = False
+    google_sheets_spreadsheet_id: str | None = None
+    google_sheets_solicitudes_cita_tab: str = "Solicitudes_Cita"
+    google_service_account_json: str | None = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
