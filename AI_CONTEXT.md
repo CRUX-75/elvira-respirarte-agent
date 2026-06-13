@@ -1554,3 +1554,100 @@ Important boundary:
 
 Do not enable `WHATSAPP_SENDING_ENABLED=true` yet.
 
+
+---
+
+## P6-F.9.44 Closure Note — Real Webhook Readiness Review
+
+Status:
+
+CLOSED / WEBHOOK READINESS REVIEW GREEN
+
+Objective:
+
+Review the real `/webhook` code path before any controlled activation.
+
+Important boundary:
+
+This phase did not activate real WhatsApp sending.
+
+Safety baseline maintained:
+
+* `WHATSAPP_SENDING_ENABLED=false`
+* Real outbound WhatsApp sending not enabled.
+* Real patients not contacted.
+* No Google Sheets, Telegram, n8n, Calendar, campaigns or doctor confirmation automation added.
+* No production activation performed.
+
+Webhook verification readiness:
+
+Validated:
+
+* Meta verification endpoint exists.
+* The endpoint returns raw `hub.challenge` as `PlainTextResponse`.
+* Invalid verification token returns `403`.
+
+Webhook POST readiness:
+
+Validated code path:
+
+* Payload extraction is wrapped in `try/except`.
+* Payload extraction failure returns `payload_extraction_failed`.
+* Empty payload/no message returns `ignored / no_message`.
+* Missing required fields returns `ignored / missing_required_message_fields`.
+* Deduplication check runs before LangGraph/LLM.
+* Duplicate messages return `ignored / duplicate_message`.
+* Deduplication failure returns safely without processing or marking the message as processed.
+* Patient is loaded/created before message processing.
+* Persisted patient state is used as `estado_actual`.
+* `/webhook` calls `traced_process_message(process_message, message)`.
+* `/webhook` uses `_apply_appointment_request_runtime(...)`.
+* Appointment runtime receives the real WhatsApp message ID as `source_interaction_id`.
+* Appointment request metadata is returned in the webhook response.
+* If `WHATSAPP_SENDING_ENABLED=false`, response delivery is skipped with `delivery_status=sending_skipped`.
+* If WhatsApp send fails, the code stores a `send_failed` interaction but does not update patient state and does not mark the message as processed.
+* Successful processing saves interaction, updates patient state, updates last message timestamp, and marks the WhatsApp message as processed.
+
+Validated tests:
+
+* `tests/test_webhook_persistence.py` GREEN:
+  * `10 passed`
+* Full suite GREEN:
+  * `256 passed`
+
+Relevant test coverage confirmed:
+
+* Duplicate guard before LLM/LangGraph.
+* Sending disabled path.
+* Send failure path.
+* `processed_marked=false` on failures.
+* Successful path calls `mark_message_processed`.
+* Successful path calls `save_interaction`.
+* Successful path calls `update_patient_state`.
+* Appointment runtime wiring in `/webhook`.
+
+Known non-blocking test gap:
+
+* The webhook appointment runtime test validates that `_apply_appointment_request_runtime(...)` is called and receives `source_interaction_id` correctly.
+* It does not yet test actual AppointmentRequest persistence from the real `/webhook` path.
+* This is not blocking for P6-F.9.44 because persistence was validated in P6-F.9.42 via `/test/message-stateful` and DB evidence.
+* A future controlled webhook dry-run phase can add or validate this with Meta-shaped payloads while keeping sending disabled.
+
+Conclusion:
+
+P6-F.9.44 is CLOSED.
+
+The real `/webhook` code path is ready for controlled dry-run validation with sending disabled.
+
+Next recommended block:
+
+P6-F.9.45 — Controlled Webhook Dry-Run With Sending Disabled
+
+Purpose:
+
+Validate the real `/webhook` path using Meta-shaped payloads while keeping `WHATSAPP_SENDING_ENABLED=false`.
+
+Important boundary:
+
+Do not enable real outbound WhatsApp sending yet.
+
