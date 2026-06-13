@@ -500,7 +500,10 @@ def _force_unsupported_slot_selection_guard_response(result):
     result.nuevo_estado = "ST_CITA_FRANJA"
     result.next_action = "ask_confirm_exact_hour_as_slot"
     result.state_reason = "unsupported_slot_selection_guard"
-    result.respuesta = _build_exact_hour_franja_confirmation_response(None)
+    result.respuesta = _build_exact_hour_franja_confirmation_response(
+        None,
+        slots=getattr(result, "slots_candidatos", None) or [],
+    )
     return result
 
 

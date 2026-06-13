@@ -530,7 +530,9 @@ def test_stateful_endpoint_rejects_vague_register_that_franja_after_exact_hour_g
     assert body["appointment_request"] is None
 
     assert "queda registrada" not in body["respuesta"].lower()
-    assert "indíquenos su preferencia de franja" in body["respuesta"]
+    assert "3:00 p. m. a 5:00 p. m." in body["respuesta"]
+    assert "5:00 p. m. a 7:00 p. m." in body["respuesta"]
+    assert "indíquenos su preferencia de franja" not in body["respuesta"]
     # assert eliminado: nuevo texto dinámico no lista franjas cuando slots vacíos
     # assert eliminado: idem
 
