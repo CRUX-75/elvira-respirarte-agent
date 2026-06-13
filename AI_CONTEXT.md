@@ -3535,3 +3535,131 @@ Standing safety baseline:
 * Do not write automatically from patient conversations.
 * Do not add doctor action reader yet.
 * Do not touch Telegram, n8n, Calendar, campaigns, or real patient activation.
+
+---
+
+## P6-F.9.67 Closure Note — Manual Controlled Sheets Write Dry-Run
+
+Status:
+
+CLOSED / MANUAL GOOGLE SHEETS WRITE VALIDATED / GREEN
+
+Objective:
+
+Validate a controlled manual Google Sheets write through the existing Google Sheets adapter/factory path without connecting it to `/webhook` or automatic AppointmentRequest persistence.
+
+Implemented before validation:
+
+* `docs/P6-F.9.67_MANUAL_CONTROLLED_SHEETS_WRITE_DRY_RUN.md`
+* `scripts/manual_google_sheets_human_review_dry_run.py`
+
+Manual dry-run script behavior:
+
+* Uses `Settings`.
+* Builds the writer through `build_google_sheets_human_review_writer(...)`.
+* Returns safely when Google Sheets config is incomplete.
+* Creates one controlled fake `AppointmentRequest`.
+* Calls `GoogleSheetsHumanReviewWriter.upsert_request(...)`.
+* Does not touch PostgreSQL.
+* Does not touch `/webhook`.
+* Does not send WhatsApp messages.
+* Does not contact patients.
+* Does not read doctor actions.
+* Does not trigger Telegram, n8n, Calendar, or campaigns.
+
+Disabled-config validation:
+
+With incomplete Google Sheets config, the script returned safely:
+
+`SKIPPED: Google Sheets writer is not configured. Required: GOOGLE_SHEETS_ENABLED=true, GOOGLE_SERVICE_ACCOUNT_JSON, GOOGLE_SHEETS_SPREADSHEET_ID.`
+
+Real controlled Google Sheets validation:
+
+Configured locally:
+
+* `GOOGLE_SHEETS_ENABLED=true`
+* `GOOGLE_SHEETS_SPREADSHEET_ID` configured for the controlled Google Sheet.
+* `GOOGLE_SHEETS_SOLICITUDES_CITA_TAB=Solicitudes_Cita`
+* `GOOGLE_SERVICE_ACCOUNT_JSON` loaded from a local secret file / local environment, not committed to Git.
+* Google Sheet shared with the service account as Editor.
+
+Validated first manual run:
+
+* Result: `appended`
+* `id_solicitud = SOL-MANUAL-SHEETS-DRY-RUN-001`
+
+Validated second manual run:
+
+* Result: `updated`
+* `id_solicitud = SOL-MANUAL-SHEETS-DRY-RUN-001`
+
+Conclusion from manual validation:
+
+* The factory → GoogleSheetsApiClient → GoogleSheetsHumanReviewWriter path works against the real Google Sheets API.
+* Upsert behavior works.
+* Repeated dry-run updates the existing row instead of duplicating it.
+* Google Sheets remains an auxiliary human-visible inbox adapter.
+* PostgreSQL remains the source of truth.
+
+Test isolation follow-up:
+
+During closure, the local Google Sheets environment exposed that tests were reading local `.env` / exported variables.
+
+Fixed:
+
+* `tests/test_google_sheets_config.py`
+* `tests/test_google_sheets_human_review_writer_factory.py`
+
+Result:
+
+* Google Sheets tests are now isolated from local runtime environment variables.
+* Runtime behavior is unchanged.
+* Production behavior is unchanged.
+* Elvira runtime is unchanged.
+
+Validation:
+
+* Full suite GREEN:
+  * `301 passed in 10.35s`
+
+Important boundary respected:
+
+* No `/webhook` wiring.
+* No automatic Google Sheets write after AppointmentRequest persistence.
+* No doctor action reader.
+* No WhatsApp sending changes.
+* No Telegram.
+* No n8n.
+* No Calendar.
+* No campaigns.
+* No real patient activation.
+
+Safety baseline after dry-run:
+
+* `WHATSAPP_SENDING_ENABLED=false` remains the standing production safety baseline.
+* `GOOGLE_SHEETS_ENABLED` should remain disabled unless explicitly running a named controlled Google Sheets phase.
+* Secrets must not be committed.
+* `.env` remains ignored by Git.
+
+Conclusion:
+
+P6-F.9.67 is CLOSED.
+
+Next recommended block:
+
+P6-F.9.68 — Runtime Wiring After AppointmentRequest Persistence
+
+Purpose:
+
+Wire the optional Google Sheets human review writer after successful AppointmentRequest persistence, but only behind the existing factory/config boundary.
+
+Initial safety design for P6-F.9.68:
+
+* If `GOOGLE_SHEETS_ENABLED=false`, runtime must behave exactly as today.
+* If writer construction returns `None`, runtime must continue safely.
+* Google Sheets write failure must not break patient conversation persistence.
+* PostgreSQL must remain source of truth.
+* No doctor action reader yet.
+* No WhatsApp sending changes.
+* No Telegram, n8n, Calendar, or campaigns.
+
