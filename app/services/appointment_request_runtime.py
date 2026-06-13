@@ -112,6 +112,27 @@ def resolve_requested_slot_from_message(
     )
     if any(re.search(p, normalized) for p in _NON_SELECTION_SIGNALS):
         return None
+    if len(slots) == 1:
+        single_slot_confirmation_patterns = (
+            r"^si$",
+            r"^si\b",
+            r"^ok$",
+            r"^okay$",
+            r"^listo$",
+            r"^claro$",
+            r"^perfecto$",
+            r"^esa$",
+            r"^esa franja$",
+            r"^esa esta bien$",
+            r"^me sirve$",
+            r"^registre esa$",
+            r"^registre esa franja$",
+            r"^si esa franja$",
+            r"^si por favor$",
+        )
+        if any(re.search(pattern, normalized) for pattern in single_slot_confirmation_patterns):
+            return slots[0]
+
     first_slot = slots[0] if len(slots) >= 1 else None
     second_slot = slots[1] if len(slots) >= 2 else None
 

@@ -796,3 +796,77 @@ def test_resolve_slot_still_works_for_valid_selection():
     assert resolve_requested_slot_from_message("la segunda", slots) == "5:00 p. m.–7:00 p. m."
     assert resolve_requested_slot_from_message("a las 3", slots) == "3:00 p. m.–5:00 p. m."
     assert resolve_requested_slot_from_message("a las 5", slots) == "5:00 p. m.–7:00 p. m."
+
+
+def test_p6f940_single_slot_soft_confirmation_persists_only_candidate_slot():
+    decision = decide_appointment_request_persistence(
+        state=make_state(
+            intent="hora_cita",
+            nuevo_estado="ST_CITA_PENDIENTE",
+            next_action="confirm_appointment_request",
+            fecha_solicitada="2026-06-17",
+            slots_candidatos=["3:00 p. m.–6:00 p. m."],
+            es_dia_disponible=True,
+            is_weekend=False,
+            is_colombia_holiday=False,
+            mensaje_original="sí, esa franja",
+        ),
+        telefono="573001112233",
+        nombre="Paciente Test",
+        source_interaction_id="wamid.test-p6f940-001",
+    )
+
+    assert decision.should_persist is True
+    assert decision.reason == "allowed_hora_cita_ready_for_human_review"
+    assert decision.franja_solicitada == "3:00 p. m.–6:00 p. m."
+    assert decision.estado_solicitud == "pendiente_confirmacion"
+
+
+def test_p6f940_single_slot_me_sirve_persists_only_candidate_slot():
+    decision = decide_appointment_request_persistence(
+        state=make_state(
+            intent="hora_cita",
+            nuevo_estado="ST_CITA_PENDIENTE",
+            next_action="confirm_appointment_request",
+            fecha_solicitada="2026-06-17",
+            slots_candidatos=["3:00 p. m.–6:00 p. m."],
+            es_dia_disponible=True,
+            is_weekend=False,
+            is_colombia_holiday=False,
+            mensaje_original="me sirve",
+        ),
+        telefono="573001112233",
+        nombre="Paciente Test",
+        source_interaction_id="wamid.test-p6f940-002",
+    )
+
+    assert decision.should_persist is True
+    assert decision.reason == "allowed_hora_cita_ready_for_human_review"
+    assert decision.franja_solicitada == "3:00 p. m.–6:00 p. m."
+    assert decision.estado_solicitud == "pendiente_confirmacion"
+
+
+def test_p6f940_multi_slot_soft_confirmation_does_not_persist():
+    decision = decide_appointment_request_persistence(
+        state=make_state(
+            intent="hora_cita",
+            nuevo_estado="ST_CITA_PENDIENTE",
+            next_action="confirm_appointment_request",
+            fecha_solicitada="2026-06-16",
+            slots_candidatos=[
+                "3:00 p. m.–5:00 p. m.",
+                "5:00 p. m.–7:00 p. m.",
+            ],
+            es_dia_disponible=True,
+            is_weekend=False,
+            is_colombia_holiday=False,
+            mensaje_original="sí, esa franja",
+        ),
+        telefono="573001112233",
+        nombre="Paciente Test",
+        source_interaction_id="wamid.test-p6f940-003",
+    )
+
+    assert decision.should_persist is False
+    assert decision.reason == "skipped_unsupported_slot_selection"
+    assert decision.franja_solicitada is None
