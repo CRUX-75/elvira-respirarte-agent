@@ -3901,3 +3901,54 @@ Purpose:
 
 Review whether Google Sheets should remain disabled by default or become enabled in a controlled production mode, and define what operational evidence Dra. D'Aleman needs before using the sheet as her human review inbox.
 
+
+---
+
+## P6-F.9.69 Final Evidence Note — Google Sheets Visual Row Confirmed
+
+Status:
+
+CLOSED / GREEN / GOOGLE SHEETS VISUAL EVIDENCE CONFIRMED
+
+Additional validation evidence:
+
+After the successful `/test/message-stateful` runtime validation, the operator visually confirmed in Google Sheets that the row was appended into the `Solicitudes_Cita` sheet.
+
+Confirmed Google Sheets evidence:
+
+* Sheet: `Respirarte CRM`
+* Tab: `Solicitudes_Cita`
+* Runtime-created row present.
+* `telefono = 573009420013`
+* `nombre_paciente = paciente001`
+* `fecha_solicitada = 2026-06-16`
+* `franja_solicitada = 5:00 p. m.–7:00 p. m.`
+* `estado_solicitud = pendiente_confirmacion`
+* `interaction_id_origen = test-stateful-c67be22d-0b28-43d5-8faa-8a7b06929b6a`
+* `sync_error` empty.
+
+Conclusion:
+
+P6-F.9.69 is fully validated with:
+
+* Swagger response evidence.
+* PostgreSQL-backed AppointmentRequest creation.
+* Google Sheets runtime adapter response: `human_review_inbox.status = appended`.
+* Operator-confirmed visual row in Google Sheets.
+
+Operational safety reminder:
+
+After this validation, keep:
+
+* `WHATSAPP_SENDING_ENABLED=false`
+* `GOOGLE_SHEETS_ENABLED=false` unless running a named controlled validation or production handoff phase.
+* `KB_RUNTIME_ENABLED=true`
+
+Next recommended block:
+
+P6-F.9.70 — Human Review Inbox Operational Readiness Review
+
+Purpose:
+
+Decide whether Google Sheets should remain disabled by default or become enabled for a controlled production handoff, and define exactly what Dra. D'Aleman needs to review, edit, or act on inside `Solicitudes_Cita`.
+
