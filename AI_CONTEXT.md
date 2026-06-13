@@ -2430,3 +2430,99 @@ No n8n.
 No Calendar.
 
 No real WhatsApp sending.
+
+
+---
+
+## P6-F.9.52 / P6-F.9.53 Closure Note — Human Review Service Tests And Minimal Implementation
+
+Status:
+
+GREEN / INTERNAL SERVICE CONTRACT IMPLEMENTED
+
+Context:
+
+After P6-F.9.51 documented the Human Review Internal Model And Service Contract, the project moved into tests-first implementation.
+
+P6-F.9.52 created the internal service tests first.
+
+Initial expected RED result:
+
+* `ModuleNotFoundError: No module named 'app.models.human_review'`
+
+P6-F.9.53 then added the minimal internal model and service implementation required to satisfy the tests.
+
+Implemented files:
+
+* `app/models/human_review.py`
+* `app/services/human_review_service.py`
+* `tests/test_human_review_service.py`
+
+Implemented models:
+
+* `HumanReviewAction`
+* `HumanReviewResult`
+
+Implemented service:
+
+* `HumanReviewService`
+* `apply_action(action: HumanReviewAction) -> HumanReviewResult`
+
+Supported actions:
+
+* `confirm`
+* `request_missing_data`
+* `propose_alternative`
+* `reschedule`
+* `cancel`
+* `close`
+
+Validated behavior:
+
+* `confirm` moves `pendiente_confirmacion` to `confirmada`.
+* `request_missing_data` moves `pendiente_confirmacion` to `pendiente_datos`.
+* `propose_alternative` keeps status as `pendiente_confirmacion`.
+* `reschedule` moves `confirmada` to `reagendada`.
+* `cancel` moves active status to `cancelada`.
+* `close` moves `confirmada` to `cerrada`.
+* Invalid actions are rejected.
+* Missing requests are rejected.
+* Forbidden transition from `cancelada` to `confirmada` is rejected.
+* Forbidden transition from `cerrada` to active status is rejected.
+* Missing required fields are rejected.
+* The service does not send WhatsApp messages.
+* The service only prepares `should_notify_patient` and `patient_message`.
+
+Targeted validation:
+
+* `tests/test_human_review_service.py`
+* Result: `12 passed`
+
+Important boundary respected:
+
+* No Google Sheets adapter.
+* No Telegram implementation.
+* No n8n workflow.
+* No Calendar integration.
+* No API endpoint.
+* No doctor confirmation automation.
+* No real WhatsApp sending.
+* `WHATSAPP_SENDING_ENABLED=false` remains the safety baseline.
+
+Architecture note:
+
+This implementation is intentionally internal-only.
+
+The service prepares human review lifecycle decisions but does not yet persist through the real PostgreSQL repository beyond the repository contract expected by the tests.
+
+Next recommended phase:
+
+P6-F.9.54 — Human Review Repository Contract Review
+
+Purpose:
+
+Review the existing AppointmentRequest repository capabilities and decide whether new repository methods are needed before wiring HumanReviewService to real PostgreSQL.
+
+Boundary:
+
+Do not add external adapters yet.
