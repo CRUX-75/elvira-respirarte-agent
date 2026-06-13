@@ -23,7 +23,6 @@ class Settings(BaseSettings):
 
     kb_runtime_enabled: bool = False
     internal_admin_token: str | None = None
-    internal_admin_token: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
