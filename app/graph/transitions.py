@@ -139,6 +139,19 @@ def apply_state_transition(state: ElviraState) -> ElviraState:
             state.state_reason = "affirmative_slot_confirmation_guard"
             return state
 
+        if (
+            previous_state == "ST_CITA_FRANJA"
+            and len(state.slots_candidatos or []) == 1
+            and is_exact_hour_without_explicit_franja_confirmation(
+                state.mensaje_original
+            )
+        ):
+            state.nuevo_estado = "ST_CITA_PENDIENTE"
+            state.next_action = "confirm_appointment_request"
+            state.franja_solicitada = state.slots_candidatos[0]
+            state.state_reason = "exact_hour_inside_available_slot"
+            return state
+
         matched_slot = resolve_requested_slot_from_message(
             state.mensaje_original,
             list(state.slots_candidatos or []),

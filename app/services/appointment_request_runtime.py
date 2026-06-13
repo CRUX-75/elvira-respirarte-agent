@@ -323,7 +323,6 @@ def decide_appointment_request_persistence(
         franja_solicitada is not None
         and is_exact_hour_without_explicit_franja_confirmation(state.mensaje_original)
         and getattr(state, "state_reason", None) != "exact_hour_inside_available_slot"
-        and getattr(state, "state_reason", None) != "exact_hour_inside_available_slot"
     ):
         return AppointmentPersistenceDecision(
             should_persist=False,

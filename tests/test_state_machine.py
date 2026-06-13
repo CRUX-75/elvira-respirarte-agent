@@ -748,3 +748,5 @@ def test_p6f946_affirmative_confirmation_guard_requires_slot_context():
 
     assert state.state_reason != "affirmative_slot_confirmation_guard"
     assert state.franja_solicitada is None
+
+
