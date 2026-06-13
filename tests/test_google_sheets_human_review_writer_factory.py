@@ -19,7 +19,7 @@ def test_factory_returns_none_when_google_sheets_disabled(monkeypatch):
     monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_JSON", '{"type":"service_account"}')
 
     writer = build_google_sheets_human_review_writer(
-        settings=Settings(),
+        settings=Settings(_env_file=None),
         service_builder=fake_service_builder,
     )
 
@@ -32,7 +32,7 @@ def test_factory_returns_none_when_spreadsheet_id_missing(monkeypatch):
     monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_JSON", '{"type":"service_account"}')
 
     writer = build_google_sheets_human_review_writer(
-        settings=Settings(),
+        settings=Settings(_env_file=None),
         service_builder=fake_service_builder,
     )
 
@@ -45,7 +45,7 @@ def test_factory_returns_none_when_service_account_json_missing(monkeypatch):
     monkeypatch.delenv("GOOGLE_SERVICE_ACCOUNT_JSON", raising=False)
 
     writer = build_google_sheets_human_review_writer(
-        settings=Settings(),
+        settings=Settings(_env_file=None),
         service_builder=fake_service_builder,
     )
 
@@ -59,7 +59,7 @@ def test_factory_builds_writer_when_all_required_config_exists(monkeypatch):
     monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_JSON", '{"type":"service_account"}')
 
     writer = build_google_sheets_human_review_writer(
-        settings=Settings(),
+        settings=Settings(_env_file=None),
         service_builder=fake_service_builder,
     )
 
