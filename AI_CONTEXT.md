@@ -1800,3 +1800,110 @@ Do not enable `WHATSAPP_SENDING_ENABLED=true`.
 
 Do not move to real sending until P6-F.9.46 is executed, validated, documented, and closed.
 
+
+---
+
+## P6-F.9.46 Closure Note — Production Meta Webhook Run
+
+Status:
+
+CLOSED / PRODUCTION META WEBHOOK VALIDATED / OWNER-ACCEPTED SUCCESSFUL RUN
+
+Validation date:
+
+2026-06-13
+
+Validated by:
+
+Project owner / operator
+
+Production evidence:
+
+* Production app was running successfully on EasyPanel.
+* `/ready` returned production-ready status before execution.
+* Meta webhook configuration was confirmed in Meta Developer Console:
+  * Callback URL: `https://elvira.genflowautomation.com/webhook`
+  * App mode: Live
+  * WhatsApp webhook field `messages` subscribed
+* Real Meta inbound webhook reached production `/webhook`.
+* Production logs showed multiple successful `POST /webhook HTTP/1.1 200 OK`.
+* Real Meta WhatsApp message IDs (`wamid...`) were received and preserved.
+* Status notifications without messages were ignored correctly with `reason=no_message`.
+* Patient was loaded/created correctly.
+* Interaction logs were written.
+* State transitions executed correctly through the real production webhook path.
+
+Validated real conversation flow:
+
+1. `Hola, quisiera agendar una cita con la doctora`
+   * intent: `cita`
+   * transition: `ST_CITA_PENDIENTE -> ST_CITA_FECHA`
+   * response asked for preferred day.
+
+2. `Para el día lunes`
+   * intent: `fecha_cita`
+   * Monday 2026-06-15 was correctly identified as Colombia holiday:
+     `Sagrado Corazón de Jesús`
+   * state remained `ST_CITA_FECHA`
+   * response correctly asked for another weekday.
+
+3. `Entiendo, entonces el martes`
+   * intent: `fecha_cita`
+   * transition: `ST_CITA_FECHA -> ST_CITA_FRANJA`
+   * Tuesday 2026-06-16 was correctly accepted.
+   * Available slots were presented:
+     * `3:00 p. m. - 5:00 p. m.`
+     * `5:00 p. m. - 7:00 p. m.`
+
+4. `La de las 5`
+   * intent: `hora_cita`
+   * transition: `ST_CITA_FRANJA -> ST_CITA_PENDIENTE`
+   * response confirmed request registration for the selected franja.
+   * Elvira did not confirm the appointment as final; she indicated that Dra. D'Aleman will confirm.
+
+Observed delivery behavior:
+
+* Logs showed real outbound WhatsApp API requests to Graph API.
+* Delivery status observed: `sent`.
+* `whatsapp_sending_enabled=True` was observed during the run.
+* This run is therefore accepted by the owner as a successful controlled production webhook + real sending validation, not merely a disabled-sending dry-run.
+
+Important owner decision:
+
+The owner/operator explicitly validated this production run as successful.
+
+Conclusion:
+
+P6-F.9.46 is CLOSED as an owner-accepted successful production Meta webhook validation.
+
+The production webhook path is proven end-to-end:
+
+Meta inbound message
+-> production `/webhook`
+-> parsing
+-> state machine
+-> KB/date logic
+-> appointment slot flow
+-> interaction persistence
+-> processed message handling
+-> outbound WhatsApp response
+
+Next recommended block:
+
+P6-F.9.47 — Post-Run Safety Reconciliation And Controlled Next-Step Decision
+
+Purpose:
+
+Reconcile documentation after the successful owner-accepted production run, confirm the intended value of `WHATSAPP_SENDING_ENABLED` for the next phase, and decide whether the next controlled production block should continue with sending enabled or return to disabled mode.
+
+Standing boundaries until explicitly changed:
+
+* Do not open to uncontrolled real patients.
+* Do not run campaigns.
+* Do not add Google Sheets.
+* Do not add Telegram.
+* Do not add n8n.
+* Do not add Calendar.
+* Do not add doctor confirmation automation.
+* Keep production testing controlled and operator-supervised.
+
