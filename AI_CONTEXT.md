@@ -3663,3 +3663,140 @@ Initial safety design for P6-F.9.68:
 * No WhatsApp sending changes.
 * No Telegram, n8n, Calendar, or campaigns.
 
+
+---
+
+## P6-F.9.68 Closure Note — Runtime Wiring After AppointmentRequest Persistence
+
+Status:
+
+CLOSED / OPTIONAL GOOGLE SHEETS RUNTIME WIRING IMPLEMENTED / GREEN
+
+Objective:
+
+Wire the optional Google Sheets human review inbox writer after successful `AppointmentRequest` persistence, while keeping PostgreSQL as the source of truth and preserving runtime safety.
+
+Implemented:
+
+* `app/main.py`
+* `tests/test_stateful_appointment_request_wiring.py`
+
+Runtime design:
+
+The runtime now follows this order:
+
+1. Deterministic appointment request decision.
+2. PostgreSQL `AppointmentRequest` persistence through `AppointmentRequestService.create_or_reuse_active_request(...)`.
+3. Best-effort optional Google Sheets human review inbox write.
+4. Patient state / interaction flow continues regardless of Google Sheets status.
+
+Core rule:
+
+PostgreSQL persists first.
+
+Google Sheets writes after persistence.
+
+Google Sheets must never own appointment lifecycle state.
+
+Implemented helper:
+
+`_write_human_review_inbox(appointment_request)`
+
+Behavior:
+
+* Builds the optional writer through `build_google_sheets_human_review_writer(settings=settings)`.
+* If the factory returns `None`, returns:
+  * `{"adapter": "google_sheets", "status": "skipped_disabled"}`
+* If the writer writes successfully, returns:
+  * `{"adapter": "google_sheets", "status": "<writer result>"}`
+  * examples: `appended`, `updated`
+* If writer construction or write fails, returns:
+  * `{"adapter": "google_sheets", "status": "failed"}`
+* Exceptions are swallowed intentionally because Google Sheets is an auxiliary inbox adapter, not the source of truth.
+
+Metadata:
+
+When an `AppointmentRequest` is persisted, `appointment_request` response metadata now includes:
+
+```json
+{
+  "human_review_inbox": {
+    "adapter": "google_sheets",
+    "status": "skipped_disabled | appended | updated | failed"
+  }
+}
+
+Validated tests:
+
+Added coverage for:
+
+Google Sheets skipped when the writer factory returns None.
+Google Sheets write after successful AppointmentRequest persistence.
+Runtime continues safely when Google Sheets write fails.
+
+Validation:
+
+Full suite GREEN:
+304 passed in 9.33s
+
+Verified wiring:
+
+grep confirmed:
+
+build_google_sheets_human_review_writer imported in app/main.py.
+_write_human_review_inbox(...) exists.
+Runtime calls create_or_reuse_active_request(...) before _write_human_review_inbox(...).
+Both current AppointmentRequest persistence paths include human_review_inbox metadata.
+
+Important boundary respected:
+
+PostgreSQL remains the source of truth.
+Google Sheets is optional and best-effort only.
+No doctor action reader.
+No WhatsApp sending changes.
+No Telegram.
+No n8n.
+No Calendar.
+No campaigns.
+No real patient activation.
+No change to AppointmentRequest lifecycle ownership.
+
+Safety behavior:
+
+If GOOGLE_SHEETS_ENABLED=false, runtime continues exactly as before, with metadata showing skipped_disabled.
+If Google Sheets config is incomplete, runtime continues safely.
+If Google Sheets API fails, runtime continues safely and reports failed.
+Patient conversation persistence must not be blocked by Google Sheets.
+
+Conclusion:
+
+P6-F.9.68 is CLOSED.
+
+Next recommended block:
+
+P6-F.9.69 — Controlled Runtime Google Sheets Validation Through /test/message-stateful
+
+Purpose:
+
+Validate the new optional runtime wiring through the safe /test/message-stateful endpoint using a controlled test patient and controlled AppointmentRequest flow.
+
+Scope for P6-F.9.69:
+
+Keep WHATSAPP_SENDING_ENABLED=false.
+Use /test/message-stateful, not real /webhook.
+Enable Google Sheets only for the controlled validation window.
+Confirm runtime response includes human_review_inbox.
+Confirm Google Sheets row is appended/updated.
+Confirm PostgreSQL AppointmentRequest remains source of truth.
+Restore Google Sheets disabled state after validation.
+
+Out of scope for P6-F.9.69:
+
+No real WhatsApp sending.
+No uncontrolled patient activation.
+No doctor action reader.
+No Telegram.
+No n8n.
+No Calendar.
+No campaigns.
+
