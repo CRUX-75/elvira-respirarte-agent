@@ -3123,3 +3123,331 @@ Execute the Swagger dry-run using controlled data and document evidence.
 Boundary:
 
 No real patient notification sending.
+
+---
+
+## P6-F.9.62 / P6-F.9.63 / P6-F.9.64 / P6-F.9.65 Closure Note — Google Sheets Human Review Inbox Foundation
+
+Status:
+
+GREEN / COMMITTED / READY FOR NEXT BLOCK
+
+Context:
+
+The project moved from pure HumanReviewService/API design into the Google Sheets human review inbox foundation for Dra. D'Aleman.
+
+Operational product decision:
+
+Elvira registers appointment requests.
+
+Dra. D'Aleman reviews them in Google Sheets.
+
+PostgreSQL remains the source of truth.
+
+Google Sheets is only the human-facing review inbox, not the owner of appointment lifecycle logic.
+
+The doctor should not manually edit `estado_solicitud`.
+
+The doctor should use `accion_doctora`.
+
+A later backend reader will translate doctor actions into HumanReviewAction and apply them through HumanReviewService.
+
+## P6-F.9.62 — Google Sheets Human Review Inbox Alignment
+
+Status:
+
+CLOSED / COMMITTED
+
+Commit:
+
+26c011b Document Google Sheets human review inbox alignment
+
+Document created:
+
+docs/P6-F.9.62_GOOGLE_SHEETS_HUMAN_REVIEW_INBOX_ALIGNMENT.md
+
+Existing Google Sheet:
+
+Respirarte CRM
+
+Tab:
+
+Solicitudes_Cita
+
+Final agreed columns:
+
+- id_solicitud
+- fecha_registro
+- telefono
+- nombre_paciente
+- fecha_solicitada_texto
+- franja_solicitada
+- modalidad
+- estado_solicitud
+- observaciones_elvira
+- interaction_id_origen
+- direccion_domicilio
+- servicio_solicitado
+- fecha_confirmada
+- franja_confirmada
+- accion_doctora
+- motivo_decision
+- revisado_por
+- fecha_revision
+- sync_status
+- last_sync_at
+- sync_error
+
+Doctor-owned columns:
+
+- accion_doctora
+- fecha_confirmada
+- franja_confirmada
+- motivo_decision
+- revisado_por
+- fecha_revision
+
+Backend-owned columns:
+
+- id_solicitud
+- fecha_registro
+- telefono
+- nombre_paciente
+- fecha_solicitada_texto
+- franja_solicitada
+- modalidad
+- estado_solicitud
+- observaciones_elvira
+- interaction_id_origen
+- direccion_domicilio
+- servicio_solicitado
+- sync_status
+- last_sync_at
+- sync_error
+
+Allowed doctor actions:
+
+- aprobar
+- rechazar
+- pedir_datos
+- proponer_alternativa
+- reagendar
+- cerrar
+
+Backend action mapping:
+
+- aprobar -> confirm
+- rechazar -> cancel
+- pedir_datos -> request_missing_data
+- proponer_alternativa -> propose_alternative
+- reagendar -> reschedule
+- cerrar -> close
+
+## P6-F.9.63 — Google Sheets Human Review Inbox Writer
+
+Status:
+
+CLOSED / GREEN / COMMITTED
+
+Commit:
+
+55b8024 Add Google Sheets human review inbox writer
+
+Files created:
+
+- app/adapters/__init__.py
+- app/adapters/google_sheets_human_review_writer.py
+- tests/test_google_sheets_human_review_writer.py
+- docs/P6-F.9.63_GOOGLE_SHEETS_HUMAN_REVIEW_INBOX_WRITER_SPEC.md
+
+Implemented:
+
+- GOOGLE_SHEETS_HUMAN_REVIEW_COLUMNS
+- DOCTOR_OWNED_COLUMNS
+- SheetsClient protocol
+- map_appointment_request_to_sheet_row(...)
+- GoogleSheetsHumanReviewWriter
+- upsert_request(...)
+
+Validated behavior:
+
+- AppointmentRequest maps to Solicitudes_Cita row contract.
+- Missing optional fields become empty strings.
+- Existing row is updated by id_solicitud.
+- Missing row is appended.
+- Doctor-owned values are preserved on update.
+- Writer is skipped when disabled.
+
+Validated targeted tests:
+
+- tests/test_google_sheets_human_review_writer.py
+- tests/test_appointment_request_model.py
+- tests/test_appointment_request_service.py
+
+Result:
+
+27 passed
+
+Important implementation note:
+
+The writer is isolated.
+
+It is not connected to /webhook or appointment runtime yet.
+
+No real Google Sheets write happens automatically.
+
+## P6-F.9.64 — Google Sheets Config Boundary
+
+Status:
+
+CLOSED / GREEN / COMMITTED
+
+Commit:
+
+d80eb27 Add Google Sheets config boundary
+
+Files changed/created:
+
+- app/config.py
+- tests/test_google_sheets_config.py
+- docs/P6-F.9.64_GOOGLE_SHEETS_CLIENT_CONFIG_BOUNDARY.md
+
+Config fields added:
+
+- google_sheets_enabled: bool = False
+- google_sheets_spreadsheet_id: str | None = None
+- google_sheets_solicitudes_cita_tab: str = "Solicitudes_Cita"
+- google_service_account_json: str | None = None
+
+Safety decision:
+
+GOOGLE_SHEETS_ENABLED defaults to false.
+
+No Google Sheets write may happen unless explicitly enabled.
+
+## P6-F.9.65 — Google Sheets API Client Adapter
+
+Status:
+
+CLOSED / GREEN / COMMITTED
+
+Commit:
+
+d72d20f Add Google Sheets API client adapter
+
+Files changed/created:
+
+- requirements.txt
+- app/adapters/google_sheets_client.py
+- tests/test_google_sheets_api_client.py
+- docs/P6-F.9.65_GOOGLE_SHEETS_API_CLIENT_ADAPTER.md
+
+Dependencies added:
+
+- google-api-python-client==2.187.0
+- google-auth==2.43.0
+
+Implemented:
+
+- GoogleSheetsConfigError
+- GOOGLE_SHEETS_SCOPES
+- build_google_sheets_service(...)
+- GoogleSheetsApiClient
+- get_values(...)
+- append_row(...)
+- update_row(...)
+
+Validated behavior with mocks/fakes only:
+
+- Missing service account JSON is rejected.
+- Invalid service account JSON is rejected.
+- Valid service account JSON builds a mocked Sheets service.
+- get_values calls the expected Sheets API chain.
+- append_row uses USER_ENTERED.
+- update_row uses USER_ENTERED and row-specific range.
+
+Important safety note:
+
+No real Google Sheets write was performed during P6-F.9.65.
+
+The client exists but is not wired into runtime.
+
+## Google Cloud / Service Account Operational Note
+
+A Google Cloud service account was created:
+
+elvira-sheets-writer@charged-atlas-492207-n9.iam.gserviceaccount.com
+
+Intended purpose:
+
+Write appointment requests from Elvira backend to the Respirarte CRM Google Sheet.
+
+Required external setup before real dry-run:
+
+- Google Sheets API enabled.
+- Share the Respirarte CRM Google Sheet with the service account email as Editor.
+- Create/download JSON key.
+- Store JSON only as environment variable, never in Git or chat.
+
+Expected future env vars:
+
+GOOGLE_SHEETS_ENABLED=false
+GOOGLE_SHEETS_SPREADSHEET_ID=1KybtxT0genUOzYLfiPridsAXRtx8jS-rm79829LKjgY
+GOOGLE_SHEETS_SOLICITUDES_CITA_TAB=Solicitudes_Cita
+GOOGLE_SERVICE_ACCOUNT_JSON=<service-account-json-one-line>
+
+Never commit the service account JSON.
+
+## Current Safety Baseline
+
+WHATSAPP_SENDING_ENABLED=false
+
+GOOGLE_SHEETS_ENABLED=false by default.
+
+No real patient notification sending.
+
+No runtime Google Sheets writes yet.
+
+No doctor action reader.
+
+No Telegram.
+
+No n8n.
+
+No Calendar.
+
+No campaigns.
+
+No doctor confirmation automation.
+
+No therapy session package tracking.
+
+## Current Next Recommended Block
+
+P6-F.9.66 — Google Sheets Writer Factory And Runtime Boundary
+
+Purpose:
+
+Create a safe factory that builds the Google Sheets writer only when configuration is complete and GOOGLE_SHEETS_ENABLED=true.
+
+Recommended scope:
+
+- create factory/helper for GoogleSheetsHumanReviewWriter
+- require google_sheets_enabled=true
+- require google_service_account_json
+- require google_sheets_spreadsheet_id
+- use google_sheets_solicitudes_cita_tab
+- return disabled/null writer safely when not enabled
+- tests with mocks only
+- no /webhook wiring yet
+- no automatic Sheets write yet
+
+Recommended order after P6-F.9.66:
+
+P6-F.9.67 — Internal/manual controlled Google Sheets write dry-run
+P6-F.9.68 — Runtime wiring after AppointmentRequest persistence
+P6-F.9.69 — Doctor action reader design
+P6-F.9.70 — Patient notification after human review
+
+Do not jump directly into automatic runtime writing before a controlled manual dry-run.
+
