@@ -1282,3 +1282,45 @@ Scope reminder:
 - Do not add Google Sheets, Telegram, n8n, Calendar, campaigns, or doctor confirmation automation yet.
 - Focus only on final validation of AppointmentRequest persistence behavior before moving toward production readiness.
 
+
+## P6-F.9.42 — AppointmentRequest Persistence Final Validation / Scope
+
+P6-F.9.42 starts after P6-F.9.41 was closed, GREEN, and Swagger-validated.
+
+Goal:
+
+Validate final AppointmentRequest persistence behavior before moving toward production readiness.
+
+Scope:
+
+1. Validate that `appointment_request` is persisted correctly in PostgreSQL.
+2. Validate that `appointment_context` is cleared after successful persistence.
+3. Validate that duplicate active AppointmentRequests are not created for the same patient.
+4. Validate that `persisted_state = ST_CITA_PENDIENTE` after successful request registration.
+5. Document `franja_solicitada = null` at top-level response as minor non-blocking response-shape debt.
+
+Decision:
+
+The top-level `franja_solicitada = null` observed in the Swagger response is not a blocker because the operational persistence sources are correct:
+
+- `appointment_request_decision.franja_solicitada` is correct.
+- `appointment_request.franja_solicitada` is correct.
+- `estado_solicitud = pendiente_confirmacion` is correct.
+- `appointment_request != null` is correct.
+- `persisted_state = ST_CITA_PENDIENTE` is correct.
+
+This should not distract P6-F.9.42. It can be cleaned later as response-shape polish.
+
+Out of scope:
+
+- No graph refactor.
+- No `restore_appointment_context` node yet.
+- No Google Sheets.
+- No Telegram.
+- No n8n.
+- No Calendar.
+- No campaigns.
+- No doctor confirmation automation.
+- No real patient traffic.
+- Keep `WHATSAPP_SENDING_ENABLED=false`.
+
