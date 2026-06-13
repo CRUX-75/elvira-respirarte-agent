@@ -2130,3 +2130,110 @@ Standing boundaries:
 * Do not enable real sending again without a named controlled phase.
 * Do not add Google Sheets, Telegram, n8n, Calendar, or doctor confirmation automation until explicitly scoped.
 
+
+
+---
+
+## P6-F.9.49 Closure Note — Controlled Next Production Test Definition
+
+Status:
+
+CLOSED / DECISION RECORDED / NO NEW PRODUCTION TEST REQUIRED NOW
+
+Context:
+
+P6-F.9.49 was opened after the owner-accepted production Meta webhook run, post-run safety restoration, production DB evidence review, and AppointmentRequest existence verification.
+
+Controlled production evidence already validated:
+
+* Real Meta inbound webhook delivery.
+* Production `/webhook` execution.
+* Payload parsing.
+* Real `wamid` preservation.
+* State transition flow.
+* Colombia holiday blocking.
+* KB-driven slot presentation.
+* Slot selection.
+* AppointmentRequest creation.
+* Interaction persistence.
+* Processed message persistence.
+* Patient state persistence.
+* Real outbound WhatsApp sending during the controlled run.
+
+Controlled production phone:
+
+* `4917655660163`
+
+Controlled patient name:
+
+* `Nabit Mikan`
+
+Validated AppointmentRequest:
+
+* `SOL-20260613-090329-503926-0163`
+
+Final validated patient state:
+
+* `ST_CITA_PENDIENTE`
+
+Decision:
+
+No additional real production sending test is required at this moment.
+
+Reason:
+
+The previous controlled production run already validated the end-to-end production path. Repeating another real-sending test now would add limited value and increase operational risk unnecessarily.
+
+Current safety baseline:
+
+* `WHATSAPP_SENDING_ENABLED=false`
+* No uncontrolled real patients.
+* No campaigns.
+* No Google Sheets.
+* No Telegram.
+* No n8n.
+* No Calendar.
+* No doctor confirmation automation.
+* No real sending without a newly named controlled phase.
+
+Controlled test data decision:
+
+Do not delete the existing controlled production evidence automatically.
+
+The controlled patient and AppointmentRequest may remain as audit evidence unless a future clean-state test explicitly requires reset or archival.
+
+Accepted next direction:
+
+Move to human review handoff design only.
+
+Next phase:
+
+P6-F.9.50 — Human Review Handoff Spec
+
+Purpose:
+
+Define how a persisted `AppointmentRequest` in `pendiente_confirmacion` moves into human review by Dra. D'Aleman before implementing any external adapter.
+
+Important boundary:
+
+P6-F.9.50 must be spec/design only at first.
+
+Do not implement yet:
+
+* Google Sheets adapter
+* Telegram notification
+* n8n workflow
+* Calendar integration
+* doctor confirmation automation
+* campaigns
+* therapy package/session tracking
+* real patient activation
+* real WhatsApp sending
+
+Conclusion:
+
+P6-F.9.49 is CLOSED.
+
+Next starting point:
+
+Create the spec for P6-F.9.50 — Human Review Handoff Spec.
