@@ -58,3 +58,5 @@ watchfiles==1.1.1
 websockets==16.0
 xxhash==3.7.0
 zstandard==0.25.0
+google-api-python-client==2.187.0
+google-auth==2.43.0
