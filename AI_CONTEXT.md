@@ -2237,3 +2237,100 @@ P6-F.9.49 is CLOSED.
 Next starting point:
 
 Create the spec for P6-F.9.50 — Human Review Handoff Spec.
+
+P6-F.9.50 Spec Note — Human Review Handoff Spec
+
+Status:
+
+SPEC / DESIGN ONLY
+
+Objective:
+
+Define how a persisted AppointmentRequest in pendiente_confirmacion moves into human review by Dra. D'Aleman before implementing any external adapter.
+
+Spec created:
+
+docs/P6-F.9.50_HUMAN_REVIEW_HANDOFF_SPEC.md
+
+Core decision:
+
+Elvira registers requests.
+
+Dra. D'Aleman confirms appointments.
+
+PostgreSQL remains the source of truth.
+
+External tools such as Google Sheets, Telegram, n8n, or Calendar may later become adapters or notification surfaces, but they must not own appointment lifecycle logic.
+
+Human review object minimum required fields:
+
+id_solicitud
+telefono
+nombre_paciente
+fecha_solicitada
+franja_solicitada
+servicio_solicitado
+direccion_paciente
+estado_solicitud
+fecha_creacion
+ultima_actualizacion
+notas_paciente
+source_channel
+source_interaction_id
+
+Doctor actions defined:
+
+confirm request
+request missing data
+propose alternative
+reschedule
+cancel request
+close request
+
+Status contract remains:
+
+nueva
+pendiente_datos
+pendiente_confirmacion
+confirmada
+reagendada
+cancelada
+cerrada
+
+Invalid statuses remain forbidden:
+
+pendiente
+contraoferta
+completada
+
+Important design decision:
+
+A contraoffer remains represented as pendiente_confirmacion, not as a separate status.
+
+Adapter boundaries:
+
+Google Sheets may later act as a visual inbox only.
+Telegram may later notify the doctor or provide action buttons only through backend validation.
+n8n may later orchestrate auxiliary notifications only.
+Calendar may later mirror confirmed appointments only.
+None of these tools may become the source of truth.
+
+Current safety baseline:
+
+WHATSAPP_SENDING_ENABLED=false
+No uncontrolled real patients.
+No campaigns.
+No Google Sheets implementation.
+No Telegram implementation.
+No n8n workflow.
+No Calendar integration.
+No doctor confirmation automation.
+No real WhatsApp sending.
+
+Recommended next phase:
+
+P6-F.9.51 — Human Review Internal Model And Service Contract
+
+Purpose:
+
+Create the internal backend contract for human review actions without connecting Google Sheets, Telegram, n8n, or Calendar.
