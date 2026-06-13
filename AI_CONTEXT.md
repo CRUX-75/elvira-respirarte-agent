@@ -2334,3 +2334,99 @@ P6-F.9.51 — Human Review Internal Model And Service Contract
 Purpose:
 
 Create the internal backend contract for human review actions without connecting Google Sheets, Telegram, n8n, or Calendar.
+
+P6-F.9.51 Spec Note — Human Review Internal Model And Service Contract
+
+Status:
+
+SPEC / CONTRACT / PRE-IMPLEMENTATION
+
+Objective:
+
+Define the internal backend contract for human review actions before connecting any external adapter.
+
+Spec created:
+
+docs/P6-F.9.51_HUMAN_REVIEW_INTERNAL_MODEL_AND_SERVICE_CONTRACT.md
+
+Core decision:
+
+The human review lifecycle must be controlled by backend service logic.
+
+PostgreSQL remains the source of truth.
+
+External tools remain out of scope and may later act only as adapters.
+
+Recommended internal model:
+
+HumanReviewAction
+
+Recommended service:
+
+HumanReviewService
+
+Recommended service method:
+
+apply_action(action: HumanReviewAction) -> HumanReviewResult
+
+Supported actions:
+
+confirm
+request_missing_data
+propose_alternative
+reschedule
+cancel
+close
+
+Supported status contract remains:
+
+nueva
+pendiente_datos
+pendiente_confirmacion
+confirmada
+reagendada
+cancelada
+cerrada
+
+Important design decisions:
+
+A contraoffer remains represented as pendiente_confirmacion.
+P6-F.9.51 must not send patient messages.
+The service result may prepare should_notify_patient and patient_message, but actual sending belongs to a later named phase.
+Doctor-side lifecycle events should eventually use a dedicated appointment_request_events table rather than overloading patient-facing interactions.
+
+Current safety baseline:
+
+WHATSAPP_SENDING_ENABLED=false
+No uncontrolled real patients.
+No campaigns.
+No Google Sheets implementation.
+No Telegram implementation.
+No n8n workflow.
+No Calendar integration.
+No doctor confirmation automation.
+No real WhatsApp sending.
+
+Recommended next phase:
+
+P6-F.9.52 — Human Review Service Tests
+
+Purpose:
+
+Create tests for the internal human review service contract before implementation.
+
+Boundary:
+
+No external adapters.
+
+No API endpoints.
+
+No Google Sheets.
+
+No Telegram.
+
+No n8n.
+
+No Calendar.
+
+No real WhatsApp sending.
