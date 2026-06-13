@@ -587,6 +587,10 @@ def _apply_appointment_request_runtime(
     if (
         appointment_request_decision.reason
         == "requires_exact_hour_franja_confirmation"
+        or (
+            appointment_request_decision.reason == "skipped_wrong_state_or_action"
+            and getattr(result, "state_reason", None) == "requires_exact_hour_franja_confirmation"
+        )
     ):
         result = _force_exact_hour_franja_confirmation_state_guard_response(result)
         result.respuesta = _build_exact_hour_franja_confirmation_response(
@@ -713,6 +717,10 @@ def test_message_stateful(message: IncomingMessage):
     if (
         appointment_request_decision.reason
         == "requires_exact_hour_franja_confirmation"
+        or (
+            appointment_request_decision.reason == "skipped_wrong_state_or_action"
+            and getattr(result, "state_reason", None) == "requires_exact_hour_franja_confirmation"
+        )
     ):
         result = _force_exact_hour_franja_confirmation_state_guard_response(result)
         result.respuesta = _build_exact_hour_franja_confirmation_response(
