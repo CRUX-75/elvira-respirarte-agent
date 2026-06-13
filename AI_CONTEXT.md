@@ -1733,3 +1733,70 @@ Important boundary:
 
 Do not enable real outbound WhatsApp sending yet.
 
+
+---
+
+## P6-F.9.46 Planning Note — Production Meta Webhook Dry-Run Plan
+
+Status:
+
+PLANNED / DOCUMENTED
+
+Repository status at planning time:
+
+* Branch: main
+* Working tree before P6-F.9.46 doc creation: clean
+* Latest full suite before this planning block: 260 passed
+* Latest committed doc: `docs/P6-F.9.46_PRODUCTION_META_WEBHOOK_DRY_RUN_PLAN.md`
+* Commit: `88c9eed Document production Meta webhook dry-run plan`
+
+Objective:
+
+Prepare the first controlled production dry-run where Meta delivers a real inbound WhatsApp webhook event to the production `/webhook` endpoint while outbound sending remains disabled.
+
+Safety baseline:
+
+* `WHATSAPP_SENDING_ENABLED=false`
+* Real outbound WhatsApp sending remains disabled.
+* Real patients must not be contacted.
+* No Google Sheets.
+* No Telegram.
+* No n8n.
+* No Calendar.
+* No campaigns.
+* No doctor confirmation automation.
+* No runtime code changes unless a real blocker is found.
+
+Scope:
+
+P6-F.9.46 is documentation and operational planning for real inbound Meta webhook reception in production with sending disabled.
+
+The first dry-run message should be a simple controlled greeting, for example:
+
+`Hola, prueba controlada`
+
+The first dry-run must not start an appointment flow.
+
+Expected validation evidence:
+
+* Production `/webhook` receives a real Meta event.
+* Payload extraction succeeds.
+* Real Meta `wamid` is preserved.
+* Patient row is created or reused.
+* Interaction is saved.
+* `processed_messages` records the real Meta `wamid`.
+* `delivery_status=sending_skipped`.
+* `whatsapp_sending_enabled=false`.
+* No outbound WhatsApp message is sent.
+* No AppointmentRequest is created from the simple greeting.
+
+Next active block:
+
+P6-F.9.46 — Production Meta Webhook Dry-Run Execution
+
+Important boundary:
+
+Do not enable `WHATSAPP_SENDING_ENABLED=true`.
+
+Do not move to real sending until P6-F.9.46 is executed, validated, documented, and closed.
+
