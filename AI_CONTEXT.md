@@ -1651,3 +1651,85 @@ Important boundary:
 
 Do not enable real outbound WhatsApp sending yet.
 
+
+---
+
+## P6-F.9.45 Closure Note — Controlled Webhook Dry-Run With Sending Disabled
+
+Status:
+
+CLOSED / META-SHAPED WEBHOOK PAYLOAD VALIDATED / GREEN
+
+Objective:
+
+Validate the real `/webhook` path using Meta-shaped WhatsApp payloads while keeping real outbound sending disabled.
+
+Important boundary:
+
+This phase did not enable real WhatsApp sending.
+
+Safety baseline maintained:
+
+* `WHATSAPP_SENDING_ENABLED=false`
+* Real outbound WhatsApp sending not enabled.
+* Real patients not contacted.
+* No Google Sheets, Telegram, n8n, Calendar, campaigns or doctor confirmation automation added.
+* No production activation performed.
+
+Implemented validation:
+
+Created:
+
+* `tests/test_whatsapp_payload_model.py`
+
+Validated `WhatsAppPayload.extract_message()` with Meta-shaped payloads:
+
+* Text message payload is parsed correctly.
+* Status notifications return `None`.
+* Unsupported message types such as `audio` return `None`.
+
+Validated extracted fields:
+
+* `telefono`
+* `mensaje`
+* `nombre`
+* `msg_type`
+* `whatsapp_message_id`
+* `whatsapp_timestamp`
+
+Validated real `/webhook` path with `WhatsAppPayload` instead of `FakeWhatsAppPayload`:
+
+* `/webhook` accepts Meta-shaped text payload.
+* `WHATSAPP_SENDING_ENABLED=false` produces `status=sending_skipped`.
+* `whatsapp_sending_enabled=false` is returned.
+* WhatsApp message ID and timestamp are preserved.
+* Patient is loaded/created.
+* Interaction is saved with `delivery_status=sending_skipped`.
+* Patient state is updated.
+* Patient last message timestamp is updated.
+* Message is marked as processed only after successful processing.
+* No real WhatsApp send is attempted.
+
+Local validation:
+
+* Full suite GREEN:
+  * `260 passed in 9.45s`
+
+Conclusion:
+
+P6-F.9.45 is CLOSED.
+
+The real webhook path now has local test coverage with Meta-shaped WhatsApp payloads while sending remains disabled.
+
+Next recommended block:
+
+P6-F.9.46 — Production Meta Webhook Dry-Run Plan
+
+Purpose:
+
+Prepare a controlled production dry-run using real Meta webhook delivery while keeping `WHATSAPP_SENDING_ENABLED=false`.
+
+Important boundary:
+
+Do not enable real outbound WhatsApp sending yet.
+
