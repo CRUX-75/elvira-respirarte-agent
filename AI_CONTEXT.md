@@ -1444,3 +1444,113 @@ Purpose:
 
 Prepare the controlled production activation checklist before touching the real WhatsApp Cloud API webhook or enabling real outbound sending.
 
+
+---
+
+## P6-F.9.43 Closure Note — Production Readiness Checklist / Controlled Activation Preparation
+
+Status:
+
+CLOSED / PRE-ACTIVATION READINESS VALIDATED
+
+Objective:
+
+Prepare and validate the controlled production readiness checklist before touching the real WhatsApp Cloud API webhook or enabling real outbound WhatsApp sending.
+
+Documentation created:
+
+* `docs/P6-F.9.43_PRODUCTION_READINESS_CHECKLIST.md`
+
+Safety baseline maintained:
+
+* `WHATSAPP_SENDING_ENABLED=false`
+* Real `/webhook` not changed.
+* Real WhatsApp sending not enabled.
+* Real patients not contacted.
+* `/test/message-stateful` remains the safe validation surface.
+* Google Sheets, Telegram, n8n, Calendar, campaigns and doctor confirmation automation remain out of scope.
+
+Environment readiness:
+
+Validated manually without exposing secrets:
+
+* `DATABASE_URL` present.
+* `OPENAI_API_KEY` present.
+* WhatsApp Cloud API credentials present.
+* KB runtime configuration present.
+* LangSmith configuration reviewed.
+* No secrets were pasted into chat or committed to Git.
+* `WHATSAPP_SENDING_ENABLED=false` remains the safety baseline.
+
+Database schema readiness:
+
+Validated in production PostgreSQL / pgweb:
+
+Required tables exist:
+
+* `appointment_requests`
+* `interactions`
+* `kb_rules`
+* `kb_schedules`
+* `patients`
+
+Additional relevant runtime tables observed:
+
+* `kb_services`
+* `processed_messages`
+
+AppointmentRequest status readiness:
+
+Validated current production statuses:
+
+* `pendiente_confirmacion`
+
+No invalid statuses observed:
+
+* `pendiente`
+* `contraoferta`
+* `completada`
+
+KB schedules readiness:
+
+Validated `kb_schedules` production rows:
+
+* `HOR-01`: weekday / Lunes a viernes excepto miércoles / 15:00–19:00 / 120 minutes / max 2 / available.
+* `HOR-02`: wednesday / Miércoles / 15:00–18:00 / 180 minutes / max 1 / available.
+* `HOR-03`: saturday / Sábado / unavailable.
+* `HOR-04`: sunday / Domingo / unavailable.
+
+KB rules readiness:
+
+Validated `kb_rules` production schema uses:
+
+* `response_rule` instead of `rule_description`.
+
+Validated relevant active rules:
+
+* `RULE-001`: Elvira cannot confirm appointments outside `KB_Horarios`.
+* `RULE-004`: If a requested slot is full, offer the next available alternative; Elvira cannot overbook patients.
+* `RULE-008`: Appointment slot policy is active and aligned with KB-driven scheduling:
+  * Monday, Tuesday, Thursday and Friday: 15:00–17:00 and 17:00–19:00.
+  * Wednesday: 15:00–18:00.
+  * Elvira may present candidate time windows as patient preference.
+  * Elvira must not confirm the appointment.
+
+Conclusion:
+
+P6-F.9.43 is CLOSED.
+
+The system is ready for the next review block, but not yet for real sending.
+
+Next recommended block:
+
+P6-F.9.44 — Real Webhook Readiness Review
+
+Purpose:
+
+Review the real `/webhook` code path before any controlled activation.
+
+Important boundary:
+
+Do not enable `WHATSAPP_SENDING_ENABLED=true` yet.
+
