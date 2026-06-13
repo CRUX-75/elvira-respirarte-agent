@@ -3800,3 +3800,104 @@ No n8n.
 No Calendar.
 No campaigns.
 
+
+---
+
+## P6-F.9.69 Closure Note — Controlled Runtime Google Sheets Validation Through `/test/message-stateful`
+
+Status:
+
+CLOSED / GREEN / GOOGLE SHEETS RUNTIME VALIDATED
+
+Objective:
+
+Validate the optional Google Sheets human review inbox runtime wiring through `/test/message-stateful`, without using the real `/webhook` path and without enabling real WhatsApp sending.
+
+Validation surface:
+
+* `/test/message-stateful`
+
+Runtime environment:
+
+* `KB_RUNTIME_ENABLED=true`
+* `GOOGLE_SHEETS_ENABLED=true` during the controlled validation
+* `GOOGLE_SERVICE_ACCOUNT_JSON` configured in EasyPanel as compact service account JSON
+* `GOOGLE_SHEETS_SPREADSHEET_ID` configured in EasyPanel
+* `WHATSAPP_SENDING_ENABLED=false`
+
+Validated flow:
+
+Phone:
+
+* `573009420013`
+
+Patient name:
+
+* `paciente001`
+
+Messages:
+
+1. `quiero solicitar una cita`
+2. `para el martes`
+3. `la de las 5`
+
+Final validated result:
+
+* `nuevo_estado = ST_CITA_PENDIENTE`
+* `persisted_state = ST_CITA_PENDIENTE`
+* `intent = hora_cita`
+* `next_action = confirm_appointment_request`
+* `delivery_status = sending_skipped`
+* `appointment_request_decision.should_persist = true`
+* `appointment_request_decision.reason = allowed_hora_cita_ready_for_human_review`
+* `appointment_request_decision.estado_solicitud = pendiente_confirmacion`
+* `appointment_request_decision.fecha_solicitada = 2026-06-16`
+* `appointment_request_decision.franja_solicitada = 5:00 p. m.–7:00 p. m.`
+* `appointment_request != null`
+
+Validated AppointmentRequest:
+
+* `id_solicitud = SOL-20260613-143552-494105-0013`
+* `estado_solicitud = pendiente_confirmacion`
+* `fecha_solicitada = 2026-06-16`
+* `franja_solicitada = 5:00 p. m.–7:00 p. m.`
+* `source_interaction_id = test-stateful-c67be22d-0b28-43d5-8faa-8a7b06929b6a`
+
+Validated Google Sheets runtime result:
+
+* `human_review_inbox.adapter = google_sheets`
+* `human_review_inbox.status = appended`
+
+Conclusion:
+
+The runtime wiring works correctly:
+
+PostgreSQL source of truth
+→ AppointmentRequest persistence
+→ optional Google Sheets human review inbox adapter
+
+Google Sheets is confirmed as an auxiliary human review inbox and does not own appointment lifecycle logic.
+
+Important operational note:
+
+`KB_RUNTIME_ENABLED=true` must remain enabled because KB_Horarios, KB_Reglas and KB_Servicios are part of the normal runtime behavior.
+
+Safety baseline after validation:
+
+* `WHATSAPP_SENDING_ENABLED=false`
+* `GOOGLE_SHEETS_ENABLED=false` should be restored unless running a named controlled validation block
+* No uncontrolled real patients
+* No campaigns
+* No Telegram
+* No n8n
+* No Calendar
+* No doctor confirmation automation
+
+Next recommended block:
+
+P6-F.9.70 — Human Review Inbox Operational Readiness Review
+
+Purpose:
+
+Review whether Google Sheets should remain disabled by default or become enabled in a controlled production mode, and define what operational evidence Dra. D'Aleman needs before using the sheet as her human review inbox.
+
