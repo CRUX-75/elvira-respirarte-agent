@@ -2060,3 +2060,73 @@ Verify the final AppointmentRequest fields for `SOL-20260613-090329-503926-0163`
 * duplicate active request behavior
 * whether any cleanup/reset is needed for the controlled test patient before future tests.
 
+
+---
+
+## P6-F.9.48.2 Closure Note — AppointmentRequest Detail Verification And Cleanup Decision
+
+Status:
+
+CLOSED / APPOINTMENT REQUEST EXISTENCE AND ACTIVE COUNT VERIFIED
+
+Context:
+
+After P6-F.9.48.1 validated production evidence from the owner-accepted production Meta webhook run, the AppointmentRequest created during the run was checked directly in production PostgreSQL.
+
+Verified controlled patient:
+
+* `telefono`: `4917655660163`
+* `nombre`: `Nabit Mikan`
+* Final patient state: `ST_CITA_PENDIENTE`
+
+Verified AppointmentRequest:
+
+* `id_solicitud`: `SOL-20260613-090329-503926-0163`
+* Active AppointmentRequest count for the controlled phone: `1`
+
+Validation result:
+
+* The production run created an AppointmentRequest.
+* The controlled patient ended in `ST_CITA_PENDIENTE`.
+* Duplicate active AppointmentRequests were not observed.
+* `active_requests = 1` confirms no duplicate active request was created for the controlled phone.
+
+Field detail note:
+
+The exact values for `estado_solicitud`, `fecha_solicitada`, and `franja_solicitada` were not copied into this closure note. The validated operational evidence is limited to request existence, controlled phone ownership, final patient state, and active request count.
+
+Cleanup decision:
+
+Do not delete the production test evidence automatically.
+
+The controlled production test data may remain as audit evidence unless the operator explicitly decides to reset the test patient before future controlled tests.
+
+Current safety state:
+
+* `WHATSAPP_SENDING_ENABLED=false` has been restored.
+* No uncontrolled patient activation is open.
+* No campaigns are active.
+* Future production tests must remain explicitly named and operator-supervised.
+
+Next recommended block:
+
+P6-F.9.49 — Controlled Next Production Test Definition
+
+Purpose:
+
+Define the next controlled production test before enabling real sending again, if sending is needed at all.
+
+Recommended options:
+
+1. Keep sending disabled and continue DB/log verification only.
+2. Run one short controlled real-sending test with the same internal phone.
+3. Reset or archive controlled patient state before future appointment-flow tests.
+4. Start designing the future human review handoff, without implementing Google Sheets, Telegram, n8n, Calendar, or doctor confirmation automation yet.
+
+Standing boundaries:
+
+* Do not open to uncontrolled real patients.
+* Do not run campaigns.
+* Do not enable real sending again without a named controlled phase.
+* Do not add Google Sheets, Telegram, n8n, Calendar, or doctor confirmation automation until explicitly scoped.
+
