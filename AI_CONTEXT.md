@@ -3952,3 +3952,64 @@ Purpose:
 
 Decide whether Google Sheets should remain disabled by default or become enabled for a controlled production handoff, and define exactly what Dra. D'Aleman needs to review, edit, or act on inside `Solicitudes_Cita`.
 
+
+---
+
+## Meta / WhatsApp Operational Note — Colombia Number Pending Verification
+
+Status:
+
+TRACKED / NOT BLOCKING BACKEND / BLOCKING COLOMBIA PATIENT-FACING ACTIVATION
+
+Context:
+
+The Respirarte WhatsApp Business Account currently has two phone numbers visible in Meta Business settings:
+
+* Colombia number: `+57 323 8136975`
+* Germany number: `+49 15678 305720`
+
+Observed status:
+
+* Colombia number: pending / `Ausstehend`
+* Germany number: connected / `Verbunden`
+* Germany number quality rating: high
+
+Operational interpretation:
+
+The backend, PostgreSQL persistence, AppointmentRequest flow, Google Sheets human review inbox, and `/test/message-stateful` validation are not blocked by this pending Colombia number status.
+
+However, patient-facing activation in Colombia is blocked until the Colombia number is fully connected in Meta.
+
+Known reason:
+
+The Colombia number has been pending review for several days because two-step verification / 2FA validation must be completed or enabled correctly in Meta.
+
+Safety decision:
+
+Do not use the Colombia number for uncontrolled patient-facing production until:
+
+* Meta shows the Colombia number as connected / `Verbunden`.
+* Two-step verification is complete.
+* The number can receive/send through WhatsApp Cloud API in a named controlled validation phase.
+* `WHATSAPP_SENDING_ENABLED=true` is enabled only inside a named controlled test phase.
+
+Roadmap impact:
+
+This becomes a parallel operational track:
+
+P6-F.9.70-META — Colombia WhatsApp Number Verification Readiness
+
+Purpose:
+
+Track and complete Meta/WhatsApp operational readiness for the Colombian Respirarte number before any broader patient-facing activation.
+
+This track must remain separate from backend logic.
+
+Current next technical/product block remains:
+
+P6-F.9.70 — Human Review Inbox Operational Readiness Review
+
+Purpose:
+
+Review whether Google Sheets should remain disabled by default or become enabled for a controlled production handoff, and define exactly what Dra. D'Aleman needs to review, edit, or act on inside `Solicitudes_Cita`.
+
