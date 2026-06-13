@@ -590,7 +590,8 @@ def _apply_appointment_request_runtime(
     ):
         result = _force_exact_hour_franja_confirmation_state_guard_response(result)
         result.respuesta = _build_exact_hour_franja_confirmation_response(
-            appointment_request_decision.franja_solicitada
+            appointment_request_decision.franja_solicitada,
+            slots=getattr(result, "slots_candidatos", None) or [],
         )
 
     if appointment_request_decision.reason == "skipped_unsupported_slot_selection":
@@ -715,7 +716,8 @@ def test_message_stateful(message: IncomingMessage):
     ):
         result = _force_exact_hour_franja_confirmation_state_guard_response(result)
         result.respuesta = _build_exact_hour_franja_confirmation_response(
-            appointment_request_decision.franja_solicitada
+            appointment_request_decision.franja_solicitada,
+            slots=getattr(result, "slots_candidatos", None) or [],
         )
 
     if appointment_request_decision.reason == "skipped_unsupported_slot_selection":
