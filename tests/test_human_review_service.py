@@ -1,5 +1,4 @@
-import pytest
-
+from app.models.appointment_request import AppointmentRequest
 from app.models.human_review import HumanReviewAction
 from app.services.human_review_service import HumanReviewService
 
@@ -9,31 +8,26 @@ class FakeAppointmentRequestRepository:
         self.request = request
         self.updated = None
 
-    def find_by_id_solicitud(self, id_solicitud: str):
-        if self.request and self.request["id_solicitud"] == id_solicitud:
+    def get_by_id(self, id_solicitud: str):
+        if self.request and self.request.id_solicitud == id_solicitud:
             return self.request
         return None
 
-    def update_status(self, id_solicitud: str, new_status: str, updates: dict | None = None):
-        self.updated = {
-            "id_solicitud": id_solicitud,
-            "new_status": new_status,
-            "updates": updates or {},
-        }
-        if self.request:
-            self.request["estado_solicitud"] = new_status
-        return self.request
+    def update(self, request: AppointmentRequest):
+        self.updated = request
+        self.request = request
+        return request
 
 
 def make_request(status: str = "pendiente_confirmacion"):
-    return {
-        "id_solicitud": "SOL-TEST-001",
-        "telefono": "573009420001",
-        "nombre_paciente": "Paciente Test",
-        "estado_solicitud": status,
-        "fecha_solicitada": "2026-06-17",
-        "franja_solicitada": "3:00 p. m.–6:00 p. m.",
-    }
+    return AppointmentRequest(
+        id_solicitud="SOL-TEST-001",
+        telefono="573009420001",
+        nombre_paciente="Paciente Test",
+        estado_solicitud=status,
+        fecha_solicitada="2026-06-17",
+        franja_solicitada="3:00 p. m.–6:00 p. m.",
+    )
 
 
 def make_service(status: str = "pendiente_confirmacion"):
@@ -57,7 +51,27 @@ def test_confirm_from_pendiente_confirmacion_to_confirmada():
     assert result.new_status == "confirmada"
     assert result.should_notify_patient is True
     assert result.patient_message is not None
-    assert repo.updated["new_status"] == "confirmada"
+    assert repo.updated.estado_solicitud == "confirmada"
+    assert repo.updated.updated_by == "dra_daleman"
+
+
+def test_confirm_can_store_confirmed_date_and_franja():
+    service, repo = make_service("pendiente_confirmacion")
+
+    result = service.apply_action(
+        HumanReviewAction(
+            id_solicitud="SOL-TEST-001",
+            action="confirm",
+            actor="dra_daleman",
+            confirmed_date="2026-06-17",
+            confirmed_franja="3:00 p. m.–6:00 p. m.",
+        )
+    )
+
+    assert result.success is True
+    assert repo.updated.estado_solicitud == "confirmada"
+    assert repo.updated.fecha_confirmada == "2026-06-17"
+    assert repo.updated.franja_confirmada == "3:00 p. m.–6:00 p. m."
 
 
 def test_request_missing_data_from_pendiente_confirmacion_to_pendiente_datos():
@@ -76,7 +90,8 @@ def test_request_missing_data_from_pendiente_confirmacion_to_pendiente_datos():
     assert result.previous_status == "pendiente_confirmacion"
     assert result.new_status == "pendiente_datos"
     assert result.should_notify_patient is True
-    assert repo.updated["new_status"] == "pendiente_datos"
+    assert repo.updated.estado_solicitud == "pendiente_datos"
+    assert "direccion_paciente" in repo.updated.observaciones
 
 
 def test_propose_alternative_keeps_pendiente_confirmacion():
@@ -96,7 +111,9 @@ def test_propose_alternative_keeps_pendiente_confirmacion():
     assert result.previous_status == "pendiente_confirmacion"
     assert result.new_status == "pendiente_confirmacion"
     assert result.should_notify_patient is True
-    assert repo.updated["new_status"] == "pendiente_confirmacion"
+    assert repo.updated.estado_solicitud == "pendiente_confirmacion"
+    assert repo.updated.fecha_aceptada == "2026-06-18"
+    assert repo.updated.franja_aceptada == "5:00 p. m.–7:00 p. m."
 
 
 def test_reschedule_from_confirmada_to_reagendada():
@@ -109,6 +126,7 @@ def test_reschedule_from_confirmada_to_reagendada():
             actor="dra_daleman",
             alternative_date="2026-06-18",
             alternative_franja="5:00 p. m.–7:00 p. m.",
+            reason="Cambio de ruta",
         )
     )
 
@@ -116,7 +134,10 @@ def test_reschedule_from_confirmada_to_reagendada():
     assert result.previous_status == "confirmada"
     assert result.new_status == "reagendada"
     assert result.should_notify_patient is True
-    assert repo.updated["new_status"] == "reagendada"
+    assert repo.updated.estado_solicitud == "reagendada"
+    assert repo.updated.fecha_confirmada == "2026-06-18"
+    assert repo.updated.franja_confirmada == "5:00 p. m.–7:00 p. m."
+    assert repo.updated.motivo_reagendamiento == "Cambio de ruta"
 
 
 def test_cancel_from_active_status_to_cancelada():
@@ -135,7 +156,8 @@ def test_cancel_from_active_status_to_cancelada():
     assert result.previous_status == "pendiente_confirmacion"
     assert result.new_status == "cancelada"
     assert result.should_notify_patient is True
-    assert repo.updated["new_status"] == "cancelada"
+    assert repo.updated.estado_solicitud == "cancelada"
+    assert repo.updated.motivo_cancelacion == "No hay disponibilidad"
 
 
 def test_close_from_confirmada_to_cerrada():
@@ -153,7 +175,7 @@ def test_close_from_confirmada_to_cerrada():
     assert result.previous_status == "confirmada"
     assert result.new_status == "cerrada"
     assert result.should_notify_patient is False
-    assert repo.updated["new_status"] == "cerrada"
+    assert repo.updated.estado_solicitud == "cerrada"
 
 
 def test_invalid_action_is_rejected():

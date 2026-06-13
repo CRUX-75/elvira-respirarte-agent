@@ -1,3 +1,4 @@
+from app.models.appointment_request import AppointmentRequest
 from app.models.human_review import HumanReviewAction, HumanReviewResult
 
 
@@ -55,11 +56,11 @@ class HumanReviewService:
         if missing_error:
             return self._error(action, "missing_required_fields", missing_error)
 
-        request = self.repository.find_by_id_solicitud(action.id_solicitud)
+        request = self.repository.get_by_id(action.id_solicitud)
         if request is None:
             return self._error(action, "request_not_found", "Appointment request was not found.")
 
-        previous_status = request.get("estado_solicitud")
+        previous_status = request.estado_solicitud
         new_status = ALLOWED_TRANSITIONS.get(action.action, {}).get(previous_status)
 
         if new_status is None:
@@ -73,10 +74,11 @@ class HumanReviewService:
                 error_code="forbidden_transition",
             )
 
-        updates = self._build_updates(action)
-        self.repository.update_status(action.id_solicitud, new_status, updates)
+        updates = self._build_request_updates(action, new_status)
+        updated_request = request.model_copy(update=updates)
+        self.repository.update(updated_request)
 
-        patient_message = self._build_patient_message(action, request, new_status)
+        patient_message = self._build_patient_message(action, request)
         should_notify_patient = action.action != "close"
 
         return HumanReviewResult(
@@ -101,42 +103,71 @@ class HumanReviewService:
 
         return None
 
-    def _build_updates(self, action: HumanReviewAction) -> dict:
-        updates: dict = {
-            "reviewed_by": action.actor,
+    def _build_request_updates(
+        self,
+        action: HumanReviewAction,
+        new_status: str,
+    ) -> dict:
+        updates = {
+            "estado_solicitud": new_status,
+            "updated_by": action.actor,
         }
 
-        if action.notes:
-            updates["doctor_notes"] = action.notes
+        if action.action == "confirm":
+            if action.confirmed_date:
+                updates["fecha_confirmada"] = action.confirmed_date
+            if action.confirmed_franja:
+                updates["franja_confirmada"] = action.confirmed_franja
 
-        if action.reason:
-            updates["reason"] = action.reason
+        if action.action == "request_missing_data":
+            missing_fields = ", ".join(action.missing_fields or [])
+            updates["observaciones"] = self._append_note(
+                action.notes,
+                f"Datos faltantes solicitados: {missing_fields}",
+            )
 
-        if action.confirmed_date:
-            updates["confirmed_date"] = action.confirmed_date
+        if action.action == "propose_alternative":
+            updates["fecha_aceptada"] = action.alternative_date
+            updates["franja_aceptada"] = action.alternative_franja
+            updates["observaciones"] = self._append_note(
+                action.notes,
+                action.reason,
+            )
 
-        if action.confirmed_franja:
-            updates["confirmed_franja"] = action.confirmed_franja
+        if action.action == "reschedule":
+            updates["fecha_confirmada"] = action.alternative_date
+            updates["franja_confirmada"] = action.alternative_franja
+            updates["motivo_reagendamiento"] = action.reason or action.notes
 
-        if action.alternative_date:
-            updates["alternative_date"] = action.alternative_date
+        if action.action == "cancel":
+            updates["motivo_cancelacion"] = action.reason or action.notes
 
-        if action.alternative_franja:
-            updates["alternative_franja"] = action.alternative_franja
-
-        if action.missing_fields:
-            updates["missing_fields"] = action.missing_fields
+        if action.action == "close" and action.notes:
+            updates["observaciones"] = action.notes
 
         return updates
+
+    def _append_note(self, *parts: str | None) -> str | None:
+        cleaned = [part for part in parts if part]
+        if not cleaned:
+            return None
+        return " | ".join(cleaned)
 
     def _build_patient_message(
         self,
         action: HumanReviewAction,
-        request: dict,
-        new_status: str,
+        request: AppointmentRequest,
     ) -> str | None:
-        fecha = action.confirmed_date or action.alternative_date or request.get("fecha_solicitada")
-        franja = action.confirmed_franja or action.alternative_franja or request.get("franja_solicitada")
+        fecha = (
+            action.confirmed_date
+            or action.alternative_date
+            or request.fecha_solicitada
+        )
+        franja = (
+            action.confirmed_franja
+            or action.alternative_franja
+            or request.franja_solicitada
+        )
 
         if action.action == "confirm":
             return f"Su cita ha sido confirmada para el {fecha} en la franja {franja}."

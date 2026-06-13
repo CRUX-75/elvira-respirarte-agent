@@ -2526,3 +2526,88 @@ Review the existing AppointmentRequest repository capabilities and decide whethe
 Boundary:
 
 Do not add external adapters yet.
+
+
+---
+
+## P6-F.9.54 Closure Note — Human Review Repository Contract Alignment
+
+Status:
+
+GREEN / CONTRACT ALIGNED WITH REAL REPOSITORY
+
+Context:
+
+After P6-F.9.52/P6-F.9.53 introduced the first internal HumanReviewService tests and implementation, P6-F.9.54 reviewed the real AppointmentRequest repository contract before deeper wiring.
+
+Repository inspection confirmed:
+
+* `AppointmentRequestRepository` already defines:
+  * `save(request)`
+  * `update(request)`
+  * `get_by_id(id_solicitud)`
+  * `find_active_by_telefono(telefono)`
+* `PostgresAppointmentRequestRepository` already implements:
+  * `get_by_id(id_solicitud)`
+  * `update(request)`
+* `AppointmentRequest` is a Pydantic model, not a dict.
+
+Decision:
+
+Do not introduce duplicate methods such as:
+
+* `find_by_id_solicitud`
+* `update_status`
+
+Instead, align `HumanReviewService` with the existing repository contract:
+
+* read with `repository.get_by_id(id_solicitud)`
+* update via `repository.update(updated_request)`
+
+Implemented alignment:
+
+* `HumanReviewService` now consumes real `AppointmentRequest` model instances.
+* `HumanReviewService` uses `request.model_copy(update=...)` before repository update.
+* Tests now use an `AppointmentRequest` model fake instead of dict-shaped request data.
+* Fake test repository now exposes `get_by_id(...)` and `update(...)`, matching the real protocol.
+
+Validated behavior remains:
+
+* confirm
+* request_missing_data
+* propose_alternative
+* reschedule
+* cancel
+* close
+* invalid action rejection
+* missing request rejection
+* forbidden transition rejection
+* missing required field rejection
+* no WhatsApp sending
+
+Important field mapping decisions:
+
+* confirm may write `fecha_confirmada` / `franja_confirmada`.
+* request_missing_data writes missing field information into `observaciones` for now.
+* propose_alternative keeps status as `pendiente_confirmacion` and uses `fecha_aceptada` / `franja_aceptada` as temporary internal fields for the proposed alternative.
+* reschedule writes `fecha_confirmada` / `franja_confirmada` and `motivo_reagendamiento`.
+* cancel writes `motivo_cancelacion`.
+* all successful actions write `updated_by`.
+
+Boundary respected:
+
+* No Google Sheets.
+* No Telegram.
+* No n8n.
+* No Calendar.
+* No API endpoint.
+* No doctor confirmation automation.
+* No real WhatsApp sending.
+
+Next recommended phase:
+
+P6-F.9.55 — Human Review PostgreSQL Repository Integration Test
+
+Purpose:
+
+Validate HumanReviewService against the real PostgresAppointmentRequestRepository contract using the existing SQLite-style repository test infrastructure, without adding external adapters or endpoints.
