@@ -1907,3 +1907,45 @@ Standing boundaries until explicitly changed:
 * Do not add doctor confirmation automation.
 * Keep production testing controlled and operator-supervised.
 
+
+---
+
+## P6-F.9.47 Safety Reconciliation Note — Sending Disabled After Production Run
+
+Status:
+
+CLOSED / SAFETY BASELINE RESTORED
+
+Context:
+
+After the successful owner-accepted P6-F.9.46 production Meta webhook validation run, the operator restored the production safety baseline.
+
+Current production safety state:
+
+* `WHATSAPP_SENDING_ENABLED=false`
+* Real outbound WhatsApp sending is disabled again.
+* Production webhook remains validated.
+* Meta inbound path remains confirmed.
+* No uncontrolled patient activation is open.
+* No campaigns are active.
+* No Google Sheets, Telegram, n8n, Calendar, or doctor confirmation automation has been added.
+
+Operational decision:
+
+The successful production run validated end-to-end WhatsApp behavior, but the system is now intentionally returned to safe mode before any next production step.
+
+Next recommended block:
+
+P6-F.9.48 — Controlled Production Readiness Review Before Wider Testing
+
+Purpose:
+
+Review whether the next controlled test should stay internal-only, whether sending should remain disabled, and what exact evidence is required before allowing any broader patient-facing usage.
+
+Standing boundaries:
+
+* Do not open to uncontrolled real patients.
+* Do not run campaigns.
+* Do not enable real sending again without a named controlled phase.
+* Keep all future production tests operator-supervised.
+
