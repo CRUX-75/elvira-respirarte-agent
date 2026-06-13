@@ -3059,3 +3059,67 @@ Define and then validate the internal human review endpoint through Swagger usin
 Boundary:
 
 No real patient notification sending.
+
+P6-F.9.60 Plan Note — Human Review API Swagger Dry-Run Plan
+
+Status:
+
+PLAN / NO RUNTIME CHANGES
+
+Objective:
+
+Define the controlled Swagger dry-run for the internal human review endpoint before using it in any real operational workflow.
+
+Plan created:
+
+docs/P6-F.9.60_HUMAN_REVIEW_API_SWAGGER_DRY_RUN_PLAN.md
+
+Current implemented endpoint:
+
+POST /internal/human-review/actions
+
+Required header:
+
+X-Internal-Admin-Token
+
+Required environment variable:
+
+INTERNAL_ADMIN_TOKEN
+
+Safety baseline:
+
+WHATSAPP_SENDING_ENABLED=false
+no uncontrolled real patients
+no campaigns
+no Google Sheets
+no Telegram
+no n8n
+no Calendar
+no doctor confirmation automation
+no patient notification sending
+
+Planned Swagger cases:
+
+missing token returns 401
+invalid token returns 401
+confirm request mutates controlled AppointmentRequest to confirmada
+invalid action returns structured business error
+forbidden transition returns structured business error
+no WhatsApp message is sent
+no external adapter is triggered
+
+Important boundary:
+
+The endpoint may return should_notify_patient and patient_message, but it must not send WhatsApp messages in this phase.
+
+Next recommended phase:
+
+P6-F.9.61 — Human Review API Swagger Dry-Run Execution
+
+Purpose:
+
+Execute the Swagger dry-run using controlled data and document evidence.
+
+Boundary:
+
+No real patient notification sending.
