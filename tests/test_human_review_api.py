@@ -183,3 +183,14 @@ def test_human_review_endpoint_does_not_send_whatsapp(monkeypatch):
     assert response.status_code == 200
     assert response.json()["success"] is True
     assert whatsapp_calls == []
+
+
+def test_get_internal_admin_token_reads_settings_field(monkeypatch):
+    monkeypatch.setattr(
+        main.settings,
+        "internal_admin_token",
+        "configured-secret-token",
+        raising=False,
+    )
+
+    assert main.get_internal_admin_token() == "configured-secret-token"

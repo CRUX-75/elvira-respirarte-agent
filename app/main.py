@@ -85,7 +85,7 @@ def verify_webhook(
 
 
 def get_internal_admin_token() -> str | None:
-    return getattr(settings, "internal_admin_token", None)
+    return settings.internal_admin_token
 
 
 def create_human_review_repository():

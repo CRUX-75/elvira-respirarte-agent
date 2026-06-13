@@ -2879,3 +2879,74 @@ Boundary:
 No external adapters.
 
 No patient notification sending.
+
+
+---
+
+## P6-F.9.59 Closure Note — Human Review API Config Hardening
+
+Status:
+
+GREEN / CONFIG CONTRACT HARDENED
+
+Context:
+
+P6-F.9.58 implemented the internal human review endpoint with token validation through:
+
+* `get_internal_admin_token()`
+
+Initially, the token was read with:
+
+* `getattr(settings, "internal_admin_token", None)`
+
+This worked defensively but did not define a real configuration contract.
+
+P6-F.9.59 hardened the config boundary.
+
+Implemented:
+
+* Added `internal_admin_token: str | None = None` to `app/config.py`.
+* Updated `get_internal_admin_token()` to read `settings.internal_admin_token` directly.
+* Added test coverage proving `get_internal_admin_token()` reads the configured settings field.
+
+Validated behavior:
+
+* Internal human review endpoint still requires `X-Internal-Admin-Token`.
+* Missing token returns `401`.
+* Invalid token returns `401`.
+* Valid token allows business action handling.
+* Endpoint still does not send WhatsApp messages.
+* Endpoint still only returns `should_notify_patient` and `patient_message`.
+
+Operational note:
+
+For production readiness, `INTERNAL_ADMIN_TOKEN` must be configured as an environment variable before using the internal human review endpoint.
+
+Security note:
+
+Do not hardcode this token.
+
+Do not expose the endpoint for uncontrolled public usage.
+
+Boundary respected:
+
+* No Google Sheets.
+* No Telegram.
+* No n8n.
+* No Calendar.
+* No doctor confirmation automation.
+* No patient notification sending.
+* No WhatsApp sending.
+* No production activation.
+
+Next recommended phase:
+
+P6-F.9.60 — Human Review API Swagger Dry-Run Plan
+
+Purpose:
+
+Define and then validate the internal human review endpoint through Swagger using a controlled local/preproduction AppointmentRequest.
+
+Boundary:
+
+No real patient notification sending.
