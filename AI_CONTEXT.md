@@ -2950,3 +2950,41 @@ Define and then validate the internal human review endpoint through Swagger usin
 Boundary:
 
 No real patient notification sending.
+
+
+---
+
+## P6-F.9.59 Fix Note — Config Syntax Correction
+
+Status:
+
+GREEN / SYNTAX FIXED
+
+Context:
+
+During P6-F.9.59, `internal_admin_token` was added to `app/config.py`.
+
+A shell insertion introduced a stray leading `n` before the field:
+
+`n    internal_admin_token: str | None = None`
+
+This caused a syntax error during pytest collection.
+
+Fix applied:
+
+* Corrected the line to:
+  * `internal_admin_token: str | None = None`
+
+Validation required:
+
+* `tests/test_human_review_api.py`
+* full suite
+
+Boundary respected:
+
+* No Google Sheets.
+* No Telegram.
+* No n8n.
+* No Calendar.
+* No WhatsApp sending.
+* No production activation.

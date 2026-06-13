@@ -194,3 +194,14 @@ def test_get_internal_admin_token_reads_settings_field(monkeypatch):
     )
 
     assert main.get_internal_admin_token() == "configured-secret-token"
+
+
+def test_get_internal_admin_token_reads_settings_field(monkeypatch):
+    monkeypatch.setattr(
+        main.settings,
+        "internal_admin_token",
+        "configured-secret-token",
+        raising=False,
+    )
+
+    assert main.get_internal_admin_token() == "configured-secret-token"

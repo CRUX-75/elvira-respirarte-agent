@@ -22,7 +22,8 @@ class Settings(BaseSettings):
     database_url: str | None = None
 
     kb_runtime_enabled: bool = False
-n    internal_admin_token: str | None = None
+    internal_admin_token: str | None = None
+    internal_admin_token: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
