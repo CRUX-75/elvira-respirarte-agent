@@ -216,3 +216,57 @@ def test_preferred_time_response_clarifies_afternoon_for_day_after_tomorrow_morn
         "o entre 5:00 p. m. y 7:00 p. m. "
         "¿Cuál le sirve mejor?"
     )
+
+
+def test_p6f941_exact_hour_clarification_uses_single_real_slot_from_context():
+    state = ElviraState(
+        telefono="573001112233",
+        mensaje_original="si por favor, es posible que lleguen a las 4?",
+        sanitized_input="si por favor, es posible que lleguen a las 4?",
+        estado_actual="ST_CITA_FRANJA",
+        nuevo_estado="ST_CITA_FRANJA",
+        intent="hora_cita",
+        next_action="ask_confirm_exact_hour_as_slot",
+        fecha_solicitada="2026-06-17",
+        fecha_solicitada_texto="miércoles 17 de junio",
+        slots_candidatos=["3:00 p. m.–6:00 p. m."],
+        es_dia_disponible=True,
+        is_weekend=False,
+        is_colombia_holiday=False,
+    )
+
+    result = llm.generate_llm_response(state)
+
+    assert "hora exacta garantizada" in result.respuesta
+    assert "3:00 p. m. a 6:00 p. m." in result.respuesta
+    assert "3:00 p. m. a 5:00 p. m." not in result.respuesta
+    assert "5:00 p. m. a 7:00 p. m." not in result.respuesta
+    assert "¿Desea que registre esa franja como preferencia?" in result.respuesta
+
+
+def test_p6f941_exact_hour_clarification_lists_multiple_real_slots_from_context():
+    state = ElviraState(
+        telefono="573001112233",
+        mensaje_original="se puede a las 4?",
+        sanitized_input="se puede a las 4?",
+        estado_actual="ST_CITA_FRANJA",
+        nuevo_estado="ST_CITA_FRANJA",
+        intent="hora_cita",
+        next_action="ask_confirm_exact_hour_as_slot",
+        fecha_solicitada="2026-06-16",
+        fecha_solicitada_texto="martes 16 de junio",
+        slots_candidatos=[
+            "3:00 p. m.–5:00 p. m.",
+            "5:00 p. m.–7:00 p. m.",
+        ],
+        es_dia_disponible=True,
+        is_weekend=False,
+        is_colombia_holiday=False,
+    )
+
+    result = llm.generate_llm_response(state)
+
+    assert "hora exacta garantizada" in result.respuesta
+    assert "3:00 p. m. a 5:00 p. m." in result.respuesta
+    assert "5:00 p. m. a 7:00 p. m." in result.respuesta
+    assert "¿Cuál le queda mejor?" in result.respuesta

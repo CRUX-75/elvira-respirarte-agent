@@ -240,11 +240,35 @@ def generate_llm_response(state: ElviraState) -> ElviraState:
         return state
 
     if state.next_action == "ask_confirm_exact_hour_as_slot":
+        slots_candidatos = list(state.slots_candidatos or [])
+
+        if len(slots_candidatos) == 1:
+            slot = slots_candidatos[0].replace("–", " a ")
+            state.respuesta = (
+                "Con gusto. Le aclaro que las atenciones domiciliarias se manejan por franjas, "
+                "no por una hora exacta garantizada. "
+                f"Para ese día tenemos disponible la franja de {slot}. "
+                "¿Desea que registre esa franja como preferencia?"
+            )
+            return state
+
+        if len(slots_candidatos) > 1:
+            slots = " o ".join(
+                f"de {slot.replace('–', ' a ')}"
+                for slot in slots_candidatos
+            )
+            state.respuesta = (
+                "Con gusto. Le aclaro que las atenciones domiciliarias se manejan por franjas, "
+                "no por una hora exacta garantizada. "
+                f"Para continuar, por favor elija una de las franjas disponibles: {slots}. "
+                "¿Cuál le queda mejor?"
+            )
+            return state
+
         state.respuesta = (
             "Con gusto. Le aclaro que las atenciones domiciliarias se manejan por franjas, "
-            "no por una hora exacta garantizada. Para continuar, por favor elija una de "
-            "las franjas disponibles: de 3:00 p. m. a 5:00 p. m. o de "
-            "5:00 p. m. a 7:00 p. m. ¿Cuál le queda mejor?"
+            "no por una hora exacta garantizada. "
+            "Por favor indíquenos su preferencia de franja."
         )
         return state
 
