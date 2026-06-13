@@ -33,6 +33,7 @@ from app.services.appointment_context import (
 )
 from app.services.appointment_request_runtime import (
     decide_appointment_request_persistence,
+    is_exact_hour_without_explicit_franja_confirmation,
 )
 from app.services.appointment_request_service import AppointmentRequestService
 from app.db.session import engine
