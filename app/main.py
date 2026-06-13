@@ -36,6 +36,7 @@ from app.services.appointment_request_runtime import (
     is_exact_hour_without_explicit_franja_confirmation,
 )
 from app.services.appointment_request_service import AppointmentRequestService
+from app.adapters.google_sheets_human_review_writer_factory import build_google_sheets_human_review_writer
 from app.models.human_review import HumanReviewAction
 from app.services.human_review_service import HumanReviewService
 from app.db.session import engine
@@ -580,6 +581,33 @@ def _force_unavailable_date_guard_response(result):
 
 
 
+
+def _write_human_review_inbox(appointment_request):
+    """Best-effort optional write to the human review inbox adapter.
+
+    PostgreSQL remains the source of truth.
+    Google Sheets failures must not break patient conversation runtime.
+    """
+    try:
+        writer = build_google_sheets_human_review_writer(settings=settings)
+        if writer is None:
+            return {
+                "adapter": "google_sheets",
+                "status": "skipped_disabled",
+            }
+
+        status = writer.upsert_request(appointment_request)
+        return {
+            "adapter": "google_sheets",
+            "status": status,
+        }
+    except Exception:
+        return {
+            "adapter": "google_sheets",
+            "status": "failed",
+        }
+
+
 def _apply_appointment_request_runtime(
     *,
     result,
@@ -665,6 +693,7 @@ def _apply_appointment_request_runtime(
             "source_interaction_id": appointment_request.source_interaction_id,
             "fecha_solicitada": appointment_request.fecha_solicitada,
             "franja_solicitada": appointment_request.franja_solicitada,
+            "human_review_inbox": _write_human_review_inbox(appointment_request),
         }
 
     captured_appointment_context = (
@@ -795,6 +824,7 @@ def test_message_stateful(message: IncomingMessage):
             "source_interaction_id": appointment_request.source_interaction_id,
             "fecha_solicitada": appointment_request.fecha_solicitada,
             "franja_solicitada": appointment_request.franja_solicitada,
+            "human_review_inbox": _write_human_review_inbox(appointment_request),
         }
 
     logged_response = f"[TEST_STATEFUL_WHATSAPP_SENDING_DISABLED] {result.respuesta}"

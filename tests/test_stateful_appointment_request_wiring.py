@@ -289,3 +289,144 @@ def test_stateful_endpoint_persists_ready_hora_cita_with_synthetic_source_intera
     assert calls["save_interaction"]["whatsapp_message_id"] == body["whatsapp_message_id"]
     assert calls["save_interaction"]["delivery_status"] == "sending_skipped"
     assert calls["update_patient_state"]["nuevo_estado"] == "ST_CITA_PENDIENTE"
+
+
+def test_stateful_endpoint_skips_google_sheets_when_writer_factory_returns_none(monkeypatch):
+    fake_result = FakeElviraResult(
+        intent="hora_cita",
+        nuevo_estado="ST_CITA_PENDIENTE",
+        next_action="confirm_appointment_request",
+        fecha_solicitada="2026-05-29",
+        slots_candidatos=["3:00 p. m.–5:00 p. m.", "5:00 p. m.–7:00 p. m."],
+        mensaje_original="la primera franja está bien",
+        is_weekend=False,
+        is_colombia_holiday=False,
+        es_dia_disponible=True,
+    )
+    calls = _patch_stateful_endpoint_dependencies(monkeypatch, fake_result)
+
+    monkeypatch.setattr(
+        main,
+        "build_google_sheets_human_review_writer",
+        lambda settings: None,
+        raising=False,
+    )
+
+    response = client.post(
+        "/test/message-stateful",
+        json={
+            "telefono": "573001112233",
+            "nombre": "Paciente Test",
+            "mensaje": "la primera franja está bien",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["appointment_request"] is not None
+    assert body["appointment_request"]["id_solicitud"] == "SOL-TEST-001"
+    assert body["appointment_request"]["human_review_inbox"] == {
+        "adapter": "google_sheets",
+        "status": "skipped_disabled",
+    }
+    assert calls["appointment_service_call"] is not None
+    assert calls["update_patient_state"]["nuevo_estado"] == "ST_CITA_PENDIENTE"
+
+
+def test_stateful_endpoint_writes_google_sheets_after_appointment_request_persistence(monkeypatch):
+    fake_result = FakeElviraResult(
+        intent="hora_cita",
+        nuevo_estado="ST_CITA_PENDIENTE",
+        next_action="confirm_appointment_request",
+        fecha_solicitada="2026-05-29",
+        slots_candidatos=["3:00 p. m.–5:00 p. m.", "5:00 p. m.–7:00 p. m."],
+        mensaje_original="la primera franja está bien",
+        is_weekend=False,
+        is_colombia_holiday=False,
+        es_dia_disponible=True,
+    )
+    calls = _patch_stateful_endpoint_dependencies(monkeypatch, fake_result)
+    sheets_calls = {"request": None}
+
+    class FakeGoogleSheetsHumanReviewWriter:
+        def upsert_request(self, request):
+            sheets_calls["request"] = request
+            return "appended"
+
+    monkeypatch.setattr(
+        main,
+        "build_google_sheets_human_review_writer",
+        lambda settings: FakeGoogleSheetsHumanReviewWriter(),
+        raising=False,
+    )
+
+    response = client.post(
+        "/test/message-stateful",
+        json={
+            "telefono": "573001112233",
+            "nombre": "Paciente Test",
+            "mensaje": "la primera franja está bien",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["appointment_request"] is not None
+    assert body["appointment_request"]["id_solicitud"] == "SOL-TEST-001"
+    assert body["appointment_request"]["human_review_inbox"] == {
+        "adapter": "google_sheets",
+        "status": "appended",
+    }
+    assert sheets_calls["request"] is not None
+    assert sheets_calls["request"].id_solicitud == "SOL-TEST-001"
+    assert calls["appointment_service_call"] is not None
+    assert calls["update_patient_state"]["nuevo_estado"] == "ST_CITA_PENDIENTE"
+
+
+def test_stateful_endpoint_continues_when_google_sheets_write_fails(monkeypatch):
+    fake_result = FakeElviraResult(
+        intent="hora_cita",
+        nuevo_estado="ST_CITA_PENDIENTE",
+        next_action="confirm_appointment_request",
+        fecha_solicitada="2026-05-29",
+        slots_candidatos=["3:00 p. m.–5:00 p. m.", "5:00 p. m.–7:00 p. m."],
+        mensaje_original="la primera franja está bien",
+        is_weekend=False,
+        is_colombia_holiday=False,
+        es_dia_disponible=True,
+    )
+    calls = _patch_stateful_endpoint_dependencies(monkeypatch, fake_result)
+
+    class FailingGoogleSheetsHumanReviewWriter:
+        def upsert_request(self, request):
+            raise RuntimeError("Google Sheets unavailable")
+
+    monkeypatch.setattr(
+        main,
+        "build_google_sheets_human_review_writer",
+        lambda settings: FailingGoogleSheetsHumanReviewWriter(),
+        raising=False,
+    )
+
+    response = client.post(
+        "/test/message-stateful",
+        json={
+            "telefono": "573001112233",
+            "nombre": "Paciente Test",
+            "mensaje": "la primera franja está bien",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["appointment_request"] is not None
+    assert body["appointment_request"]["id_solicitud"] == "SOL-TEST-001"
+    assert body["appointment_request"]["human_review_inbox"] == {
+        "adapter": "google_sheets",
+        "status": "failed",
+    }
+    assert calls["appointment_service_call"] is not None
+    assert calls["update_patient_state"]["nuevo_estado"] == "ST_CITA_PENDIENTE"
