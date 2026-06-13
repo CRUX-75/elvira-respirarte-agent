@@ -1080,3 +1080,123 @@ P6-F.9.41 — Exact-Hour Franja Clarification
 
 Do not patch it inside P6-F.9.39.
 
+
+
+---
+
+## P6-F.9.40 Closure Note — Slot Selection Rules
+
+Status:
+
+GREEN / VALIDATED IN SWAGGER
+
+Objective:
+
+Make appointment slot selection deterministic and safe after KB-driven slot generation.
+
+Implemented:
+
+* `resolve_requested_slot_from_message(...)` now accepts soft confirmations only when there is exactly one candidate slot.
+* Single-slot confirmations such as `sí`, `sí, esa franja`, `sí por favor`, `me sirve`, `claro`, `perfecto`, `esa franja`, and similar safe confirmations resolve to the only visible slot.
+* Multi-slot ambiguous confirmations remain blocked.
+* Multi-slot flows still require explicit selection such as `la primera`, `la segunda`, `la de las 3`, `la de las 5`, `de 3 a 5`, or `de 5 a 7`.
+* The existing non-selection guard still blocks complaints, questions, and non-selection messages before any slot can be resolved.
+
+Files changed:
+
+* `app/services/appointment_request_runtime.py`
+* `tests/test_appointment_request_runtime_decision.py`
+
+Local validation:
+
+* Runtime decision tests GREEN.
+* Targeted appointment context / wiring tests GREEN.
+* Full suite GREEN before Swagger validation.
+
+Swagger validation:
+
+Endpoint:
+
+* `/test/message-stateful`
+
+Safety:
+
+* Real `/webhook` not used.
+* Real WhatsApp sending remained disabled.
+* `WHATSAPP_SENDING_ENABLED=false`.
+* `delivery_status=sending_skipped`.
+* No real patients contacted.
+
+Validated case — Wednesday single-slot soft confirmation:
+
+Flow:
+
+* `Para una cita , por favor`
+* `para el dia miercoles me queda bien`
+* `si, esa franja`
+
+Result:
+
+* `nuevo_estado=ST_CITA_PENDIENTE`
+* `intent=hora_cita`
+* `next_action=confirm_appointment_request`
+* `appointment_request_decision.should_persist=true`
+* `appointment_request_decision.reason=allowed_hora_cita_ready_for_human_review`
+* `fecha_solicitada=2026-06-17`
+* `franja_solicitada=3:00 p. m.–6:00 p. m.`
+* `appointment_request != null`
+* `estado_solicitud=pendiente_confirmacion`
+* `delivery_status=sending_skipped`
+
+Validated case — Tuesday multi-slot ambiguous confirmation blocked:
+
+Flow:
+
+* `necesito una cita`
+* `para el martes`
+* `si,esa franja`
+
+Result:
+
+* `nuevo_estado=ST_CITA_FRANJA`
+* `intent=hora_cita`
+* `appointment_request_decision.should_persist=false`
+* `appointment_request_decision.reason=skipped_unsupported_slot_selection`
+* `appointment_request=null`
+* `delivery_status=sending_skipped`
+
+Validated case — Tuesday multi-slot explicit second slot:
+
+Flow:
+
+* `para agendar una cita`
+* `para el martes`
+* `la de las 5`
+
+Result:
+
+* `nuevo_estado=ST_CITA_PENDIENTE`
+* `intent=hora_cita`
+* `next_action=confirm_appointment_request`
+* `appointment_request_decision.should_persist=true`
+* `appointment_request_decision.reason=allowed_hora_cita_ready_for_human_review`
+* `fecha_solicitada=2026-06-16`
+* `franja_solicitada=5:00 p. m.–7:00 p. m.`
+* `appointment_request != null`
+* `estado_solicitud=pendiente_confirmacion`
+* `delivery_status=sending_skipped`
+
+Known follow-up:
+
+* The blocked multi-slot ambiguous case currently uses `next_action=ask_confirm_exact_hour_as_slot`, even though the issue is ambiguous slot selection rather than exact-hour clarification.
+* This did not break safety because no AppointmentRequest was created.
+* Do not patch this inside P6-F.9.40 unless a later response wording/state-action cleanup phase is opened.
+
+Next phase:
+
+P6-F.9.41 — Exact-Hour Franja Clarification
+
+Objective:
+
+Ensure exact-hour clarification responses use the real `slots_candidatos` from context instead of hardcoded generic weekday slots, especially for Wednesday single-slot context.
+
