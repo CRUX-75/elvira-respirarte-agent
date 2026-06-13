@@ -3451,3 +3451,87 @@ P6-F.9.70 — Patient notification after human review
 
 Do not jump directly into automatic runtime writing before a controlled manual dry-run.
 
+
+---
+
+## P6-F.9.66 Closure Note — Google Sheets Writer Factory And Runtime Boundary
+
+Status:
+
+GREEN / FACTORY IMPLEMENTED / NOT WIRED TO RUNTIME
+
+Objective:
+
+Create a safe factory that builds `GoogleSheetsHumanReviewWriter` only when Google Sheets human review inbox configuration is explicitly complete.
+
+Implemented:
+
+* `app/adapters/google_sheets_human_review_writer_factory.py`
+* `tests/test_google_sheets_human_review_writer_factory.py`
+
+Factory behavior:
+
+`build_google_sheets_human_review_writer(...)` returns `None` unless all required conditions are met:
+
+* `GOOGLE_SHEETS_ENABLED=true`
+* `GOOGLE_SERVICE_ACCOUNT_JSON` exists
+* `GOOGLE_SHEETS_SPREADSHEET_ID` exists
+
+When all required config exists, the factory:
+
+* builds a Google Sheets API service through the injected `service_builder`
+* wraps it in `GoogleSheetsApiClient`
+* returns `GoogleSheetsHumanReviewWriter`
+* sets `spreadsheet_id` from settings
+* sets `tab_name` from `GOOGLE_SHEETS_SOLICITUDES_CITA_TAB`
+* keeps writer `enabled=True`
+
+Validated behavior:
+
+* Factory returns `None` when Google Sheets is disabled.
+* Factory returns `None` when spreadsheet ID is missing.
+* Factory returns `None` when service account JSON is missing.
+* Factory returns `GoogleSheetsHumanReviewWriter` when all required config is present.
+
+Validation:
+
+* Google Sheets targeted suite GREEN.
+* Full suite GREEN:
+  * `301 passed in 11.59s`
+
+Commit:
+
+* `e2c4075 Add Google Sheets human review writer factory`
+
+Important boundary respected:
+
+* No `/webhook` wiring.
+* No automatic Google Sheets write.
+* No doctor action reader.
+* No WhatsApp sending changes.
+* No Telegram.
+* No n8n.
+* No Calendar.
+* No doctor confirmation automation.
+* PostgreSQL remains the source of truth.
+* Google Sheets remains an optional human-visible inbox adapter only.
+
+Conclusion:
+
+P6-F.9.66 is CLOSED.
+
+Next recommended block:
+
+P6-F.9.67 — Manual Controlled Sheets Write Dry-Run
+
+Purpose:
+
+Run a controlled manual Google Sheets write through the adapter/factory path, without connecting it to `/webhook` or automatic AppointmentRequest persistence.
+
+Standing safety baseline:
+
+* Keep `WHATSAPP_SENDING_ENABLED=false`.
+* Do not connect Google Sheets to runtime yet.
+* Do not write automatically from patient conversations.
+* Do not add doctor action reader yet.
+* Do not touch Telegram, n8n, Calendar, campaigns, or real patient activation.
