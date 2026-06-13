@@ -2686,3 +2686,110 @@ Spec only first.
 No external adapters.
 
 No real sending.
+
+P6-F.9.56 Spec Note — Human Review API Boundary Spec
+
+Status:
+
+SPEC / API BOUNDARY ONLY
+
+Objective:
+
+Define the backend API boundary for future doctor/human review actions before implementing any endpoint.
+
+Spec created:
+
+docs/P6-F.9.56_HUMAN_REVIEW_API_BOUNDARY_SPEC.md
+
+Current validated internal contract:
+
+HumanReviewAction
+HumanReviewResult
+HumanReviewService
+HumanReviewService.apply_action(action)
+Repository contract:
+repository.get_by_id(id_solicitud)
+repository.update(request)
+
+Core decision:
+
+A backend API boundary should be introduced in a later implementation phase so future doctor-facing surfaces cannot mutate appointment state directly.
+
+Recommended future endpoint:
+
+POST /internal/human-review/actions
+
+The endpoint should map request body to HumanReviewAction and response body to HumanReviewResult.
+
+Supported actions remain:
+
+confirm
+request_missing_data
+propose_alternative
+reschedule
+cancel
+close
+
+Notification boundary:
+
+The first API implementation must not send WhatsApp messages.
+
+Allowed:
+
+return should_notify_patient
+return patient_message
+
+Not allowed yet:
+
+call WhatsApp Cloud API
+update interactions as if a message was sent
+trigger Telegram
+trigger n8n
+trigger Google Sheets
+trigger Calendar
+
+Security boundary:
+
+The endpoint must be internal/admin only.
+
+Recommended first implementation:
+
+Require an internal header such as X-Internal-Admin-Token.
+Load the secret from environment variables.
+Do not hardcode secrets.
+Do not expose this endpoint publicly without protection.
+
+HTTP strategy:
+
+200 OK for successful business actions.
+200 OK for known business rejections returned by HumanReviewService.
+422 only for Pydantic/request validation errors.
+500 only for unexpected infrastructure errors.
+
+Audit note:
+
+P6-F.9.56 does not implement audit events.
+
+Future recommended audit direction:
+
+Create appointment_request_events table in a later phase.
+Do not overload patient-facing interactions with doctor-side lifecycle events.
+
+Boundary respected:
+
+No API endpoint implemented.
+No Google Sheets.
+No Telegram.
+No n8n.
+No Calendar.
+No doctor confirmation automation.
+No real WhatsApp sending.
+No production activation.
+
+Recommended next phase:
+
+P6-F.9.57 — Human Review API Endpoint Tests
+
+Purpose:
+
+Create tests for the internal endpoint boundary before implementing it.
