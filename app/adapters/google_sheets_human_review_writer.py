@@ -29,6 +29,11 @@ GOOGLE_SHEETS_HUMAN_REVIEW_COLUMNS = [
     "interaction_id_origen",
     "direccion_domicilio",
     "servicio_solicitado",
+    "tipo_cita",
+    "eps",
+    "barrio",
+    "edad_paciente",
+    "notas_clinicas_breves",
     "fecha_confirmada",
     "franja_confirmada",
     "accion_doctora",
@@ -103,6 +108,11 @@ def map_appointment_request_to_sheet_row(
         "interaction_id_origen": _string(request.source_interaction_id),
         "direccion_domicilio": _string(request.direccion_domicilio),
         "servicio_solicitado": _string(request.servicio_solicitado),
+        "tipo_cita": _string(request.tipo_cita),
+        "eps": _string(request.eps),
+        "barrio": _string(request.barrio),
+        "edad_paciente": _string(request.edad_paciente),
+        "notas_clinicas_breves": _string(request.notas_clinicas_breves),
         "fecha_confirmada": _string(request.fecha_confirmada),
         "franja_confirmada": _string(request.franja_confirmada),
         "accion_doctora": "",
@@ -146,7 +156,7 @@ class GoogleSheetsHumanReviewWriter:
         if not self.enabled:
             return "skipped_disabled"
 
-        range_name = f"{self.tab_name}!A:U"
+        range_name = f"{self.tab_name}!A:Z"
         values = self.client.get_values(self.spreadsheet_id, range_name)
 
         if not values:

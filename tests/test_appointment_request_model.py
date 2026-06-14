@@ -77,3 +77,24 @@ def test_appointment_request_rejects_invalid_source_channel():
             telefono="573001112233",
             canal_origen="n8n",
         )
+
+
+def test_appointment_request_includes_human_review_operational_fields():
+    request = AppointmentRequest(
+        id_solicitud="SOL-20260614-001",
+        telefono="573001112233",
+        tipo_cita="primera_vez",
+        eps="Sanitas",
+        barrio="Chapinero",
+        edad_paciente=7,
+        notas_clinicas_breves="Paciente pediátrico con síntomas respiratorios reportados por acudiente.",
+    )
+
+    assert request.tipo_cita == "primera_vez"
+    assert request.eps == "Sanitas"
+    assert request.barrio == "Chapinero"
+    assert request.edad_paciente == 7
+    assert (
+        request.notas_clinicas_breves
+        == "Paciente pediátrico con síntomas respiratorios reportados por acudiente."
+    )

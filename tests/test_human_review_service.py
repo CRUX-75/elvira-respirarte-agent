@@ -275,3 +275,37 @@ def test_service_does_not_send_whatsapp_messages():
     assert result.should_notify_patient is True
     assert result.patient_message is not None
     assert not hasattr(service, "send_whatsapp_message")
+
+
+def test_human_review_readiness_requires_address_and_requested_service():
+    service, _repo = make_service("pendiente_confirmacion")
+    request = make_request("pendiente_confirmacion").model_copy(
+        update={
+            "direccion_domicilio": "Calle 123 #45-67",
+            "servicio_solicitado": "Terapia Respiratoria",
+        }
+    )
+
+    result = service.check_readiness(request)
+
+    assert result == {
+        "ready_for_human_review": True,
+        "missing_fields": [],
+    }
+
+
+def test_human_review_readiness_reports_missing_address_and_service():
+    service, _repo = make_service("pendiente_confirmacion")
+    request = make_request("pendiente_confirmacion").model_copy(
+        update={
+            "direccion_domicilio": None,
+            "servicio_solicitado": None,
+        }
+    )
+
+    result = service.check_readiness(request)
+
+    assert result == {
+        "ready_for_human_review": False,
+        "missing_fields": ["direccion_domicilio", "servicio_solicitado"],
+    }

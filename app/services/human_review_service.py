@@ -93,6 +93,20 @@ class HumanReviewService:
             error_code=None,
         )
 
+    def check_readiness(self, request: AppointmentRequest) -> dict:
+        missing_fields = []
+
+        if not request.direccion_domicilio:
+            missing_fields.append("direccion_domicilio")
+
+        if not request.servicio_solicitado:
+            missing_fields.append("servicio_solicitado")
+
+        return {
+            "ready_for_human_review": len(missing_fields) == 0,
+            "missing_fields": missing_fields,
+        }
+
     def _validate_required_fields(self, action: HumanReviewAction) -> str | None:
         if action.action == "request_missing_data" and not action.missing_fields:
             return "missing_fields is required for request_missing_data."

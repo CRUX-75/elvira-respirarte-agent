@@ -54,6 +54,11 @@ class AppointmentRequest(BaseModel):
     # Required operational visibility fields
     servicio_solicitado: Optional[str] = Field(default=None)
     direccion_domicilio: Optional[str] = Field(default=None)
+    tipo_cita: Optional[str] = Field(default=None)
+    eps: Optional[str] = Field(default=None)
+    barrio: Optional[str] = Field(default=None)
+    edad_paciente: Optional[int] = Field(default=None)
+    notas_clinicas_breves: Optional[str] = Field(default=None)
 
     # Operational notes
     observaciones: Optional[str] = Field(default=None)

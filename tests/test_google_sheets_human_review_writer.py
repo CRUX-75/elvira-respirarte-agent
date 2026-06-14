@@ -60,6 +60,11 @@ def test_sheet_columns_match_contract():
         "interaction_id_origen",
         "direccion_domicilio",
         "servicio_solicitado",
+        "tipo_cita",
+        "eps",
+        "barrio",
+        "edad_paciente",
+        "notas_clinicas_breves",
         "fecha_confirmada",
         "franja_confirmada",
         "accion_doctora",
@@ -198,3 +203,29 @@ def test_writer_is_skipped_when_disabled():
     assert result == "skipped_disabled"
     assert client.appended_rows == []
     assert client.updated_rows == []
+
+
+def test_sheet_columns_include_doctor_requested_operational_fields():
+    assert "tipo_cita" in GOOGLE_SHEETS_HUMAN_REVIEW_COLUMNS
+    assert "eps" in GOOGLE_SHEETS_HUMAN_REVIEW_COLUMNS
+    assert "barrio" in GOOGLE_SHEETS_HUMAN_REVIEW_COLUMNS
+    assert "edad_paciente" in GOOGLE_SHEETS_HUMAN_REVIEW_COLUMNS
+    assert "notas_clinicas_breves" in GOOGLE_SHEETS_HUMAN_REVIEW_COLUMNS
+
+
+def test_maps_doctor_requested_operational_fields_to_sheet_row():
+    request = make_request(
+        tipo_cita="control",
+        eps="Compensar",
+        barrio="Suba",
+        edad_paciente=12,
+        notas_clinicas_breves="Control respiratorio domiciliario.",
+    )
+
+    row = map_appointment_request_to_sheet_row(request)
+
+    assert row["tipo_cita"] == "control"
+    assert row["eps"] == "Compensar"
+    assert row["barrio"] == "Suba"
+    assert row["edad_paciente"] == "12"
+    assert row["notas_clinicas_breves"] == "Control respiratorio domiciliario."
