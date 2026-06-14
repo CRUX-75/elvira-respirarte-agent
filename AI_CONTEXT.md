@@ -4013,3 +4013,87 @@ Purpose:
 
 Review whether Google Sheets should remain disabled by default or become enabled for a controlled production handoff, and define exactly what Dra. D'Aleman needs to review, edit, or act on inside `Solicitudes_Cita`.
 
+
+---
+
+## P6-F.9.71 / P6-F.9.72 / P6-F.9.73 Closure Note — Human Review Inbox Contract Expansion
+
+Status:
+
+GREEN / PUSHED TO MAIN
+
+Latest commit pushed:
+
+- `1653529 Add human review inbox repository fields and migration`
+
+Validated state:
+
+- Targeted contract suite GREEN: `44 passed`
+- Full suite GREEN: `310 passed`
+- Branch: `main`
+- Remote: `origin/main`
+
+Context:
+
+After Dra. D’Aleman reviewed the first validated `Solicitudes_Cita` row, the Human Review Inbox contract was expanded according to her feedback.
+
+Closed blocks:
+
+- P6-F.9.71 — Human Review Inbox Contract Implementation Plan
+- P6-F.9.72 — Human Review Inbox Contract Tests
+- P6-F.9.73 — Repository And Migration Contract
+
+Implemented contract fields:
+
+- `tipo_cita`
+- `eps`
+- `barrio`
+- `edad_paciente`
+- `notas_clinicas_breves`
+
+Existing readiness-critical fields:
+
+- `direccion_domicilio`
+- `servicio_solicitado`
+
+Fields explicitly not added for now:
+
+- `motivo_consulta`
+- `prioridad_urgencia`
+
+Implemented changes:
+
+- `AppointmentRequest` model now supports the 5 new operational fields.
+- Google Sheets human review writer contract now includes the 5 new visible fields.
+- Human review readiness logic now exposes `check_readiness(...)`.
+- Readiness requires:
+  - `direccion_domicilio`
+  - `servicio_solicitado`
+- PostgreSQL repository mapping now persists, loads, and updates the 5 new fields.
+- SQLite-style repository tests now include the new columns.
+- New migration created:
+  - `scripts/sql/004_add_human_review_operational_fields.sql`
+
+Important safety boundary:
+
+- `WHATSAPP_SENDING_ENABLED=false`
+- `GOOGLE_SHEETS_ENABLED=false` by default
+- `KB_RUNTIME_ENABLED=true`
+- No real patient activation.
+- No Telegram.
+- No n8n.
+- No Calendar.
+- No doctor automation.
+- No patient-facing missing-data follow-up automation yet.
+
+Important implementation note:
+
+The migration file exists but must be reviewed/executed manually in production before relying on the new fields in production PostgreSQL.
+
+Next recommended block:
+
+P6-F.9.74 — Production Migration Review And Controlled DB Alignment
+
+Purpose:
+
+Review and safely apply `scripts/sql/004_add_human_review_operational_fields.sql` to production PostgreSQL, then verify the columns exist before any controlled Google Sheets or production workflow validation.
