@@ -63,6 +63,11 @@ def db_engine():
                     franja_confirmada TEXT,
                     servicio_solicitado TEXT,
                     direccion_domicilio TEXT,
+                    tipo_cita TEXT,
+                    eps TEXT,
+                    barrio TEXT,
+                    edad_paciente INTEGER,
+                    notas_clinicas_breves TEXT,
                     observaciones TEXT,
                     motivo_reagendamiento TEXT,
                     motivo_cancelacion TEXT,
@@ -296,3 +301,43 @@ def test_human_review_service_rejects_forbidden_transition_with_postgres_reposit
     assert found is not None
     assert found.estado_solicitud == "cancelada"
     assert found.updated_by is None
+
+
+def test_save_load_and_update_human_review_operational_fields(repository):
+    request = make_request(id_solicitud="sol-human-review-fields-001")
+    request.tipo_cita = "primera_vez"
+    request.eps = "Sanitas"
+    request.barrio = "Chapinero"
+    request.edad_paciente = 7
+    request.notas_clinicas_breves = "Paciente pediátrico con síntomas respiratorios reportados."
+
+    repository.save(request)
+
+    found = repository.get_by_id("sol-human-review-fields-001")
+
+    assert found is not None
+    assert found.tipo_cita == "primera_vez"
+    assert found.eps == "Sanitas"
+    assert found.barrio == "Chapinero"
+    assert found.edad_paciente == 7
+    assert (
+        found.notas_clinicas_breves
+        == "Paciente pediátrico con síntomas respiratorios reportados."
+    )
+
+    found.tipo_cita = "control"
+    found.eps = "Compensar"
+    found.barrio = "Suba"
+    found.edad_paciente = 12
+    found.notas_clinicas_breves = "Control respiratorio domiciliario."
+
+    repository.update(found)
+
+    updated = repository.get_by_id("sol-human-review-fields-001")
+
+    assert updated is not None
+    assert updated.tipo_cita == "control"
+    assert updated.eps == "Compensar"
+    assert updated.barrio == "Suba"
+    assert updated.edad_paciente == 12
+    assert updated.notas_clinicas_breves == "Control respiratorio domiciliario."
