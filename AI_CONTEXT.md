@@ -4097,3 +4097,71 @@ P6-F.9.74 — Production Migration Review And Controlled DB Alignment
 Purpose:
 
 Review and safely apply `scripts/sql/004_add_human_review_operational_fields.sql` to production PostgreSQL, then verify the columns exist before any controlled Google Sheets or production workflow validation.
+
+---
+
+## P6-F.9.74 Closure Note — Production Migration Review And Controlled DB Alignment
+
+Status:
+
+GREEN / PRODUCTION DB ALIGNED
+
+Objective:
+
+Review and verify production PostgreSQL alignment for the new Human Review Inbox operational fields.
+
+Validated in production pgweb:
+
+Table:
+
+- `appointment_requests`
+
+Verified columns:
+
+- `tipo_cita` — text — nullable
+- `eps` — text — nullable
+- `barrio` — text — nullable
+- `edad_paciente` — integer — nullable
+- `notas_clinicas_breves` — text — nullable
+
+Result:
+
+Production PostgreSQL is aligned with:
+
+- `AppointmentRequest` model
+- `PostgresAppointmentRequestRepository`
+- `GoogleSheetsHumanReviewWriter`
+- migration file `scripts/sql/004_add_human_review_operational_fields.sql`
+
+Validation evidence:
+
+The production query against `information_schema.columns` returned all 5 expected columns.
+
+Safety baseline maintained:
+
+- `WHATSAPP_SENDING_ENABLED=false`
+- `GOOGLE_SHEETS_ENABLED=false` by default
+- `KB_RUNTIME_ENABLED=true`
+- No real patient activation
+- No Telegram
+- No n8n
+- No Calendar
+- No doctor automation
+- No patient-facing missing-data follow-up automation
+
+Conclusion:
+
+P6-F.9.74 is CLOSED.
+
+Next recommended block:
+
+P6-F.9.75 — Controlled Google Sheets Contract Validation
+
+Purpose:
+
+Validate that the expanded Google Sheets writer can append/update rows with the new fields in controlled mode only.
+
+Important boundary:
+
+Do not enable Google Sheets by default.
+Do not touch real WhatsApp sending.
