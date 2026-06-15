@@ -4486,3 +4486,121 @@ Purpose:
 
 Decide what is still required before allowing the next controlled beta step, including whether Google Sheets, WhatsApp sending, doctor manual review, and test-patient scope are ready.
 
+
+---
+
+## P6-F.9.78 Closure Note — MVP Controlled Live Release Decision
+
+Status:
+
+CLOSED / MVP LIVE RELEASE DECISION RECORDED
+
+Objective:
+
+Decide whether Elvira / Respirarte should remain in artificial beta loops or move toward a controlled MVP live release.
+
+Decision:
+
+Move to MVP Controlled Live Release.
+
+Reason:
+
+Elvira already ran for 24 hours in a real WhatsApp production environment. That run exposed real bugs and behavioral gaps. Those issues were analyzed, fixed, validated, and documented across the latest P6-F.9.x blocks.
+
+The project should not remain blocked in endless artificial beta cycles.
+
+Recently validated and closed:
+
+* Appointment flow
+* KB-driven availability
+* Colombia holiday handling
+* Slot selection rules
+* AppointmentRequest persistence
+* Production Meta webhook path
+* Google Sheets human review inbox
+* Doctor-facing Google Sheets guide
+* Google Sheets runtime policy
+
+Approved MVP live configuration:
+
+* `WHATSAPP_SENDING_ENABLED=true`
+* `GOOGLE_SHEETS_ENABLED=true`
+* `KB_RUNTIME_ENABLED=true`
+
+MVP boundaries:
+
+Elvira may:
+
+* receive real WhatsApp messages
+* respond to patients
+* answer basic service and scheduling questions
+* ask for preferred appointment date
+* present available time windows based on KB_Horarios
+* register AppointmentRequests
+* persist AppointmentRequests in PostgreSQL
+* write AppointmentRequests to Google Sheets
+* tell the patient that Dra. D'Aleman will confirm the appointment
+
+Elvira must not:
+
+* confirm final appointments automatically
+* process doctor actions automatically from Google Sheets
+* send campaigns
+* send mass messages
+* create calendar events
+* trigger Telegram notifications
+* trigger n8n workflows
+* manage therapy packages or session tracking
+* replace Dra. D'Aleman's final decision
+
+Human review process during MVP:
+
+1. Patient writes through WhatsApp.
+2. Elvira handles the conversation.
+3. Elvira registers the appointment request.
+4. Request is stored in PostgreSQL.
+5. Request appears in Google Sheets.
+6. Dra. D'Aleman reviews the row manually.
+7. Dra. D'Aleman contacts or confirms with the patient manually.
+8. No automated doctor-action processing happens yet.
+
+First live window recommendation:
+
+* Duration: 24 to 48 hours
+* Scope: real inbound patients only if they naturally contact the WhatsApp number or are manually invited by the doctor/operator
+* No campaigns
+* No public marketing push
+* Active operator monitoring
+
+Evidence to monitor:
+
+* WhatsApp responses
+* LangSmith traces
+* production logs
+* PostgreSQL AppointmentRequests
+* Google Sheets rows
+* patient state transitions
+
+Rollback plan:
+
+If unexpected behavior appears:
+
+1. Set `WHATSAPP_SENDING_ENABLED=false`.
+2. Optionally set `GOOGLE_SHEETS_ENABLED=false`.
+3. Keep `KB_RUNTIME_ENABLED=true`.
+4. Preserve logs and database evidence.
+5. Review the failing case.
+6. Patch only after understanding the root cause.
+
+Conclusion:
+
+P6-F.9.78 is CLOSED.
+
+Next phase:
+
+P6-F.9.79 — MVP Live Activation Checklist
+
+Purpose:
+
+Prepare the final operational checklist before enabling the controlled MVP live configuration.
+
