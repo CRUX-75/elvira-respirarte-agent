@@ -4381,3 +4381,108 @@ Define the exact manual operating process for Dra. D'Aleman in the `Solicitudes_
 
 This should explain which columns she reviews, which columns she fills, and which actions remain outside automation for now.
 
+
+---
+
+## P6-F.9.77 Closure Note — Doctor-Facing Sheets Operating Process
+
+Status:
+
+CLOSED / DOCTOR-FACING PDF GUIDE CREATED / REPO DECISION RECORDED
+
+Objective:
+
+Define a simple doctor-facing operating process for Dra. D'Aleman to use the `Solicitudes_Cita` Google Sheet as a manual human review inbox.
+
+Decision:
+
+The doctor-facing guide should not live as a technical Markdown document inside the repository.
+
+Reason:
+
+The doctor needs a simple, shareable PDF guide written in clear non-technical language.
+
+Repository documentation remains internal and should only record the operational decision, safety boundaries, and current process.
+
+External deliverable:
+
+A PDF guide was created for Dra. D'Aleman:
+
+`Guia_Doctora_Solicitudes_Cita_Respirarte.pdf`
+
+Purpose of the guide:
+
+Explain in simple language:
+
+* what the `Solicitudes_Cita` sheet is for
+* which columns the doctor should review
+* which columns the doctor may fill
+* which columns should not be edited
+* what each doctor action means
+* what is still manual
+* what is not automated yet
+
+Operational decision:
+
+Google Sheets acts only as a human-visible review inbox.
+
+PostgreSQL remains the source of truth for AppointmentRequest lifecycle, persistence, and auditability.
+
+Current doctor-facing workflow:
+
+1. Elvira receives and registers an appointment request.
+2. The request is persisted in PostgreSQL.
+3. When Google Sheets is enabled in a named phase, the request appears in `Solicitudes_Cita`.
+4. Dra. D'Aleman reviews the row manually.
+5. Dra. D'Aleman fills only the doctor review columns.
+6. Dra. D'Aleman contacts or confirms with the patient manually for now.
+7. No automated patient message is triggered from the sheet in this phase.
+
+Doctor-editable review columns:
+
+* `fecha_confirmada`
+* `franja_confirmada`
+* `accion_doctora`
+* `motivo_decision`
+* `revisado_por`
+* `fecha_revision`
+
+Allowed `accion_doctora` values:
+
+* `confirmar`
+* `pedir_datos`
+* `proponer_alternativa`
+* `reagendar`
+* `cancelar`
+* `cerrar`
+
+Boundaries confirmed:
+
+Google Sheets must not:
+
+* confirm appointments automatically
+* replace PostgreSQL as source of truth
+* trigger patient messages directly
+* own appointment lifecycle state
+* bypass backend validation
+
+Current safety baseline:
+
+* `GOOGLE_SHEETS_ENABLED=false`
+* `WHATSAPP_SENDING_ENABLED=false`
+* `KB_RUNTIME_ENABLED=true`
+
+Conclusion:
+
+P6-F.9.77 is CLOSED.
+
+The doctor-facing operating process is now available as a PDF guide, while the repository records only the internal operational decision and boundaries.
+
+Next recommended block:
+
+P6-F.9.78 — Beta Readiness Decision Matrix
+
+Purpose:
+
+Decide what is still required before allowing the next controlled beta step, including whether Google Sheets, WhatsApp sending, doctor manual review, and test-patient scope are ready.
+
