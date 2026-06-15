@@ -4165,3 +4165,128 @@ Important boundary:
 
 Do not enable Google Sheets by default.
 Do not touch real WhatsApp sending.
+
+---
+
+## P6-F.9.75 Closure Note — Controlled Google Sheets Contract Validation
+
+Status:
+
+GREEN / CONTROLLED RUNTIME VALIDATION COMPLETED
+
+Objective:
+
+Validate in controlled mode that the Google Sheets human review inbox can receive AppointmentRequest rows after the expanded human review contract work.
+
+Safety baseline:
+
+* `WHATSAPP_SENDING_ENABLED=false`
+* Real WhatsApp sending remained disabled.
+* Validation was performed through `/test/message-stateful`.
+* No Telegram, n8n, Calendar, campaigns, or doctor automation were touched.
+* No uncontrolled real patient activation was opened.
+* `KB_RUNTIME_ENABLED=true`.
+
+Configuration used for validation:
+
+* `GOOGLE_SHEETS_ENABLED=true` was enabled in EasyPanel for the controlled validation.
+* Google Sheets credentials and spreadsheet configuration were available in production environment.
+* Target tab: `Solicitudes_Cita`.
+
+Validated flow:
+
+Phone:
+
+* `573009420014`
+
+Patient:
+
+* `paciente002`
+
+Conversation:
+
+1. `quiero pedir una cita`
+   * `intent=cita`
+   * `nuevo_estado=ST_CITA_FECHA`
+   * `appointment_request=null`
+   * `delivery_status=sending_skipped`
+
+2. `para el miercoles`
+   * `intent=fecha_cita`
+   * `nuevo_estado=ST_CITA_FRANJA`
+   * `fecha_solicitada=2026-06-17`
+   * `slots_candidatos=["3:00 p. m.–6:00 p. m."]`
+   * `appointment_request=null`
+   * `delivery_status=sending_skipped`
+
+3. `si, esa franja por favor`
+   * `intent=hora_cita`
+   * `nuevo_estado=ST_CITA_PENDIENTE`
+   * `persisted_state=ST_CITA_PENDIENTE`
+   * `appointment_request_decision.should_persist=true`
+   * `appointment_request_decision.reason=allowed_hora_cita_ready_for_human_review`
+   * `appointment_request != null`
+   * `appointment_request.estado_solicitud=pendiente_confirmacion`
+   * `appointment_request.fecha_solicitada=2026-06-17`
+   * `appointment_request.franja_solicitada=3:00 p. m.–6:00 p. m.`
+   * `delivery_status=sending_skipped`
+
+Google Sheets validation:
+
+The final response included:
+
+* `human_review_inbox.adapter=google_sheets`
+* `human_review_inbox.status=appended`
+
+The `Solicitudes_Cita` sheet was visually confirmed to contain the new AppointmentRequest row:
+
+* `SOL-20260615-074559-579599-0014`
+* `telefono=573009420014`
+* `nombre_paciente=paciente002`
+* `fecha_solicitada=2026-06-17`
+* `franja_solicitada=3:00 p. m.–6:00 p. m.`
+* `estado_solicitud=pendiente_confirmacion`
+* `sync_status=pendiente`
+* `last_sync_at` populated
+
+Expanded contract note:
+
+The writer contract already includes the doctor-requested operational fields:
+
+* `tipo_cita`
+* `eps`
+* `barrio`
+* `edad_paciente`
+* `notas_clinicas_breves`
+
+The controlled conversational runtime validation did not populate these fields because the current appointment conversation does not yet capture them from the patient. This is expected and non-blocking for P6-F.9.75.
+
+Conclusion:
+
+P6-F.9.75 is CLOSED.
+
+Google Sheets human review inbox runtime writing is validated in controlled mode.
+
+Next recommended block:
+
+P6-F.9.76 — Decide Google Sheets Runtime Policy Before Beta
+
+Purpose:
+
+Decide whether `GOOGLE_SHEETS_ENABLED=true` should remain enabled for the next controlled beta, or whether it should be returned to `false` until the doctor-facing operating process is finalized.
+
+Important boundary:
+
+Do not enable real WhatsApp sending or open uncontrolled patient traffic in this block.
+
+
+Post-validation safety restoration:
+
+After the controlled P6-F.9.75 validation, `GOOGLE_SHEETS_ENABLED=false` was restored in EasyPanel.
+
+Current safety baseline after closure:
+
+* `GOOGLE_SHEETS_ENABLED=false`
+* `WHATSAPP_SENDING_ENABLED=false`
+* `KB_RUNTIME_ENABLED=true`
+
