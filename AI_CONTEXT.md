@@ -4290,3 +4290,94 @@ Current safety baseline after closure:
 * `WHATSAPP_SENDING_ENABLED=false`
 * `KB_RUNTIME_ENABLED=true`
 
+
+---
+
+## P6-F.9.76 Closure Note — Google Sheets Runtime Policy Before Beta
+
+Status:
+
+CLOSED / POLICY DECISION RECORDED
+
+Objective:
+
+Define the runtime policy for the Google Sheets human review inbox before any broader beta usage.
+
+Context:
+
+P6-F.9.75 validated controlled Google Sheets writing through `/test/message-stateful`.
+
+The system successfully created an AppointmentRequest and wrote the row to the `Solicitudes_Cita` Google Sheet with:
+
+* `human_review_inbox.adapter=google_sheets`
+* `human_review_inbox.status=appended`
+* `delivery_status=sending_skipped`
+
+After validation, `GOOGLE_SHEETS_ENABLED=false` was restored.
+
+Policy decision:
+
+`GOOGLE_SHEETS_ENABLED=false` remains the default before beta.
+
+Reason:
+
+Google Sheets is an auxiliary human-visible inbox only.
+
+PostgreSQL remains the source of truth for AppointmentRequest lifecycle, auditability, and backend validation.
+
+Allowed runtime modes:
+
+1. Safe Development / Default
+
+* `GOOGLE_SHEETS_ENABLED=false`
+* `WHATSAPP_SENDING_ENABLED=false`
+* `KB_RUNTIME_ENABLED=true`
+
+Use for local development, tests, and Swagger validations that do not require Sheets.
+
+2. Controlled Sheets Validation
+
+* `GOOGLE_SHEETS_ENABLED=true`
+* `WHATSAPP_SENDING_ENABLED=false`
+* `KB_RUNTIME_ENABLED=true`
+
+Use only for named controlled validation phases with test phone numbers and manual operator observation.
+
+3. Doctor-Facing Beta Inbox
+
+* `GOOGLE_SHEETS_ENABLED=true`
+* `KB_RUNTIME_ENABLED=true`
+* WhatsApp sending policy must be decided in a separate named activation phase.
+
+Use only when Dra. D'Aleman has a clear manual review process for the sheet.
+
+Boundaries confirmed:
+
+Google Sheets must not:
+
+* confirm appointments automatically
+* replace PostgreSQL as source of truth
+* trigger patient messages directly
+* own appointment lifecycle state
+* bypass backend validation
+
+Current safety baseline:
+
+* `GOOGLE_SHEETS_ENABLED=false`
+* `WHATSAPP_SENDING_ENABLED=false`
+* `KB_RUNTIME_ENABLED=true`
+
+Conclusion:
+
+P6-F.9.76 is CLOSED.
+
+Next recommended block:
+
+P6-F.9.77 — Doctor-Facing Sheets Operating Process
+
+Purpose:
+
+Define the exact manual operating process for Dra. D'Aleman in the `Solicitudes_Cita` sheet before enabling Google Sheets for beta usage.
+
+This should explain which columns she reviews, which columns she fills, and which actions remain outside automation for now.
+
