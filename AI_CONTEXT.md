@@ -5636,3 +5636,51 @@ Closure conclusion:
 The internal human-review callback now exposes deterministic structured observability for received callbacks, ignored actions, missing requests, successful transitions, rejected transitions, and unexpected processing failures.
 
 No Swagger retest, production callback test, WhatsApp send, or deployment was performed.
+
+
+## P6-F.9.89 — Debugging Closure
+
+Status:
+
+CLOSED / IMPLEMENTED / DOCUMENTED / PUSHED
+
+Completed subblocks:
+
+* P6-F.9.89-A — Absolute Appointment Date Resolution
+* P6-F.9.89-A.1 — Previous Appointment Date Replacement Coverage
+* P6-F.9.89-B — Date Intent Classification Inside `ST_CITA_FRANJA`
+* P6-F.9.89-C — False Appointment Registration Confirmation
+* P6-F.9.89-D — Definitive Wednesday Single-Slot Rule
+* P6-F.9.89-E — Weekend and Colombia Holiday Full-Flow Guard
+* P6-F.9.89-F — Human Review Callback Observability
+
+Final validation:
+
+* full test suite: `323 passed`;
+* all technical and documentation changes committed;
+* all commits pushed to `origin/main`;
+* working tree clean.
+
+Final operational rules verified:
+
+* Monday, Tuesday, Thursday, and Friday use:
+  * `3:00 p. m.–5:00 p. m.`
+  * `5:00 p. m.–7:00 p. m.`
+* Wednesday is available only:
+  * `3:00 p. m.–6:00 p. m.`
+* Saturday and Sunday are unavailable for domiciliary appointments;
+* Colombia public holidays are unavailable;
+* unavailable dates cannot create an `AppointmentRequest`;
+* missing dates cannot produce false registration confirmations;
+* new appointment dates replace previously stored dates;
+* callback outcomes expose deterministic structured observability.
+
+No production deployment or production callback execution was performed during this debugging block.
+
+Next controlled phase:
+
+1. prepare the Swagger retest matrix;
+2. restart the application in the controlled local environment;
+3. execute the selected Swagger scenarios;
+4. record actual responses;
+5. decide whether the current build is ready for deployment.
