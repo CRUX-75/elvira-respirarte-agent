@@ -753,3 +753,81 @@ def test_stateful_endpoint_missing_date_does_not_claim_request_was_registered(mo
     assert calls["save_interaction"]["nuevo_estado"] == "ST_CITA_FECHA"
     assert calls["save_interaction"]["next_action"] == "ask_preferred_date"
     assert calls["update_patient_state"]["nuevo_estado"] == "ST_CITA_FECHA"
+
+
+def test_stateful_endpoint_persists_single_wednesday_slot_from_carried_context(
+    monkeypatch,
+):
+    fake_result = FakeElviraResult(
+        intent="hora_cita",
+        nuevo_estado="ST_CITA_PENDIENTE",
+        next_action="confirm_appointment_request",
+        fecha_solicitada=None,
+        slots_candidatos=[],
+        mensaje_original="sí, esa franja",
+    )
+
+    patient = {
+        "id": "patient-001",
+        "telefono": "573001112233",
+        "nombre": "Paciente Test",
+        "estado_actual": "ST_CITA_FRANJA",
+        "opt_out": False,
+        "appointment_context": {
+            "fecha_solicitada": "2026-06-17",
+            "fecha_solicitada_texto": "miércoles 17 de junio",
+            "slots_candidatos": ["3:00 p. m.–6:00 p. m."],
+            "es_dia_disponible": True,
+            "is_weekend": False,
+            "is_colombia_holiday": False,
+            "colombia_holiday_name": None,
+        },
+    }
+
+    calls = _patch_stateful_dependencies(
+        monkeypatch,
+        fake_result=fake_result,
+        patient=patient,
+    )
+
+    response = client.post(
+        "/test/message-stateful",
+        json={
+            "telefono": "573001112233",
+            "nombre": "Paciente Test",
+            "mensaje": "sí, esa franja",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["fecha_solicitada"] == "2026-06-17"
+    assert body["fecha_solicitada_texto"] == "miércoles 17 de junio"
+    assert body["slots_candidatos"] == ["3:00 p. m.–6:00 p. m."]
+    assert body["es_dia_disponible"] is True
+    assert body["is_weekend"] is False
+    assert body["is_colombia_holiday"] is False
+
+    decision = body["appointment_request_decision"]
+
+    assert decision["should_persist"] is True
+    assert decision["reason"] == "allowed_hora_cita_ready_for_human_review"
+    assert decision["fecha_solicitada"] == "2026-06-17"
+    assert decision["franja_solicitada"] == "3:00 p. m.–6:00 p. m."
+
+    assert body["appointment_request"] is not None
+    assert body["appointment_request"]["fecha_solicitada"] == "2026-06-17"
+    assert (
+        body["appointment_request"]["franja_solicitada"]
+        == "3:00 p. m.–6:00 p. m."
+    )
+
+    assert calls["appointment_service_call"]["fecha_solicitada"] == "2026-06-17"
+    assert (
+        calls["appointment_service_call"]["franja_solicitada"]
+        == "3:00 p. m.–6:00 p. m."
+    )
+    assert calls["clear_patient_appointment_context"] == {
+        "telefono": "573001112233"
+    }

@@ -48,7 +48,7 @@ def test_preferred_time_response_with_single_slot_does_not_ask_which_one():
         fecha_solicitada_texto="miércoles 13 de mayo",
         dia_semana_solicitado="miércoles",
         es_dia_disponible=True,
-        slots_candidatos=["3:00 p. m.–5:00 p. m."],
+        slots_candidatos=["3:00 p. m.–6:00 p. m."],
         is_weekend=False,
         is_colombia_holiday=False,
         colombia_holiday_name=None,
@@ -60,7 +60,7 @@ def test_preferred_time_response_with_single_slot_does_not_ask_which_one():
     assert result.respuesta == (
         "Perfecto, se refiere a miércoles 13 de mayo. "
         "La doctora solo atiende consultas domiciliarias en la tarde. "
-        "Para ese día solo tenemos disponible la franja de 3:00 p. m. a 5:00 p. m. "
+        "Para ese día solo tenemos disponible la franja de 3:00 p. m. a 6:00 p. m. "
         "¿Desea que registre esa franja como preferencia?"
     )
     assert "¿Cuál le sirve mejor?" not in result.respuesta
