@@ -113,10 +113,77 @@ def apply_human_review_action(
 ):
     _validate_internal_admin_token(x_internal_admin_token)
 
-    repository = create_human_review_repository()
-    service = HumanReviewService(repository=repository)
+    print(
+        {
+            "event": "human_review_callback_received",
+            "id_solicitud": action.id_solicitud,
+            "action": action.action,
+            "actor": action.actor,
+        }
+    )
 
-    result = service.apply_action(action)
+    try:
+        repository = create_human_review_repository()
+        service = HumanReviewService(repository=repository)
+        result = service.apply_action(action)
+    except Exception as exc:
+        print(
+            {
+                "event": "human_review_processing_error",
+                "id_solicitud": action.id_solicitud,
+                "action": action.action,
+                "actor": action.actor,
+                "error_type": type(exc).__name__,
+                "error_message": str(exc),
+            }
+        )
+        raise
+
+    if result.success:
+        print(
+            {
+                "event": "human_review_transition_applied",
+                "id_solicitud": result.id_solicitud,
+                "action": result.action,
+                "actor": action.actor,
+                "previous_status": result.previous_status,
+                "new_status": result.new_status,
+            }
+        )
+    elif result.error_code == "request_not_found":
+        print(
+            {
+                "event": "human_review_request_not_found",
+                "id_solicitud": result.id_solicitud,
+                "action": result.action,
+                "actor": action.actor,
+                "error_code": result.error_code,
+            }
+        )
+
+    elif result.error_code == "forbidden_transition":
+        print(
+            {
+                "event": "human_review_transition_not_applied",
+                "id_solicitud": result.id_solicitud,
+                "action": result.action,
+                "actor": action.actor,
+                "previous_status": result.previous_status,
+                "new_status": result.new_status,
+                "error_code": result.error_code,
+            }
+        )
+
+    elif result.error_code == "invalid_action":
+        print(
+            {
+                "event": "human_review_callback_ignored",
+                "id_solicitud": result.id_solicitud,
+                "action": result.action,
+                "actor": action.actor,
+                "error_code": result.error_code,
+            }
+        )
 
     return result.model_dump()
 @app.post("/webhook")
