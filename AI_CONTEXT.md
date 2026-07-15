@@ -5411,3 +5411,228 @@ Unavailable dates cannot create an `AppointmentRequest`, cannot reach Google She
 Colombia holiday responses now preserve the holiday name when available.
 
 No Swagger retest, production test, or deployment was performed.
+
+
+## P6-F.9.89-F — Human Review Callback Observability
+
+Status:
+
+CLOSED / IMPLEMENTED / REGRESSION COVERAGE GREEN
+
+Objective:
+
+Improve deterministic observability for the internal human-review callback endpoint:
+
+`POST /internal/human-review/actions`
+
+The endpoint now emits structured events that distinguish:
+
+* callback received;
+* callback ignored because the action is unsupported;
+* appointment request not found;
+* lifecycle transition applied;
+* lifecycle transition not applied;
+* unexpected processing error.
+
+Endpoint observed:
+
+`app/main.py::apply_human_review_action()`
+
+Structured events added:
+
+### Callback received
+
+Event:
+
+`human_review_callback_received`
+
+Fields:
+
+* `id_solicitud`;
+* `action`;
+* `actor`.
+
+This event is emitted after successful internal-token validation and before repository or service processing.
+
+Unauthorized requests continue to return `401` before callback-processing observability is emitted.
+
+### Successful transition
+
+Event:
+
+`human_review_transition_applied`
+
+Fields:
+
+* `id_solicitud`;
+* `action`;
+* `actor`;
+* `previous_status`;
+* `new_status`.
+
+A successful transition also proves that the appointment request was found, so a second redundant `request_found` event was intentionally not added.
+
+### Appointment request not found
+
+Event:
+
+`human_review_request_not_found`
+
+Fields:
+
+* `id_solicitud`;
+* `action`;
+* `actor`;
+* `error_code`.
+
+This event is emitted when:
+
+`error_code = request_not_found`
+
+No transition-applied event is emitted.
+
+### Transition not applied
+
+Event:
+
+`human_review_transition_not_applied`
+
+Fields:
+
+* `id_solicitud`;
+* `action`;
+* `actor`;
+* `previous_status`;
+* `new_status`;
+* `error_code`.
+
+This event is emitted when:
+
+`error_code = forbidden_transition`
+
+No repository transition is applied and no successful-transition event is emitted.
+
+### Callback ignored
+
+Event:
+
+`human_review_callback_ignored`
+
+Fields:
+
+* `id_solicitud`;
+* `action`;
+* `actor`;
+* `error_code`.
+
+This event is emitted for unsupported human-review actions when:
+
+`error_code = invalid_action`
+
+### Processing error
+
+Event:
+
+`human_review_processing_error`
+
+Fields:
+
+* `id_solicitud`;
+* `action`;
+* `actor`;
+* `error_type`;
+* `error_message`.
+
+Unexpected repository or service exceptions are logged and then re-raised.
+
+The existing HTTP `500` behavior is preserved.
+
+Regression coverage added:
+
+`tests/test_human_review_api.py::test_human_review_endpoint_logs_successful_transition`
+
+Verifies:
+
+* callback-received event;
+* transition-applied event;
+* request identifier;
+* actor;
+* previous status;
+* new status.
+
+`tests/test_human_review_api.py::test_human_review_endpoint_logs_request_not_found`
+
+Verifies:
+
+* callback-received event;
+* request-not-found event;
+* request identifier;
+* actor;
+* absence of transition-applied event.
+
+`tests/test_human_review_api.py::test_human_review_endpoint_logs_forbidden_transition`
+
+Verifies:
+
+* callback-received event;
+* transition-not-applied event;
+* previous status;
+* `forbidden_transition`;
+* absence of transition-applied event.
+
+`tests/test_human_review_api.py::test_human_review_endpoint_logs_ignored_invalid_action`
+
+Verifies:
+
+* callback-received event;
+* callback-ignored event;
+* `invalid_action`;
+* absence of transition-applied event.
+
+`tests/test_human_review_api.py::test_human_review_endpoint_logs_processing_error`
+
+Verifies:
+
+* callback-received event;
+* processing-error event;
+* request identifier;
+* actor;
+* exception type;
+* exception message;
+* preserved HTTP `500` response.
+
+Validation results:
+
+* successful-transition test: GREEN;
+* request-not-found test: GREEN;
+* forbidden-transition test: GREEN;
+* invalid-action test: GREEN;
+* processing-error test: GREEN;
+* complete human-review API file: `11 passed`;
+* full test suite: `323 passed`;
+* `git diff --check`: clean.
+
+Files modified:
+
+* `app/main.py`
+* `tests/test_human_review_api.py`
+* `AI_CONTEXT.md`
+
+Implementation boundary:
+
+This block did not modify:
+
+* human-review lifecycle rules;
+* allowed transitions;
+* appointment-request persistence;
+* patient notification behavior;
+* WhatsApp sending;
+* Google Sheets writing;
+* Swagger;
+* production deployment configuration.
+
+Closure conclusion:
+
+The internal human-review callback now exposes deterministic structured observability for received callbacks, ignored actions, missing requests, successful transitions, rejected transitions, and unexpected processing failures.
+
+No Swagger retest, production callback test, WhatsApp send, or deployment was performed.
