@@ -684,3 +684,72 @@ def test_stateful_endpoint_pending_request_exact_hour_followup_does_not_register
     assert "3:00 p. m. a 5:00 p. m." in body["respuesta"]
     assert "hora exacta" in body["respuesta"].lower()
     assert "Dra. D’Aleman" in body["respuesta"]
+
+def test_stateful_endpoint_missing_date_does_not_claim_request_was_registered(monkeypatch):
+    fake_result = FakeElviraResult(
+        intent="hora_cita",
+        nuevo_estado="ST_CITA_PENDIENTE",
+        respuesta=(
+            "Perfecto, queda registrada su solicitud para esa franja. "
+            "La Dra. D’Aleman revisará la disponibilidad."
+        ),
+        next_action="confirm_appointment_request",
+        fecha_solicitada=None,
+        slots_candidatos=["3:00 p. m.–5:00 p. m."],
+        mensaje_original="En la primera franja",
+        is_weekend=False,
+        is_colombia_holiday=False,
+        es_dia_disponible=True,
+    )
+
+    patient = {
+        "id": "patient-001",
+        "telefono": "573001112233",
+        "nombre": "Paciente Test",
+        "estado_actual": "ST_CITA_FRANJA",
+        "opt_out": False,
+        "appointment_context": None,
+    }
+
+    calls = _patch_stateful_dependencies(
+        monkeypatch,
+        fake_result=fake_result,
+        patient=patient,
+    )
+
+    response = client.post(
+        "/test/message-stateful",
+        json={
+            "telefono": "573001112233",
+            "nombre": "Paciente Test",
+            "mensaje": "En la primera franja",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["appointment_request_decision"]["should_persist"] is False
+    assert (
+        body["appointment_request_decision"]["reason"]
+        == "skipped_missing_fecha_solicitada"
+    )
+    assert body["appointment_request"] is None
+    assert calls["appointment_service_call"] is None
+
+    assert body["nuevo_estado"] == "ST_CITA_FECHA"
+    assert body["persisted_state"] == "ST_CITA_FECHA"
+    assert body["next_action"] == "ask_preferred_date"
+    assert body["state_reason"] == "missing_appointment_date_guard"
+
+    response_text = body["respuesta"].lower()
+
+    assert "queda registrada" not in response_text
+    assert "registrada su solicitud" not in response_text
+    assert "la doctora revisará" not in response_text
+    assert "dra. d’aleman revisará" not in response_text
+    assert "qué día" in response_text or "fecha" in response_text
+
+    assert calls["save_interaction"]["nuevo_estado"] == "ST_CITA_FECHA"
+    assert calls["save_interaction"]["next_action"] == "ask_preferred_date"
+    assert calls["update_patient_state"]["nuevo_estado"] == "ST_CITA_FECHA"

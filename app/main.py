@@ -582,6 +582,19 @@ def _force_unavailable_date_guard_response(result):
 
 
 
+def _force_missing_appointment_date_guard_response(result):
+    """Prevent false registration confirmation when the appointment date is missing."""
+    result.nuevo_estado = "ST_CITA_FECHA"
+    result.next_action = "ask_preferred_date"
+    result.state_reason = "missing_appointment_date_guard"
+    result.respuesta = (
+        "Antes de registrar la solicitud, necesito confirmar la fecha. "
+        "¿Qué día entre semana le gustaría solicitar la atención domiciliaria?"
+    )
+    return result
+
+
+
 def _write_human_review_inbox(appointment_request):
     """Best-effort optional write to the human review inbox adapter.
 
@@ -649,6 +662,9 @@ def _apply_appointment_request_runtime(
         "skipped_unavailable_date",
     }:
         result = _force_unavailable_date_guard_response(result)
+
+    if appointment_request_decision.reason == "skipped_missing_fecha_solicitada":
+        result = _force_missing_appointment_date_guard_response(result)
 
     if (
         appointment_request_decision.reason
@@ -780,6 +796,9 @@ def test_message_stateful(message: IncomingMessage):
         "skipped_unavailable_date",
     }:
         result = _force_unavailable_date_guard_response(result)
+
+    if appointment_request_decision.reason == "skipped_missing_fecha_solicitada":
+        result = _force_missing_appointment_date_guard_response(result)
 
     if (
         appointment_request_decision.reason
