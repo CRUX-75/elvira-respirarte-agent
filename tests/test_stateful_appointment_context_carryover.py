@@ -831,3 +831,284 @@ def test_stateful_endpoint_persists_single_wednesday_slot_from_carried_context(
     assert calls["clear_patient_appointment_context"] == {
         "telefono": "573001112233"
     }
+
+
+def test_stateful_endpoint_weekend_guard_blocks_sunday_persistence(monkeypatch):
+    fake_result = FakeElviraResult(
+        intent="hora_cita",
+        nuevo_estado="ST_CITA_PENDIENTE",
+        respuesta=(
+            "Perfecto, queda registrada su solicitud para esa franja. "
+            "La Dra. D’Aleman revisará la disponibilidad."
+        ),
+        next_action="confirm_appointment_request",
+        fecha_solicitada="2026-05-17",
+        fecha_solicitada_texto="domingo 17 de mayo",
+        slots_candidatos=[],
+        mensaje_original="sí, esa franja",
+        is_weekend=True,
+        is_colombia_holiday=False,
+        es_dia_disponible=False,
+        colombia_holiday_name=None,
+    )
+
+    patient = {
+        "id": "patient-001",
+        "telefono": "573001112233",
+        "nombre": "Paciente Test",
+        "estado_actual": "ST_CITA_FRANJA",
+        "opt_out": False,
+        "appointment_context": None,
+    }
+
+    calls = _patch_stateful_dependencies(
+        monkeypatch,
+        fake_result=fake_result,
+        patient=patient,
+    )
+
+    response = client.post(
+        "/test/message-stateful",
+        json={
+            "telefono": "573001112233",
+            "nombre": "Paciente Test",
+            "mensaje": "sí, esa franja",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["fecha_solicitada"] == "2026-05-17"
+    assert body["fecha_solicitada_texto"] == "domingo 17 de mayo"
+    assert body["is_weekend"] is True
+    assert body["is_colombia_holiday"] is False
+    assert body["es_dia_disponible"] is False
+    assert body["slots_candidatos"] == []
+
+    decision = body["appointment_request_decision"]
+
+    assert decision["should_persist"] is False
+    assert decision["reason"] == "skipped_weekend"
+    assert decision["fecha_solicitada"] == "2026-05-17"
+
+    assert body["appointment_request"] is None
+    assert calls["appointment_service_call"] is None
+
+    assert body["nuevo_estado"] == "ST_CITA_FECHA"
+    assert body["persisted_state"] == "ST_CITA_FECHA"
+    assert body["next_action"] == "ask_preferred_date"
+    assert body["state_reason"] == "unavailable_date_guard"
+
+    response_text = body["respuesta"].lower()
+
+    assert "queda registrada" not in response_text
+    assert "registrada su solicitud" not in response_text
+    assert "la doctora revisará" not in response_text
+    assert "dra. d’aleman revisará" not in response_text
+    assert "domingo 17 de mayo" in response_text
+    assert "no tenemos atención domiciliaria disponible" in response_text
+    assert "otro día" in response_text
+
+    assert calls["save_interaction"]["nuevo_estado"] == "ST_CITA_FECHA"
+    assert calls["save_interaction"]["next_action"] == "ask_preferred_date"
+    assert (
+        calls["save_interaction"]["state_reason"]
+        == "unavailable_date_guard"
+    )
+    assert (
+        "no tenemos atención domiciliaria disponible"
+        in calls["save_interaction"]["respuesta_elvira"].lower()
+    )
+    assert calls["update_patient_state"]["nuevo_estado"] == "ST_CITA_FECHA"
+
+    assert calls["update_patient_appointment_context"] is None
+    assert calls["clear_patient_appointment_context"] is None
+
+
+def test_stateful_endpoint_weekend_guard_blocks_saturday_persistence(monkeypatch):
+    fake_result = FakeElviraResult(
+        intent="hora_cita",
+        nuevo_estado="ST_CITA_PENDIENTE",
+        respuesta=(
+            "Perfecto, queda registrada su solicitud para esa franja. "
+            "La Dra. D’Aleman revisará la disponibilidad."
+        ),
+        next_action="confirm_appointment_request",
+        fecha_solicitada="2026-05-30",
+        fecha_solicitada_texto="sábado 30 de mayo",
+        slots_candidatos=[],
+        mensaje_original="sí, esa franja",
+        is_weekend=True,
+        is_colombia_holiday=False,
+        es_dia_disponible=False,
+        colombia_holiday_name=None,
+    )
+
+    patient = {
+        "id": "patient-001",
+        "telefono": "573001112233",
+        "nombre": "Paciente Test",
+        "estado_actual": "ST_CITA_FRANJA",
+        "opt_out": False,
+        "appointment_context": None,
+    }
+
+    calls = _patch_stateful_dependencies(
+        monkeypatch,
+        fake_result=fake_result,
+        patient=patient,
+    )
+
+    response = client.post(
+        "/test/message-stateful",
+        json={
+            "telefono": "573001112233",
+            "nombre": "Paciente Test",
+            "mensaje": "sí, esa franja",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["fecha_solicitada"] == "2026-05-30"
+    assert body["fecha_solicitada_texto"] == "sábado 30 de mayo"
+    assert body["is_weekend"] is True
+    assert body["is_colombia_holiday"] is False
+    assert body["es_dia_disponible"] is False
+    assert body["slots_candidatos"] == []
+
+    decision = body["appointment_request_decision"]
+
+    assert decision["should_persist"] is False
+    assert decision["reason"] == "skipped_weekend"
+    assert decision["fecha_solicitada"] == "2026-05-30"
+
+    assert body["appointment_request"] is None
+    assert calls["appointment_service_call"] is None
+
+    assert body["nuevo_estado"] == "ST_CITA_FECHA"
+    assert body["persisted_state"] == "ST_CITA_FECHA"
+    assert body["next_action"] == "ask_preferred_date"
+    assert body["state_reason"] == "unavailable_date_guard"
+
+    response_text = body["respuesta"].lower()
+
+    assert "queda registrada" not in response_text
+    assert "registrada su solicitud" not in response_text
+    assert "la doctora revisará" not in response_text
+    assert "dra. d’aleman revisará" not in response_text
+    assert "sábado 30 de mayo" in response_text
+    assert "no tenemos atención domiciliaria disponible" in response_text
+    assert "otro día" in response_text
+
+    assert calls["save_interaction"]["nuevo_estado"] == "ST_CITA_FECHA"
+    assert calls["save_interaction"]["next_action"] == "ask_preferred_date"
+    assert (
+        calls["save_interaction"]["state_reason"]
+        == "unavailable_date_guard"
+    )
+    assert (
+        "no tenemos atención domiciliaria disponible"
+        in calls["save_interaction"]["respuesta_elvira"].lower()
+    )
+    assert calls["update_patient_state"]["nuevo_estado"] == "ST_CITA_FECHA"
+
+    assert calls["update_patient_appointment_context"] is None
+    assert calls["clear_patient_appointment_context"] is None
+
+
+def test_stateful_endpoint_holiday_guard_blocks_persistence_and_names_holiday(monkeypatch):
+    fake_result = FakeElviraResult(
+        intent="hora_cita",
+        nuevo_estado="ST_CITA_PENDIENTE",
+        respuesta=(
+            "Perfecto, queda registrada su solicitud para esa franja. "
+            "La Dra. D’Aleman revisará la disponibilidad."
+        ),
+        next_action="confirm_appointment_request",
+        fecha_solicitada="2026-05-18",
+        fecha_solicitada_texto="lunes 18 de mayo",
+        slots_candidatos=[],
+        mensaje_original="sí, esa franja",
+        is_weekend=False,
+        is_colombia_holiday=True,
+        es_dia_disponible=False,
+        colombia_holiday_name="Ascensión de Jesús",
+    )
+
+    patient = {
+        "id": "patient-001",
+        "telefono": "573001112233",
+        "nombre": "Paciente Test",
+        "estado_actual": "ST_CITA_FRANJA",
+        "opt_out": False,
+        "appointment_context": None,
+    }
+
+    calls = _patch_stateful_dependencies(
+        monkeypatch,
+        fake_result=fake_result,
+        patient=patient,
+    )
+
+    response = client.post(
+        "/test/message-stateful",
+        json={
+            "telefono": "573001112233",
+            "nombre": "Paciente Test",
+            "mensaje": "sí, esa franja",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["fecha_solicitada"] == "2026-05-18"
+    assert body["fecha_solicitada_texto"] == "lunes 18 de mayo"
+    assert body["is_weekend"] is False
+    assert body["is_colombia_holiday"] is True
+    assert body["colombia_holiday_name"] == "Ascensión de Jesús"
+    assert body["es_dia_disponible"] is False
+    assert body["slots_candidatos"] == []
+
+    decision = body["appointment_request_decision"]
+
+    assert decision["should_persist"] is False
+    assert decision["reason"] == "skipped_colombia_holiday"
+    assert decision["fecha_solicitada"] == "2026-05-18"
+
+    assert body["appointment_request"] is None
+    assert calls["appointment_service_call"] is None
+
+    assert body["nuevo_estado"] == "ST_CITA_FECHA"
+    assert body["persisted_state"] == "ST_CITA_FECHA"
+    assert body["next_action"] == "ask_preferred_date"
+    assert body["state_reason"] == "unavailable_date_guard"
+
+    response_text = body["respuesta"].lower()
+
+    assert "queda registrada" not in response_text
+    assert "registrada su solicitud" not in response_text
+    assert "la doctora revisará" not in response_text
+    assert "dra. d’aleman revisará" not in response_text
+    assert "lunes 18 de mayo" in response_text
+    assert "ascensión de jesús" in response_text
+    assert "no tenemos atención domiciliaria disponible" in response_text
+    assert "otro día" in response_text
+
+    assert calls["save_interaction"]["nuevo_estado"] == "ST_CITA_FECHA"
+    assert calls["save_interaction"]["next_action"] == "ask_preferred_date"
+    assert (
+        calls["save_interaction"]["state_reason"]
+        == "unavailable_date_guard"
+    )
+    assert (
+        "ascensión de jesús"
+        in calls["save_interaction"]["respuesta_elvira"].lower()
+    )
+    assert calls["update_patient_state"]["nuevo_estado"] == "ST_CITA_FECHA"
+
+    assert calls["update_patient_appointment_context"] is None
+    assert calls["clear_patient_appointment_context"] is None

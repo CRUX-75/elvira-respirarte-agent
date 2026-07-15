@@ -572,8 +572,16 @@ def _force_unavailable_date_guard_response(result):
     result.state_reason = "unavailable_date_guard"
 
     date_text = getattr(result, "fecha_solicitada_texto", None) or "ese día"
+    holiday_name = getattr(result, "colombia_holiday_name", None)
+    holiday_detail = (
+        f" porque corresponde al festivo de {holiday_name}"
+        if getattr(result, "is_colombia_holiday", False) is True and holiday_name
+        else ""
+    )
+
     result.respuesta = (
-        f"{date_text.capitalize()} no tenemos atención domiciliaria disponible. "
+        f"{date_text.capitalize()} no tenemos atención domiciliaria disponible"
+        f"{holiday_detail}. "
         "¿Le gustaría indicarme otro día entre semana para revisar las franjas disponibles?"
     )
 
