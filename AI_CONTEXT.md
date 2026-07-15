@@ -5082,3 +5082,155 @@ The runtime decision, patient-facing response, conversation state, interaction p
 No Swagger retest or production deployment was performed.
 
 Technical and documentation commits remain pending.
+
+
+---
+
+## P6-F.9.89-D — Definitive Wednesday Single-Slot Rule
+
+Status:
+
+CLOSED / VERIFIED / REGRESSION COVERAGE GREEN
+
+Objective:
+
+Verify end to end that Wednesday domiciliary appointment requests follow the definitive Respirarte operating rule.
+
+Definitive Wednesday contract:
+
+Wednesday is an available domiciliary service day.
+
+The only valid Wednesday patient-facing time window is:
+
+`3:00 p. m.–6:00 p. m.`
+
+Wednesday must not expose the regular Monday, Tuesday, Thursday, and Friday windows:
+
+* `3:00 p. m.–5:00 p. m.`
+* `5:00 p. m.–7:00 p. m.`
+
+Required deterministic behavior:
+
+When the requested date is a Wednesday:
+
+1. the date must resolve normally;
+2. `dia_semana_solicitado` must be `miércoles`;
+3. `es_dia_disponible` must be `True`;
+4. `is_weekend` must be `False`;
+5. `is_colombia_holiday` must remain independent from the weekday rule;
+6. `slots_candidatos` must contain only:
+
+   `3:00 p. m.–6:00 p. m.`
+
+7. the flow must transition to:
+
+   `ST_CITA_FRANJA`
+
+8. `next_action` must be:
+
+   `ask_preferred_time`
+
+9. the patient-facing response must mention only the real Wednesday window;
+10. a valid confirmation of the single Wednesday window may create an `AppointmentRequest`;
+11. the persisted request must preserve the exact Wednesday date and the exact `3:00 p. m.–6:00 p. m.` window;
+12. the stateful appointment context must be cleared after successful request persistence.
+
+Existing production behavior verified:
+
+The deterministic calendar already generated one Wednesday candidate window:
+
+`3:00 p. m.–6:00 p. m.`
+
+The date resolver already produced:
+
+* `es_dia_disponible = True`
+* one Wednesday candidate slot;
+* correct Wednesday date text and weekday metadata.
+
+The state machine already transitioned an appointment containing an embedded Wednesday date to:
+
+* `nuevo_estado = ST_CITA_FRANJA`
+* `next_action = ask_preferred_time`
+* `state_reason = appointment_intent_with_embedded_date`
+
+The appointment persistence runtime already allowed confirmation of the single Wednesday slot and preserved:
+
+`franja_solicitada = 3:00 p. m.–6:00 p. m.`
+
+No production-code correction was required for this block.
+
+Stateful regression coverage added:
+
+`tests/test_stateful_appointment_context_carryover.py::test_stateful_endpoint_persists_single_wednesday_slot_from_carried_context`
+
+The regression test verifies that:
+
+* the stored Wednesday appointment context is restored before persistence;
+* the date remains `2026-06-17`;
+* the date text remains `miércoles 17 de junio`;
+* the only candidate slot remains `3:00 p. m.–6:00 p. m.`;
+* the persistence decision returns `should_persist = True`;
+* the persistence reason is `allowed_hora_cita_ready_for_human_review`;
+* the generated `AppointmentRequest` preserves the Wednesday date and slot;
+* `AppointmentRequestService` receives the exact same date and slot;
+* the appointment context is cleared after successful persistence.
+
+Contradictory test fixtures corrected:
+
+`tests/test_llm_date_context.py::test_preferred_time_response_with_single_slot_does_not_ask_which_one`
+
+The fixture previously represented a Wednesday with the impossible window:
+
+`3:00 p. m.–5:00 p. m.`
+
+It now correctly verifies the Wednesday response using:
+
+`3:00 p. m.–6:00 p. m.`
+
+`tests/test_state_machine.py::test_p6f943_exact_hour_inside_available_slot_maps_to_slot_and_confirms`
+
+This generic exact-hour test previously used a Wednesday date together with a regular weekday `3:00 p. m.–5:00 p. m.` slot.
+
+The fixture was moved to Tuesday so that its synthetic state remains consistent with the operating calendar while preserving the original exact-hour transition coverage.
+
+Validation results:
+
+* Wednesday calendar, resolver, and embedded-date baseline: `25 passed`
+* Directly affected response, state-machine, and stateful files: `48 passed`
+* Complete related calendar, resolver, response, state, runtime, context, and wiring coverage: `108 passed`
+* Full test suite: `315 passed`
+
+Files modified:
+
+* `tests/test_llm_date_context.py`
+* `tests/test_state_machine.py`
+* `tests/test_stateful_appointment_context_carryover.py`
+* `AI_CONTEXT.md`
+
+Implementation boundary:
+
+This block did not modify:
+
+* production calendar logic;
+* deterministic date resolution;
+* state-transition production logic;
+* appointment persistence production logic;
+* callback processing;
+* weekend or Colombia holiday behavior;
+* Swagger;
+* WhatsApp production configuration;
+* deployment configuration.
+
+Closure conclusion:
+
+The definitive Wednesday rule is now verified across date resolution, candidate-slot generation, patient-facing copy, state transition, carried appointment context, persistence decision, `AppointmentRequestService` wiring, and persisted request data.
+
+Wednesday remains available exclusively in the `3:00 p. m.–6:00 p. m.` window.
+
+No Swagger retest, production test, or deployment was performed.
+
+Technical commit:
+
+`a938734 — Add definitive Wednesday slot regression coverage`
+
+Documentation commit follows in the current change set.
