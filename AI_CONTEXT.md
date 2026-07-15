@@ -4604,3 +4604,110 @@ Purpose:
 
 Prepare the final operational checklist before enabling the controlled MVP live configuration.
 
+---
+
+## P6-F.9.89-A — Absolute Appointment Date Resolution Debugging
+
+Status:
+
+RED TEST CONFIRMED / ROOT CAUSE IDENTIFIED / IMPLEMENTATION PENDING
+
+Objective:
+
+Correct deterministic resolution of explicit appointment dates so that a complete calendar date replaces weekday-relative resolution.
+
+Production finding:
+
+The patient requested:
+
+`jueves 23 de julio de 2026`
+
+Elvira resolved and repeated:
+
+`jueves 16 de julio de 2026`
+
+Expected result:
+
+`fecha_solicitada = 2026-07-23`
+
+Observed result:
+
+`fecha_solicitada = 2026-07-16`
+
+Root cause:
+
+`resolve_requested_date()` currently supports:
+
+* `hoy`
+* `mañana`
+* `pasado mañana`
+* weekday references such as `jueves`
+* weekday references with next-week markers
+
+It does not parse explicit calendar dates containing day, month, and year.
+
+For the message `jueves 23 de julio de 2026`, the resolver detects only the word `jueves` and calculates the nearest Thursday relative to the current Colombia date.
+
+With the Colombia date fixed at `2026-07-15`, this produces `2026-07-16` and ignores the explicit date `23 de julio de 2026`.
+
+Deterministic contract:
+
+1. An explicit calendar date containing day, month, and year must be resolved before relative weekday references.
+2. Explicit date components are authoritative over the weekday word included in the message.
+3. The normalized result must use the actual weekday corresponding to the resolved calendar date.
+4. The newly resolved date must be exposed through:
+
+   * `fecha_solicitada`
+   * `fecha_solicitada_texto`
+   * `dia_semana_solicitado`
+5. Existing behavior for `hoy`, `mañana`, `pasado mañana`, and standalone weekday references must remain unchanged.
+
+Regression test added:
+
+`tests/test_date_resolver.py::test_explicit_absolute_date_takes_priority_over_weekday_reference`
+
+Controlled input:
+
+* Current Colombia datetime: `2026-07-15 10:00`
+* Patient message: `jueves 23 de julio de 2026`
+
+Required assertions:
+
+* `fecha_actual_colombia = 2026-07-15`
+* `fecha_solicitada = 2026-07-23`
+* `fecha_solicitada_texto = jueves 23 de julio`
+* `dia_semana_solicitado = jueves`
+
+Current RED evidence:
+
+```text
+Expected: 2026-07-23
+Received: 2026-07-16
+```
+
+Implementation boundary:
+
+This patch must modify only the deterministic date-resolution layer required to support explicit absolute Spanish dates.
+
+It must not yet modify:
+
+* AppointmentRequest persistence
+* appointment context storage
+* state transitions
+* patient-facing registration confirmation
+* Wednesday scheduling rules
+* callback observability
+
+Known adjacent finding:
+
+Inside `ST_CITA_FRANJA`, the expression `mañana` can currently be classified as `hora_cita` because it appears in slot-selection patterns before date patterns.
+
+That issue is not part of this absolute-date patch and must receive its own regression test and controlled correction after P6-F.9.89-A is green.
+
+Closure criteria:
+
+* The new absolute-date regression test passes.
+* All existing `tests/test_date_resolver.py` tests remain green.
+* The full test suite remains green.
+* `jueves 23 de julio de 2026` resolves deterministically to `2026-07-23`.
+* No production deployment or Swagger retest occurs before the complete P6-F.9.89 debugging package is ready.

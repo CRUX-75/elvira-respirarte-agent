@@ -33,6 +33,22 @@ MONTH_NAMES_ES = {
     12: "diciembre",
 }
 
+MONTH_WORDS_ES = {
+    "enero": 1,
+    "febrero": 2,
+    "marzo": 3,
+    "abril": 4,
+    "mayo": 5,
+    "junio": 6,
+    "julio": 7,
+    "agosto": 8,
+    "septiembre": 9,
+    "setiembre": 9,
+    "octubre": 10,
+    "noviembre": 11,
+    "diciembre": 12,
+}
+
 WEEKDAY_WORDS_ES = {
     "lunes": 0,
     "martes": 1,
@@ -44,6 +60,18 @@ WEEKDAY_WORDS_ES = {
     "sábado": 5,
     "domingo": 6,
 }
+
+ABSOLUTE_DATE_PATTERN = re.compile(
+    r"\b"
+    r"(?:(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo)\s+)?"
+    r"(?P<day>\d{1,2})\s+de\s+"
+    r"(?P<month>"
+    r"enero|febrero|marzo|abril|mayo|junio|julio|agosto|"
+    r"septiembre|setiembre|octubre|noviembre|diciembre"
+    r")\s+de\s+"
+    r"(?P<year>\d{4})"
+    r"\b"
+)
 
 COLOMBIA_HOLIDAYS_2026 = {
     date(2026, 1, 1): "Año Nuevo",
@@ -109,6 +137,23 @@ def _has_explicit_next_week_marker(normalized_message: str) -> bool:
     return any(marker in normalized_message for marker in NEXT_WEEK_MARKERS)
 
 
+def _resolve_absolute_date_reference(
+    normalized_message: str,
+) -> date | None:
+    match = ABSOLUTE_DATE_PATTERN.search(normalized_message)
+    if match is None:
+        return None
+
+    day = int(match.group("day"))
+    month = MONTH_WORDS_ES[match.group("month")]
+    year = int(match.group("year"))
+
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
+
+
 def _resolve_weekday_reference(
     base_date: date,
     target_weekday: int,
@@ -150,33 +195,36 @@ def resolve_requested_date(
     normalized_message = _normalize_text(message)
     fecha_actual_colombia = get_today_colombia(now)
 
-    requested_date: date | None = None
+    requested_date = _resolve_absolute_date_reference(normalized_message)
 
-    if (
-        "pasado mañana" in normalized_message
-        or "pasado manana" in normalized_message
-        or "pasado maniana" in normalized_message
-    ):
-        requested_date = fecha_actual_colombia + timedelta(days=2)
-    elif (
-        re.search(r"\bmanana\b", normalized_message)
-        or (
-            re.search(r"\bmaniana\b", normalized_message)
-            and not re.fullmatch(r"(en|por) la maniana", normalized_message)
-        )
-    ):
-        requested_date = fecha_actual_colombia + timedelta(days=1)
-    elif "hoy" in normalized_message:
-        requested_date = fecha_actual_colombia
-    else:
-        for weekday_word, weekday_index in WEEKDAY_WORDS_ES.items():
-            if weekday_word in normalized_message:
-                requested_date = _resolve_weekday_reference(
-                    fecha_actual_colombia,
-                    weekday_index,
-                    explicit_next_week=_has_explicit_next_week_marker(normalized_message),
-                )
-                break
+    if requested_date is None:
+        if (
+            "pasado mañana" in normalized_message
+            or "pasado manana" in normalized_message
+            or "pasado maniana" in normalized_message
+        ):
+            requested_date = fecha_actual_colombia + timedelta(days=2)
+        elif (
+            re.search(r"\bmanana\b", normalized_message)
+            or (
+                re.search(r"\bmaniana\b", normalized_message)
+                and not re.fullmatch(r"(en|por) la maniana", normalized_message)
+            )
+        ):
+            requested_date = fecha_actual_colombia + timedelta(days=1)
+        elif "hoy" in normalized_message:
+            requested_date = fecha_actual_colombia
+        else:
+            for weekday_word, weekday_index in WEEKDAY_WORDS_ES.items():
+                if weekday_word in normalized_message:
+                    requested_date = _resolve_weekday_reference(
+                        fecha_actual_colombia,
+                        weekday_index,
+                        explicit_next_week=_has_explicit_next_week_marker(
+                            normalized_message
+                        ),
+                    )
+                    break
 
     if requested_date is None:
         return RelativeDateResolution(
@@ -200,6 +248,7 @@ def resolve_requested_date(
         slots = service.build_slots_from_schedule_rows(requested_date, schedule_rows)
     else:
         slots = service.build_default_slots(requested_date)
+
     slot_labels = [slot.label for slot in slots]
 
     if is_weekend or is_colombia_holiday:

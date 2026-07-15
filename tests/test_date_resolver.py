@@ -255,3 +255,13 @@ def test_resolver_uses_kb_schedule_rows_instead_of_default_slots():
         "2:00 p. m.–4:00 p. m.",
         "4:00 p. m.–6:00 p. m.",
     ]
+def test_explicit_absolute_date_takes_priority_over_weekday_reference():
+    result = resolve_requested_date(
+        "jueves 23 de julio de 2026",
+        now=datetime(2026, 7, 15, 10, 0, tzinfo=BOGOTA),
+    )
+
+    assert result.fecha_actual_colombia.isoformat() == "2026-07-15"
+    assert result.fecha_solicitada.isoformat() == "2026-07-23"
+    assert result.fecha_solicitada_texto == "jueves 23 de julio"
+    assert result.dia_semana_solicitado == "jueves"    
