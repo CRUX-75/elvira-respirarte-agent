@@ -5234,3 +5234,180 @@ Technical commit:
 `a938734 — Add definitive Wednesday slot regression coverage`
 
 Documentation commit follows in the current change set.
+
+
+## P6-F.9.89-E — Weekend and Colombia Holiday Full-Flow Guard
+
+Status:
+
+CLOSED / IMPLEMENTED / REGRESSION COVERAGE GREEN
+
+Objective:
+
+Verify the complete stateful appointment flow for unavailable dates:
+
+* Saturday;
+* Sunday;
+* Colombia public holidays.
+
+The block verifies the endpoint response, deterministic persistence decision, patient state update, interaction persistence, appointment-request wiring, and appointment-context behavior.
+
+Required deterministic contract:
+
+For a Saturday, Sunday, or Colombia public holiday:
+
+1. `fecha_solicitada` remains available;
+2. `fecha_solicitada_texto` remains available;
+3. `is_weekend` or `is_colombia_holiday` remains `True`;
+4. `es_dia_disponible` remains `False`;
+5. `slots_candidatos` remains empty;
+6. the flow returns to:
+
+   `ST_CITA_FECHA`
+
+7. `next_action` becomes:
+
+   `ask_preferred_date`
+
+8. `state_reason` becomes:
+
+   `unavailable_date_guard`
+
+9. the persistence decision returns:
+
+   `should_persist = False`
+
+10. the persistence reason is:
+
+   * `skipped_weekend`, or
+   * `skipped_colombia_holiday`;
+
+11. no `AppointmentRequest` is created;
+12. `AppointmentRequestService` is not called;
+13. the Google Sheets human-review writer path is not reached;
+14. Elvira does not claim that a request was registered;
+15. Elvira does not claim that the doctor will review a nonexistent request;
+16. Elvira explains that the requested date is unavailable;
+17. Elvira asks for another valid weekday;
+18. Colombia holiday responses preserve and mention `colombia_holiday_name`;
+19. the corrected interaction metadata is persisted;
+20. the patient state is persisted as `ST_CITA_FECHA`;
+21. unavailable-date context is not captured as an active appointment context.
+
+Stateful regression coverage added:
+
+`tests/test_stateful_appointment_context_carryover.py::test_stateful_endpoint_weekend_guard_blocks_sunday_persistence`
+
+The Sunday test verifies:
+
+* date `2026-05-17`;
+* text `domingo 17 de mayo`;
+* `is_weekend = True`;
+* `is_colombia_holiday = False`;
+* `es_dia_disponible = False`;
+* empty candidate slots;
+* persistence reason `skipped_weekend`;
+* `appointment_request = None`;
+* zero calls to `AppointmentRequestService`;
+* corrected response and state;
+* persisted interaction and patient state;
+* no appointment-context capture or clearing.
+
+`tests/test_stateful_appointment_context_carryover.py::test_stateful_endpoint_weekend_guard_blocks_saturday_persistence`
+
+The Saturday test verifies:
+
+* date `2026-05-30`;
+* text `sábado 30 de mayo`;
+* `is_weekend = True`;
+* `is_colombia_holiday = False`;
+* `es_dia_disponible = False`;
+* empty candidate slots;
+* persistence reason `skipped_weekend`;
+* `appointment_request = None`;
+* zero calls to `AppointmentRequestService`;
+* corrected response and state;
+* persisted interaction and patient state;
+* no appointment-context capture or clearing.
+
+`tests/test_stateful_appointment_context_carryover.py::test_stateful_endpoint_holiday_guard_blocks_persistence_and_names_holiday`
+
+The Colombia holiday test verifies:
+
+* date `2026-05-18`;
+* text `lunes 18 de mayo`;
+* `is_weekend = False`;
+* `is_colombia_holiday = True`;
+* holiday name `Ascensión de Jesús`;
+* `es_dia_disponible = False`;
+* empty candidate slots;
+* persistence reason `skipped_colombia_holiday`;
+* `appointment_request = None`;
+* zero calls to `AppointmentRequestService`;
+* corrected response and state;
+* holiday name included in the patient-facing response;
+* holiday name included in the persisted interaction;
+* no appointment-context capture or clearing.
+
+Production correction:
+
+The stateful unavailable-date guard already prevented appointment persistence and restored the safe appointment-date state.
+
+However, `_force_unavailable_date_guard_response()` replaced the existing holiday response with generic unavailable-date copy and omitted `colombia_holiday_name`.
+
+The guard now adds:
+
+`porque corresponde al festivo de <colombia_holiday_name>`
+
+when:
+
+* `is_colombia_holiday is True`; and
+* a holiday name is available.
+
+Saturday and Sunday behavior remains unchanged.
+
+Production function modified:
+
+`app/main.py::_force_unavailable_date_guard_response()`
+
+Validation results:
+
+* Sunday-specific stateful test: GREEN
+* Stateful context-carryover file after Sunday coverage: `11 passed`
+* Saturday-specific stateful test: GREEN
+* Stateful context-carryover file after weekend coverage: `12 passed`
+* Holiday-specific stateful test: RED before correction
+* Holiday-specific stateful test after minimal correction: GREEN
+* Complete stateful context-carryover file: `13 passed`
+* Related state-machine, runtime-decision, wiring, and stateful files: `78 passed`
+* Full test suite: `318 passed`
+
+Files modified:
+
+* `app/main.py`
+* `tests/test_stateful_appointment_context_carryover.py`
+* `AI_CONTEXT.md`
+
+Implementation boundary:
+
+This block did not modify:
+
+* deterministic date-resolution rules;
+* Colombia holiday calendar data;
+* regular weekday candidate slots;
+* Wednesday single-slot behavior;
+* appointment-request persistence criteria;
+* callback processing;
+* Swagger;
+* WhatsApp production configuration;
+* deployment configuration.
+
+Closure conclusion:
+
+Saturday, Sunday, and Colombia public-holiday appointment attempts are now covered through the complete stateful endpoint flow.
+
+Unavailable dates cannot create an `AppointmentRequest`, cannot reach Google Sheets human review, and cannot produce a false registration confirmation.
+
+Colombia holiday responses now preserve the holiday name when available.
+
+No Swagger retest, production test, or deployment was performed.
