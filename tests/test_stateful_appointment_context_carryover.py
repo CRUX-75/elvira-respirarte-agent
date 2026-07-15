@@ -197,6 +197,88 @@ def test_stateful_endpoint_captures_context_after_fecha_cita(monkeypatch):
     assert calls["clear_patient_appointment_context"] is None
 
 
+def test_stateful_endpoint_replaces_existing_context_with_new_absolute_date(monkeypatch):
+    fake_result = FakeElviraResult(
+        intent="fecha_cita",
+        nuevo_estado="ST_CITA_FRANJA",
+        next_action="ask_appointment_time_window",
+        fecha_solicitada="2026-07-23",
+        fecha_solicitada_texto="jueves 23 de julio",
+        slots_candidatos=[
+            "3:00 p. m.–5:00 p. m.",
+            "5:00 p. m.–7:00 p. m.",
+        ],
+        is_weekend=False,
+        is_colombia_holiday=False,
+        es_dia_disponible=True,
+        mensaje_original="jueves 23 de julio de 2026",
+    )
+
+    patient = {
+        "id": "patient-001",
+        "telefono": "573001112233",
+        "nombre": "Paciente Test",
+        "estado_actual": "ST_CITA_FRANJA",
+        "opt_out": False,
+        "appointment_context": {
+            "fecha_solicitada": "2026-07-16",
+            "fecha_solicitada_texto": "jueves 16 de julio",
+            "slots_candidatos": [
+                "3:00 p. m.–5:00 p. m.",
+                "5:00 p. m.–7:00 p. m.",
+            ],
+            "es_dia_disponible": True,
+            "is_weekend": False,
+            "is_colombia_holiday": False,
+            "colombia_holiday_name": None,
+        },
+    }
+
+    calls = _patch_stateful_dependencies(
+        monkeypatch,
+        fake_result=fake_result,
+        patient=patient,
+    )
+
+    response = client.post(
+        "/test/message-stateful",
+        json={
+            "telefono": "573001112233",
+            "nombre": "Paciente Test",
+            "mensaje": "jueves 23 de julio de 2026",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["fecha_solicitada"] == "2026-07-23"
+    assert body["fecha_solicitada_texto"] == "jueves 23 de julio"
+    assert body["slots_candidatos"] == [
+        "3:00 p. m.–5:00 p. m.",
+        "5:00 p. m.–7:00 p. m.",
+    ]
+
+    assert calls["update_patient_appointment_context"] == {
+        "telefono": "573001112233",
+        "appointment_context": {
+            "fecha_solicitada": "2026-07-23",
+            "fecha_solicitada_texto": "jueves 23 de julio",
+            "slots_candidatos": [
+                "3:00 p. m.–5:00 p. m.",
+                "5:00 p. m.–7:00 p. m.",
+            ],
+            "es_dia_disponible": True,
+            "is_weekend": False,
+            "is_colombia_holiday": False,
+            "colombia_holiday_name": None,
+        },
+    }
+
+    assert calls["appointment_service_call"] is None
+    assert calls["clear_patient_appointment_context"] is None
+
+
 def test_stateful_endpoint_applies_context_before_hora_cita_persistence(monkeypatch):
     fake_result = FakeElviraResult(
         intent="hora_cita",
