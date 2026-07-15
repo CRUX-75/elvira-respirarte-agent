@@ -4784,12 +4784,142 @@ No changes were made in this block to:
 
 No Swagger retest or production deployment was performed.
 
+---
+
+## P6-F.9.89-B — Date Intent Classification Inside ST_CITA_FRANJA
+
+Status:
+
+CLOSED / IMPLEMENTED / REGRESSION COVERAGE GREEN
+
+Objective:
+
+Correct deterministic intent classification when a patient provides a new date reference while the conversation is already waiting for an appointment time window.
+
+Production-adjacent finding:
+
+Inside `ST_CITA_FRANJA`, the message:
+
+`Mañana`
+
+was classified as:
+
+`hora_cita`
+
+Expected classification:
+
+`fecha_cita`
+
+Root cause:
+
+The `ST_CITA_FRANJA` slot-selection patterns included the normalized word:
+
+`manana`
+
+Those patterns were evaluated before the general appointment-date patterns.
+
+As a result, the standalone date reference `mañana` was interpreted as a time-of-day or slot preference instead of a request to replace the previously selected appointment date.
+
+Deterministic contract:
+
+1. Inside `ST_CITA_FRANJA`, standalone `mañana` is a date reference.
+2. Standalone `mañana` must classify as `fecha_cita`.
+3. A new date reference must be allowed to replace the date stored in `appointment_context`.
+4. Time-of-day expressions such as:
+
+   * `en la mañana`
+   * `por la mañana`
+
+   remain slot or time-window expressions inside `ST_CITA_FRANJA`.
+5. Existing slot-selection behavior must remain unchanged for:
+
+   * `la primera`
+   * `la segunda`
+   * exact-hour expressions
+   * numeric time ranges
+   * `en la tarde`
+   * affirmative slot confirmations
+
+Regression test added:
+
+`tests/test_intent.py::test_p6f989b_manana_is_fecha_cita_inside_appointment_slot_state`
+
+Initial RED evidence:
+
+```text
+Expected: fecha_cita
+Received: hora_cita
+```
+
+Implemented correction:
+
+`app/services/intent.py` now checks for explicit standalone tomorrow references before evaluating affirmative confirmations and slot-selection patterns inside `ST_CITA_FRANJA`.
+
+The controlled helper distinguishes date references such as:
+
+* `mañana`
+* `mañana en la tarde`
+* `para mañana`
+* `el día de mañana`
+
+from time-of-day expressions such as:
+
+* `en la mañana`
+* `por la mañana`
+
+Validation results:
+
+* Specific `mañana` regression test: GREEN
+* Complete `tests/test_intent.py`: `15 passed`
+* Full test suite: `313 passed`
+
+Implementation commit:
+
+`e2ce462 — Fix tomorrow intent inside appointment slot state`
+
+The implementation commit was created locally.
+
+Push to `origin/main` remains pending until this documentation update is committed.
+
+Implementation boundary:
+
+This block modified only:
+
+* `app/services/intent.py`
+* `tests/test_intent.py`
+
+It did not modify:
+
+* deterministic date calculation
+* appointment-context persistence
+* `AppointmentRequest` creation
+* patient-facing registration confirmation
+* Wednesday scheduling rules
+* callback observability
+* WhatsApp production configuration
+
+Closure conclusion:
+
+The standalone expression `mañana` no longer behaves as a slot-selection expression inside `ST_CITA_FRANJA`.
+
+It now deterministically returns `fecha_cita`, allowing the appointment flow to process it as a replacement date.
+
+Existing appointment time and slot-selection classifications remain green.
+
+No Swagger retest or production deployment was performed.
+
 Next controlled debugging block:
 
-`P6-F.9.89-B — Date Intent Classification Inside ST_CITA_FRANJA`
+`P6-F.9.89-C — False Appointment Registration Confirmation`
 
-Primary adjacent finding:
+Objective:
 
-Inside `ST_CITA_FRANJA`, the expression `mañana` can currently be classified as `hora_cita` because slot-selection patterns are evaluated before date patterns.
+Ensure that Elvira only states that an appointment request was registered when an `AppointmentRequest` was actually persisted.
 
-The next step is to add a dedicated regression test for that behavior before modifying the classifier.
+Required initial action:
+
+Add a dedicated regression test for the case where:
+
+`appointment_request_decision_reason = skipped_missing_fecha_solicitada`
+
+The patient-facing response must request the missing date again and must not contain a false registration confirmation.
