@@ -1,3 +1,6 @@
+import asyncio
+import time
+
 from dataclasses import asdict
 
 from fastapi import FastAPI, Query, HTTPException, Header
@@ -323,12 +326,15 @@ async def receive_webhook(payload: WhatsAppPayload):
             "whatsapp_message_id": whatsapp_message_id,
             "whatsapp_timestamp": whatsapp_timestamp,
         }
+    
+    typing_started_at: float | None = None
 
     if settings.whatsapp_sending_enabled and whatsapp_message_id:
         try:
             await mark_whatsapp_message_read_and_show_typing(
                 whatsapp_message_id=whatsapp_message_id,
             )
+            typing_started_at = time.monotonic()
 
             print(
                 {
@@ -381,6 +387,13 @@ async def receive_webhook(payload: WhatsAppPayload):
 
         if settings.whatsapp_sending_enabled:
             try:
+                if typing_started_at is not None:
+                    typing_elapsed = time.monotonic() - typing_started_at
+                    typing_remaining = 2.0 - typing_elapsed
+
+                    if typing_remaining > 0:
+                        await asyncio.sleep(typing_remaining)
+
                 await send_whatsapp_message(
                     telefono=telefono,
                     mensaje=result.respuesta,
