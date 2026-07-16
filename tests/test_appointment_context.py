@@ -383,3 +383,29 @@ def test_apply_appointment_context_restores_missing_slots_when_fecha_already_pre
         "3:00 p. m.–5:00 p. m.",
         "5:00 p. m.–7:00 p. m.",
     ]
+
+
+def test_capture_appointment_context_from_cita_with_embedded_date():
+    state = SimpleNamespace(
+        intent="cita",
+        nuevo_estado="ST_CITA_FRANJA",
+        fecha_solicitada="2026-07-22",
+        fecha_solicitada_texto="miércoles 22 de julio",
+        slots_candidatos=["3:00 p. m.–6:00 p. m."],
+        es_dia_disponible=True,
+        is_weekend=False,
+        is_colombia_holiday=False,
+        colombia_holiday_name=None,
+    )
+
+    context = capture_appointment_context_from_state(state)
+
+    assert context == {
+        "fecha_solicitada": "2026-07-22",
+        "fecha_solicitada_texto": "miércoles 22 de julio",
+        "slots_candidatos": ["3:00 p. m.–6:00 p. m."],
+        "es_dia_disponible": True,
+        "is_weekend": False,
+        "is_colombia_holiday": False,
+        "colombia_holiday_name": None,
+    }

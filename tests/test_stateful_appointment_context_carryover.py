@@ -1112,3 +1112,326 @@ def test_stateful_endpoint_holiday_guard_blocks_persistence_and_names_holiday(mo
 
     assert calls["update_patient_appointment_context"] is None
     assert calls["clear_patient_appointment_context"] is None
+
+
+def test_stateful_endpoint_carries_wednesday_context_across_two_calls(
+
+    monkeypatch,
+):
+    import json
+
+    from app.graph import nodes as graph_nodes
+    from app.repositories import patients as patient_repository
+
+    expected_context = {
+        "fecha_solicitada": "2026-07-22",
+        "fecha_solicitada_texto": "miércoles 22 de julio",
+        "slots_candidatos": ["3:00 p. m.–6:00 p. m."],
+        "es_dia_disponible": True,
+        "is_weekend": False,
+        "is_colombia_holiday": False,
+        "colombia_holiday_name": None,
+    }
+
+    class StatefulResult:
+        def __init__(self, row=None):
+            self.row = row
+
+        def fetchone(self):
+            return self.row
+
+    class StatefulPatientConnection:
+        def __init__(self):
+            self.patient = {
+                "id": "patient-wednesday-two-turns",
+                "telefono": "573009890090",
+                "nombre": "Swagger Miércoles Carryover",
+                "estado_actual": "ST_CITA_FECHA",
+                "opt_out": False,
+                "appointment_context": None,
+            }
+            self.patient_reads = []
+
+        def execute(self, statement, params=None):
+            sql = " ".join(str(statement).split())
+            params = params or {}
+
+            if "SELECT" in sql and "FROM patients" in sql:
+                row = dict(self.patient)
+
+                # Reproduce la proyección SQL real. El contexto solo estará
+                # disponible si la consulta del repositorio lo selecciona.
+                if "SELECT *" not in sql and "appointment_context" not in sql:
+                    row.pop("appointment_context", None)
+
+                self.patient_reads.append(dict(row))
+
+                return StatefulResult(
+                    SimpleNamespace(_mapping=row),
+                )
+
+            if "INSERT INTO patients" in sql:
+                return StatefulResult(
+                    SimpleNamespace(_mapping=dict(self.patient)),
+                )
+
+            if (
+                "UPDATE patients" in sql
+                and "appointment_context = NULL" in sql
+            ):
+                self.patient["appointment_context"] = None
+                return StatefulResult()
+
+            if (
+                "UPDATE patients" in sql
+                and "appointment_context" in sql
+                and "appointment_context = NULL" not in sql
+            ):
+                stored_context = params["appointment_context"]
+
+                if isinstance(stored_context, str):
+                    stored_context = json.loads(stored_context)
+
+                self.patient["appointment_context"] = stored_context
+                return StatefulResult()
+
+            if (
+                "UPDATE patients" in sql
+                and "estado_actual = :nuevo_estado" in sql
+            ):
+                self.patient["estado_actual"] = params["nuevo_estado"]
+
+                if "opt_out" in params:
+                    self.patient["opt_out"] = params["opt_out"]
+
+                return StatefulResult()
+
+            if (
+                "UPDATE patients" in sql
+                and "last_message_at = NOW()" in sql
+            ):
+                return StatefulResult()
+
+            raise AssertionError(
+                f"SQL no esperado en prueba stateful: {sql}"
+            )
+
+    class StatefulPatientEngine:
+        def __init__(self):
+            self.conn = StatefulPatientConnection()
+
+        def begin(self):
+            return self
+
+        def __enter__(self):
+            return self.conn
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    fake_engine = StatefulPatientEngine()
+
+    monkeypatch.setattr(
+        patient_repository,
+        "engine",
+        fake_engine,
+    )
+
+    # El endpoint utiliza las funciones reales del repositorio de pacientes.
+    monkeypatch.setattr(
+        main,
+        "get_or_create_patient_by_phone",
+        patient_repository.get_or_create_patient_by_phone,
+    )
+    monkeypatch.setattr(
+        main,
+        "update_patient_state",
+        patient_repository.update_patient_state,
+    )
+    monkeypatch.setattr(
+        main,
+        "update_patient_last_message",
+        patient_repository.update_patient_last_message,
+    )
+    monkeypatch.setattr(
+        main,
+        "update_patient_appointment_context",
+        patient_repository.update_patient_appointment_context,
+    )
+    monkeypatch.setattr(
+        main,
+        "clear_patient_appointment_context",
+        patient_repository.clear_patient_appointment_context,
+    )
+
+    def fake_classify_intent(*, message, current_state):
+        if message == "Quiero agendar una cita para el miércoles 22 de julio de 2026":
+            return "cita"
+
+        if message == "sí, esa franja":
+            return "hora_cita"
+
+        raise AssertionError(
+            f"Mensaje inesperado para clasificación: {message!r}"
+        )
+
+    def fake_generate_llm_response(state):
+        state.respuesta = "Respuesta de prueba"
+        return state
+
+    monkeypatch.setattr(
+        graph_nodes,
+        "classify_intent",
+        fake_classify_intent,
+    )
+    monkeypatch.setattr(
+        graph_nodes,
+        "generate_llm_response",
+        fake_generate_llm_response,
+    )
+    monkeypatch.setattr(
+        graph_nodes.settings,
+        "kb_runtime_enabled",
+        False,
+    )
+
+    processed_states = []
+
+    def real_traced_process_message(process_func, message):
+        processed_states.append(message.estado_actual)
+        return process_func(message)
+
+    monkeypatch.setattr(
+        main,
+        "traced_process_message",
+        real_traced_process_message,
+    )
+    monkeypatch.setattr(
+        main,
+        "save_interaction",
+        lambda **kwargs: None,
+    )
+
+    appointment_calls = []
+
+    class FakePostgresAppointmentRequestRepository:
+        def __init__(self, engine):
+            self.engine = engine
+
+    class FakeAppointmentRequestService:
+        def __init__(self, repository):
+            self.repository = repository
+
+        def create_or_reuse_active_request(self, **kwargs):
+            appointment_calls.append(kwargs)
+
+            return SimpleNamespace(
+                id_solicitud="SOL-WEDNESDAY-TWO-TURNS",
+                estado_solicitud="pendiente_confirmacion",
+                source_interaction_id=kwargs.get(
+                    "source_interaction_id"
+                ),
+                fecha_solicitada=kwargs.get("fecha_solicitada"),
+                franja_solicitada=kwargs.get("franja_solicitada"),
+            )
+
+    monkeypatch.setattr(
+        main,
+        "PostgresAppointmentRequestRepository",
+        FakePostgresAppointmentRequestRepository,
+    )
+    monkeypatch.setattr(
+        main,
+        "AppointmentRequestService",
+        FakeAppointmentRequestService,
+    )
+
+    first_response = client.post(
+        "/test/message-stateful",
+        json={
+            "telefono": "573009890090",
+            "nombre": "Swagger Miércoles Carryover",
+            "mensaje": "Quiero agendar una cita para el miércoles 22 de julio de 2026",
+        },
+    )
+
+    assert first_response.status_code == 200
+
+    first_body = first_response.json()
+
+    assert first_body["nuevo_estado"] == "ST_CITA_FRANJA"
+    assert first_body["fecha_solicitada"] == "2026-07-22"
+    assert (
+        first_body["fecha_solicitada_texto"]
+        == "miércoles 22 de julio"
+    )
+    assert first_body["slots_candidatos"] == [
+        "3:00 p. m.–6:00 p. m."
+    ]
+
+    # El primer POST debe guardar estado y contexto.
+    assert fake_engine.conn.patient["estado_actual"] == "ST_CITA_FRANJA"
+    context_after_first_turn = fake_engine.conn.patient["appointment_context"]
+    assert appointment_calls == []
+
+    second_response = client.post(
+        "/test/message-stateful",
+        json={
+            "telefono": "573009890090",
+            "nombre": "Swagger Miércoles Carryover",
+            "mensaje": "sí, esa franja",
+        },
+    )
+
+    assert second_response.status_code == 200
+
+    second_body = second_response.json()
+
+    assert processed_states == [
+        "ST_CITA_FECHA",
+        "ST_CITA_FRANJA",
+    ]
+
+    assert context_after_first_turn == expected_context
+
+    # El segundo POST debe leer el contexto escrito por el primero.
+    assert len(fake_engine.conn.patient_reads) == 2
+    assert (
+        fake_engine.conn.patient_reads[1]["appointment_context"]
+        == expected_context
+    )
+
+    assert second_body["fecha_solicitada"] == "2026-07-22"
+    assert (
+        second_body["fecha_solicitada_texto"]
+        == "miércoles 22 de julio"
+    )
+    assert second_body["slots_candidatos"] == [
+        "3:00 p. m.–6:00 p. m."
+    ]
+
+    decision = second_body["appointment_request_decision"]
+
+    assert decision["should_persist"] is True
+    assert (
+        decision["reason"]
+        == "allowed_hora_cita_ready_for_human_review"
+    )
+    assert decision["fecha_solicitada"] == "2026-07-22"
+    assert (
+        decision["franja_solicitada"]
+        == "3:00 p. m.–6:00 p. m."
+    )
+
+    assert second_body["nuevo_estado"] == "ST_CITA_PENDIENTE"
+    assert second_body["persisted_state"] == "ST_CITA_PENDIENTE"
+    assert second_body["appointment_request"] is not None
+
+    assert len(appointment_calls) == 1
+    assert appointment_calls[0]["fecha_solicitada"] == "2026-07-22"
+    assert (
+        appointment_calls[0]["franja_solicitada"]
+        == "3:00 p. m.–6:00 p. m."
+    )
+
+    assert fake_engine.conn.patient["appointment_context"] is None

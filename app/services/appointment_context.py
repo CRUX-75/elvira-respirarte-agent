@@ -17,9 +17,9 @@ APPOINTMENT_CONTEXT_FIELDS = (
 
 
 def capture_appointment_context_from_state(state: Any) -> dict[str, Any] | None:
-    """Capture active appointment date context after a fecha_cita turn."""
+    """Capture active appointment date context after a cita or fecha_cita turn."""
 
-    if getattr(state, "intent", None) != "fecha_cita":
+    if getattr(state, "intent", None) not in {"cita", "fecha_cita"}:
         return None
 
     if getattr(state, "nuevo_estado", None) != "ST_CITA_FRANJA":
