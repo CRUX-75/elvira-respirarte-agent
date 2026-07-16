@@ -5684,3 +5684,355 @@ Next controlled phase:
 3. execute the selected Swagger scenarios;
 4. record actual responses;
 5. decide whether the current build is ready for deployment.
+
+---
+
+## Swagger Controlled Retest — P6-F.9.89 Post-Closure Findings
+
+Date:
+
+`2026-07-16`
+
+Status:
+
+`PAUSED AFTER REPRODUCIBLE STATEFUL REGRESSION`
+
+The controlled Swagger retest started after the formal closure of:
+
+`P6-F.9.89`
+
+Initial conditions:
+
+* branch: `main`;
+* previously reported suite: `323 passed`;
+* `WHATSAPP_SENDING_ENABLED=false`;
+* no real WhatsApp message was sent;
+* no new production deployment was intentionally performed during this Swagger block;
+* `/test/message-stateful`, `/test/message`, and `/webhook` were exercised separately;
+* the Swagger matrix was stopped immediately after a reproducible Wednesday stateful failure.
+
+### Scenario 1 — Absolute Spanish Appointment Date
+
+Status:
+
+`GREEN`
+
+Input:
+
+`Quiero agendar una cita para el jueves 23 de julio de 2026`
+
+Validated:
+
+* `fecha_solicitada = 2026-07-23`;
+* `fecha_solicitada_texto = jueves 23 de julio`;
+* `dia_semana_solicitado = jueves`;
+* `es_dia_disponible = true`;
+* regular Thursday slots were generated;
+* transition to `ST_CITA_FRANJA`;
+* no premature `AppointmentRequest` persistence.
+
+### Scenario 2 — Previous Date Replacement
+
+Status:
+
+`GREEN`
+
+Starting context:
+
+* previous date: `2026-07-23`;
+* persisted state: `ST_CITA_FRANJA`.
+
+Input:
+
+`Prefiero el viernes 24 de julio de 2026`
+
+Validated:
+
+* `intent = fecha_cita`;
+* new date completely replaced the previous date;
+* `fecha_solicitada = 2026-07-24`;
+* `fecha_solicitada_texto = viernes 24 de julio`;
+* `dia_semana_solicitado = viernes`;
+* state remained `ST_CITA_FRANJA`;
+* no premature persistence.
+
+### Scenario 3 — “Mañana” Inside ST_CITA_FRANJA
+
+Status:
+
+`GREEN`
+
+Input:
+
+`mañana`
+
+Validated:
+
+* `intent = fecha_cita`;
+* it was not classified as `hora_cita`;
+* Colombia current date was `2026-07-16`;
+* resolved date was `2026-07-17`;
+* the previous date was replaced;
+* state remained `ST_CITA_FRANJA`;
+* no premature persistence.
+
+### Scenario 4 — Missing Appointment Date Guard
+
+Status:
+
+`GREEN / REPRODUCED DURING WEDNESDAY FLOW`
+
+The guard was ultimately reproduced through a real stateful request after the Wednesday context was lost.
+
+Validated:
+
+* `nuevo_estado = ST_CITA_FECHA`;
+* `next_action = ask_preferred_date`;
+* `state_reason = missing_appointment_date_guard`;
+* `appointment_request_decision.should_persist = false`;
+* decision reason: `skipped_missing_fecha_solicitada`;
+* `appointment_request = null`;
+* no false registration confirmation;
+* no claim that the doctor would review a nonexistent request.
+
+A direct attempt with `"la primera"` while legitimately in `ST_CITA_FECHA` was classified as `general` and remained safe.
+
+A `/webhook` request with `WHATSAPP_SENDING_ENABLED=false` also remained safe:
+
+* `status = sending_skipped`;
+* `appointment_request = null`;
+* no real WhatsApp send occurred.
+
+### Scenario 5 — Wednesday Single Slot
+
+Status:
+
+`RED / REPRODUCIBLE`
+
+First stateful turn:
+
+`Quiero agendar una cita para el miércoles 22 de julio de 2026`
+
+First-turn result was correct:
+
+* `fecha_solicitada = 2026-07-22`;
+* `fecha_solicitada_texto = miércoles 22 de julio`;
+* `dia_semana_solicitado = miércoles`;
+* `es_dia_disponible = true`;
+* `slots_candidatos = ["3:00 p. m.–6:00 p. m."]`;
+* no regular slots were offered;
+* `persisted_state = ST_CITA_FRANJA`;
+* no premature persistence.
+
+Second stateful turn:
+
+`sí, esa franja`
+
+Second-turn result exposed the regression:
+
+* `estado_anterior = ST_CITA_FRANJA` was recovered;
+* `fecha_solicitada` was not recovered;
+* `fecha_solicitada_texto` was not recovered;
+* `slots_candidatos` was not recovered;
+* `franja_solicitada` remained null;
+* the missing-date guard activated;
+* the flow returned to `ST_CITA_FECHA`;
+* no `AppointmentRequest` was created.
+
+Reproducible defect:
+
+> The persisted conversational state survives between `/test/message-stateful` calls, but the Wednesday appointment context required to confirm the single slot does not survive the second turn.
+
+The current evidence does not yet prove whether the defect is located in:
+
+* context persistence;
+* context serialization;
+* context repository mapping;
+* context recovery;
+* graph input reconstruction;
+* state cleanup being executed too early;
+* production/runtime code differing from the locally tested path.
+
+No root cause has been established yet.
+
+### Swagger Matrix Decision
+
+The remaining Swagger scenarios were not executed:
+
+* Saturday;
+* Sunday;
+* Colombia holiday;
+* human-review confirm;
+* human-review request not found;
+* human-review forbidden transition;
+* human-review invalid action.
+
+The matrix was intentionally paused to avoid mixing validation with debugging.
+
+### Next Controlled Debugging Block
+
+Proposed block:
+
+`P6-F.9.90 — Wednesday Stateful Appointment Context Carryover Regression`
+
+Objective:
+
+Ensure that after the first Wednesday turn persists:
+
+* `ST_CITA_FRANJA`;
+* `fecha_solicitada`;
+* `fecha_solicitada_texto`;
+* `dia_semana_solicitado`;
+* `es_dia_disponible`;
+* the unique Wednesday slot;
+
+the second stateful turn can recover that context and register the exact preference:
+
+`3:00 p. m.–6:00 p. m.`
+
+Expected final second-turn contract:
+
+* `intent = hora_cita`;
+* Wednesday date remains available;
+* the unique slot is selected;
+* `should_persist = true`;
+* `AppointmentRequestService` is called once;
+* the created request contains:
+  * `fecha_solicitada = 2026-07-22`;
+  * `franja_solicitada = 3:00 p. m.–6:00 p. m.`;
+* the patient receives a registration message, not a confirmed appointment;
+* context cleanup occurs only after successful persistence.
+
+### Debugging Rules for P6-F.9.90
+
+Work only in the local repository until the correction is complete.
+
+Do not mix:
+
+* local repository inspection;
+* EasyPanel container inspection;
+* Swagger execution;
+* production deployment.
+
+Sequence:
+
+1. reproduce the Wednesday two-turn flow in an automated test;
+2. obtain a deterministic RED test;
+3. inspect the stateful endpoint orchestration;
+4. identify where appointment context is written;
+5. identify where appointment context is read;
+6. compare persisted fields with reconstructed graph input;
+7. isolate the exact field-loss boundary;
+8. implement the smallest correction;
+9. run the specific RED test until GREEN;
+10. run related stateful and appointment tests;
+11. run the complete suite;
+12. update documentation;
+13. create technical commit;
+14. create documentation commit;
+15. push;
+16. confirm clean tree;
+17. deploy intentionally;
+18. repeat only the Wednesday Swagger scenario;
+19. continue the remaining Swagger matrix only after Wednesday is GREEN.
+
+No speculative correction should be made before obtaining the local RED reproduction.
+
+---
+
+## P6-F.9.90 Closure Note — Wednesday Stateful Appointment Context Carryover Regression
+
+Status:
+
+`GREEN LOCALLY / SWAGGER RETEST PENDING`
+
+Objective:
+
+Ensure that a Wednesday appointment context created during the first stateful turn survives into the second turn and allows confirmation of the unique Wednesday slot.
+
+Reproduced failure:
+
+First turn:
+
+`Quiero agendar una cita para el miércoles 22 de julio de 2026`
+
+The first response correctly produced:
+
+* `intent = cita`;
+* `nuevo_estado = ST_CITA_FRANJA`;
+* `fecha_solicitada = 2026-07-22`;
+* `fecha_solicitada_texto = miércoles 22 de julio`;
+* `slots_candidatos = ["3:00 p. m.–6:00 p. m."]`.
+
+However, the generated appointment context was not persisted.
+
+Second turn:
+
+`sí, esa franja`
+
+The patient state `ST_CITA_FRANJA` survived, but the appointment date and candidate slot were missing, causing the missing-date guard to return the flow to `ST_CITA_FECHA`.
+
+Root cause:
+
+`capture_appointment_context_from_state(...)` only captured appointment context when:
+
+`intent = fecha_cita`
+
+The real first-turn message combined appointment intent and an absolute date, so it was correctly classified as:
+
+`intent = cita`
+
+Although the graph resolved the date and transitioned to `ST_CITA_FRANJA`, the context capture function returned `None`.
+
+Implemented correction:
+
+`capture_appointment_context_from_state(...)` now accepts both appointment intents:
+
+* `cita`
+* `fecha_cita`
+
+Context is still captured only when:
+
+* `nuevo_estado = ST_CITA_FRANJA`;
+* `fecha_solicitada` exists.
+
+Files changed:
+
+* `app/services/appointment_context.py`
+* `tests/test_appointment_context.py`
+* `tests/test_stateful_appointment_context_carryover.py`
+
+Regression coverage added:
+
+1. Unit test proving that `intent = cita` with an embedded valid date captures the complete appointment context.
+2. Stateful two-call regression test proving:
+   * the first POST persists the Wednesday context;
+   * the second POST reads the persisted context;
+   * the unique Wednesday slot is selected;
+   * `AppointmentRequestService` is called exactly once;
+   * `fecha_solicitada = 2026-07-22`;
+   * `franja_solicitada = 3:00 p. m.–6:00 p. m.`;
+   * the context is cleared only after successful persistence.
+
+Validation:
+
+* focused tests: `2 passed`;
+* related appointment context and stateful tests: `30 passed`;
+* full suite: `325 passed in 19.53s`.
+
+Safety boundaries respected:
+
+* no EasyPanel changes;
+* no production deployment;
+* no real `/webhook` activation;
+* no real WhatsApp sending;
+* Swagger matrix remains paused;
+* no unrelated scenarios were executed.
+
+Conclusion:
+
+P6-F.9.90 is GREEN locally.
+
+Next controlled step:
+
+Create separate technical and documentation commits, push, deploy intentionally, and repeat only the Wednesday two-turn Swagger scenario before resuming the remaining Swagger matrix.
