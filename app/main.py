@@ -7,7 +7,10 @@ from app.models.message import IncomingMessage
 from app.models.whatsapp import WhatsAppPayload
 from app.graph.graph import process_message
 from app.services.tracing import traced_process_message
-from app.services.whatsapp import send_whatsapp_message
+from app.services.whatsapp import (
+    mark_whatsapp_message_read_and_show_typing,
+    send_whatsapp_message,
+)
 from app.repositories.logs import log_interaction, log_ignored, log_error
 from app.repositories.patients import (
     clear_patient_appointment_context,
@@ -320,6 +323,31 @@ async def receive_webhook(payload: WhatsAppPayload):
             "whatsapp_message_id": whatsapp_message_id,
             "whatsapp_timestamp": whatsapp_timestamp,
         }
+
+    if settings.whatsapp_sending_enabled and whatsapp_message_id:
+        try:
+            await mark_whatsapp_message_read_and_show_typing(
+                whatsapp_message_id=whatsapp_message_id,
+            )
+
+            print(
+                {
+                    "event": "whatsapp_read_and_typing_sent",
+                    "telefono": telefono,
+                    "whatsapp_message_id": whatsapp_message_id,
+                }
+            )
+
+        except Exception as indicator_error:
+            print(
+                {
+                    "event": "whatsapp_read_and_typing_failed",
+                    "telefono": telefono,
+                    "whatsapp_message_id": whatsapp_message_id,
+                    "error_type": type(indicator_error).__name__,
+                    "error_message": str(indicator_error),
+                }
+            )
 
     try:
         patient = get_or_create_patient_by_phone(

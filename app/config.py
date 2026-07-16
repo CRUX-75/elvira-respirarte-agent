@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
 
     whatsapp_verify_token: str | None = None
-    whatsapp_api_url: str = "https://graph.facebook.com/v19.0"
+    whatsapp_api_url: str = "https://graph.facebook.com/v25.0"
     whatsapp_phone_number_id: str | None = None
     whatsapp_token: str | None = None
     whatsapp_sending_enabled: bool = False
