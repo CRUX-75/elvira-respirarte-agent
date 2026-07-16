@@ -2,59 +2,77 @@
 
 Elvira is the conversational assistant for **Respirarte**, a respiratory therapy service led by Dra. D'Aleman.
 
-This project is a Python-based agentic system designed to support controlled WhatsApp patient interactions through a deterministic, testable, auditable and production-ready architecture.
+This project is a Python-based agentic system designed to support real WhatsApp patient interactions through a deterministic, testable, auditable, and production-ready architecture.
 
 ---
 
-## Current Production MVP Status
+## Current Production Status
 
-Elvira is currently preparing for controlled production activation with the official Respirarte Colombian WhatsApp number.
+Elvira is currently active in production with the official Respirarte WhatsApp number.
 
-Latest confirmed local validation:
+Current repository:
 
 ```txt
-214 passed
+Repository: github.com/CRUX-75/elvira-respirarte-agent
+Branch: main
+Deployment: Easypanel on Hetzner
+Production domain: https://elvira.genflowautomation.com
 ```
 
-Current validated capabilities:
+Latest confirmed validation baseline before the latest WhatsApp UX changes:
+
+```txt
+325 passed
+```
+
+Current validated production capabilities:
 
 * Patient-facing WhatsApp conversational core.
+* Real Meta webhook reception.
+* Real outbound WhatsApp replies.
+* Message deduplication by `whatsapp_message_id`.
 * Deterministic intent and state handling.
-* KB-backed responses about services, schedules, and operational rules.
+* Persistent patient state in PostgreSQL.
+* Runtime KB-backed responses about services, schedules, and operational rules.
+* Deterministic Colombian date resolution.
+* Weekend and Colombian holiday blocking.
+* KB-driven appointment slot generation.
 * Safe appointment request intake.
 * AppointmentRequest persistence in PostgreSQL.
+* Human review inbox through Google Sheets.
 * Explicit franja confirmation before request persistence.
-* Human review and confirmation by Dra. D'Aleman.
+* Human confirmation by Dra. D'Aleman.
 * No automatic appointment confirmation.
+* WhatsApp read receipts.
+* WhatsApp typing indicator.
+* Minimum natural typing delay before sending fast responses.
+* Deterministic opt-out from any state.
+* LangSmith tracing and production auditability.
 
-Current safety mode:
+Current production configuration:
 
-* Real WhatsApp sending is disabled by default.
-* `WHATSAPP_SENDING_ENABLED=false`.
-* `/test/message-stateful` is the validated dry-run endpoint.
-* Real `/webhook` activation/review is pending.
-* Google Sheets, Telegram, n8n, and Calendar are not required for the initial controlled MVP launch.
-* Appointment requests are registered for human review, not automatically confirmed.
-
-Current production-preparation phase:
-
-```txt
-P6-F.9.18 — Production Activation Context Reconciliation
+```env
+WHATSAPP_SENDING_ENABLED=true
+KB_RUNTIME_ENABLED=true
+GOOGLE_SHEETS_ENABLED=true
+WHATSAPP_API_URL=https://graph.facebook.com/v25.0
 ```
 
-Next block:
+Current production block:
 
 ```txt
-P6-F.9.19 — Production Activation Checklist
+P6-F.9.91 — WhatsApp Read Receipt, Typing Indicator and Natural Delay
+Status: CLOSED / GREEN IN PRODUCTION
 ```
 
----
+Current operational direction:
 
-## Production Safety Rule
-
-Do not enable real WhatsApp sending or modify the real `/webhook` behavior until the production activation checklist and webhook readiness review are completed.
-
-Elvira must never confirm appointments automatically.
+```txt
+Controlled patient onboarding
+→ gradual real-patient usage
+→ doctor reviews requests in Google Sheets
+→ organic social media and landing-page traffic
+```
 
 ---
 
@@ -84,20 +102,24 @@ The LLM does not decide:
 * appointment availability
 * KB truth
 * appointment confirmation
+* weekend or holiday availability
+* persistence eligibility
 
-Those responsibilities remain deterministic, testable and auditable.
+Those responsibilities remain deterministic, testable, and auditable.
 
 ---
 
 ## Current Architecture
 
-Current implemented flow:
+Current production flow:
 
 ```txt
 WhatsApp Cloud API
 → FastAPI webhook
 → WhatsApp payload parser
 → Message ID deduplication
+→ Mark message as read
+→ Show typing indicator
 → Patient repository
 → Load current patient state
 → Input sanitization
@@ -106,49 +128,29 @@ WhatsApp Cloud API
 → Runtime KB context loader
 → LangGraph orchestration
 → LLM response generation
+→ AppointmentRequest runtime
 → Save interaction
 → Update patient state
-→ Safety-controlled WhatsApp Send API
+→ Send WhatsApp reply
+→ Mark message as processed
 → LangSmith tracing
 ```
 
-Current safety behavior:
+Current appointment architecture:
 
 ```txt
-WHATSAPP_SENDING_ENABLED=false
-→ Webhook can receive messages
-→ Elvira processes messages
-→ State is loaded from PostgreSQL
-→ Message is deduplicated
-→ Response is generated
-→ Interaction is logged
-→ Patient state is persisted
-→ WhatsApp reply is NOT sent
-→ API response status is sending_skipped
+FECHA → KB → SLOTS → CONTEXT
+HORA → CONTEXT → SLOT SELECTION → APPOINTMENT_REQUEST
 ```
 
----
+Meaning:
 
-## Project Status
-
-Current repository:
-
-* GitHub: `github.com/CRUX-75/elvira-respirarte-agent`
-* Branch: `main`
-* Visibility: Private
-* Deployment: Easypanel on Hetzner
-* Stable domain: `https://elvira.genflowautomation.com`
-* Production health endpoint: `/health`
-* Production readiness endpoint: `/ready`
-* Production dry-run endpoint: `/test/message-stateful`
-* Meta webhook endpoint: `/webhook`
-* Current production safety mode: `WHATSAPP_SENDING_ENABLED=false`
-* KB runtime: `KB_RUNTIME_ENABLED=true`
-* LangSmith project: `elvira-respirarte-prod`
-
-Current important boundary:
-
-Real `/webhook` behavior and real WhatsApp sending must not be activated until the controlled production activation checklist and webhook readiness review are completed.
+* A date turn resolves date, availability, and candidate slots deterministically.
+* The result is stored as `appointment_context`.
+* A time or slot turn consumes the stored context.
+* A time or slot turn must not contradict previously resolved availability.
+* AppointmentRequest persistence happens only after a valid slot selection.
+* The context is cleared only after successful request persistence.
 
 ---
 
@@ -163,6 +165,7 @@ Real `/webhook` behavior and real WhatsApp sending must not be activated until t
 * OpenAI for response wording only
 * LangSmith for tracing
 * WhatsApp Cloud API
+* Google Sheets human review adapter
 * pytest
 * Easypanel
 * Hetzner
@@ -170,8 +173,6 @@ Real `/webhook` behavior and real WhatsApp sending must not be activated until t
 ---
 
 ## Repository Structure
-
-The repository uses:
 
 ```txt
 elvira-respirarte-agent/
@@ -187,8 +188,10 @@ elvira-respirarte-agent/
 
 Important rule:
 
-Do not create a `src/` folder.
-This repository uses `app/`.
+```txt
+Do not create a src/ folder.
+This repository uses app/.
+```
 
 ---
 
@@ -204,11 +207,15 @@ Responsibilities:
 * verify Meta webhook challenge
 * parse incoming WhatsApp messages
 * deduplicate messages by `whatsapp_message_id`
+* mark valid inbound messages as read
+* trigger the WhatsApp typing indicator
 * load and persist patient state
 * execute deterministic routing and state transitions
 * call the LLM only for wording
 * persist interactions
 * control real WhatsApp sending through feature flags
+* invoke AppointmentRequest runtime logic
+* expose controlled internal human-review endpoints
 
 ### PostgreSQL
 
@@ -217,10 +224,14 @@ PostgreSQL is the operational source of truth.
 Main responsibilities:
 
 * patients
+* patient state
+* patient opt-out
+* appointment context
 * interactions
 * processed messages
 * runtime KB data
 * AppointmentRequest persistence
+* human review lifecycle data
 
 Appointment requests are not Google Sheets-first objects.
 
@@ -231,8 +242,24 @@ AppointmentRequest internal model
 → AppointmentRequestService
 → AppointmentRequestRepository
 → PostgreSQL source of truth
-→ future human-visible inbox or notification adapter, optional
+→ Google Sheets human review inbox
 ```
+
+Google Sheets is an operational review surface.
+
+It is not the lifecycle source of truth.
+
+### Google Sheets
+
+Google Sheets acts as a human-visible inbox for Dra. D'Aleman.
+
+Current operational tab:
+
+```txt
+Solicitudes_Cita
+```
+
+The doctor may review requests there, but backend state and lifecycle rules remain in PostgreSQL and Python.
 
 ### Knowledge Base
 
@@ -261,6 +288,32 @@ It must not decide business logic, availability, state, appointment confirmation
 
 ---
 
+## WhatsApp Production Experience
+
+Elvira currently uses the official WhatsApp Cloud API.
+
+For each valid inbound patient message:
+
+```txt
+Inbound message received
+→ message deduplicated
+→ message marked as read
+→ typing indicator shown
+→ Elvira processes the request
+→ minimum typing visibility is enforced for very fast responses
+→ reply is sent
+```
+
+Current UX behavior:
+
+* blue read receipts are visible
+* typing dots are visible
+* fast responses wait long enough to avoid an unnatural instant-reply effect
+* longer responses are not delayed unnecessarily
+* typing-indicator failure must not break the main webhook flow
+
+---
+
 ## Appointment Request Rules
 
 Elvira may collect appointment request preferences.
@@ -282,59 +335,244 @@ Elvira must not:
 * approve or reject appointments
 * reschedule confirmed appointments automatically
 * cancel appointments automatically
-* claim real availability without human confirmation
+* claim final availability without human confirmation
 
 Human confirmation by Dra. D'Aleman remains required.
 
 ---
 
-## Current Appointment Flow
+## Current Appointment Schedule
 
-Controlled MVP appointment flow:
+Current production schedule:
+
+* Monday, Tuesday, Thursday, and Friday:
+  * 15:00–17:00
+  * 17:00–19:00
+* Wednesday:
+  * 15:00–18:00
+* Saturday:
+  * unavailable
+* Sunday:
+  * unavailable
+* Colombian holidays:
+  * unavailable unless explicitly overridden in a future controlled phase
+
+Important product rule:
+
+```txt
+The system adapts to the doctor's schedule.
+The doctor is not forced into uniform slots because the code prefers them.
+```
+
+---
+
+## Current Appointment Flow
 
 ```txt
 Patient requests appointment
-→ Elvira asks for preferred date
-→ Elvira validates date deterministically
+→ Elvira asks for or resolves the preferred date
+→ Elvira validates the date deterministically
 → Elvira blocks weekends and Colombian holidays
 → Elvira offers KB-backed afternoon franjas
 → Patient selects or confirms a franja
 → AppointmentRequest is persisted in PostgreSQL
-→ Elvira sends a final request-registration message
+→ Request is written to the Google Sheets human review inbox
+→ Elvira sends the request-registration message
 → Dra. D'Aleman reviews and confirms manually
 ```
 
 Important:
 
+```txt
 Elvira registers the request.
 Elvira does not confirm the appointment.
+```
+
+Terminal patient copy after successful registration:
+
+```txt
+Hemos recibido su solicitud, pronto recibirá confirmación de la hora en que recibirá la atención.
+```
+
+---
+
+## Appointment Context Contract
+
+`appointment_context` is the operational package calculated after a valid date turn.
+
+Expected minimum shape:
+
+```json
+{
+  "flow": "appointment_request",
+  "fecha_solicitada": "2026-07-22",
+  "fecha_solicitada_texto": "miércoles 22 de julio",
+  "slots_candidatos": ["3:00 p. m.–6:00 p. m."],
+  "es_dia_disponible": true,
+  "is_weekend": false,
+  "is_colombia_holiday": false,
+  "colombia_holiday_name": null
+}
+```
+
+For `hora_cita` turns, this context is authoritative for:
+
+* `fecha_solicitada`
+* `fecha_solicitada_texto`
+* `slots_candidatos`
+* `es_dia_disponible`
+* `is_weekend`
+* `is_colombia_holiday`
+* `colombia_holiday_name`
+
+---
+
+## Slot Selection Rules
+
+If there is one candidate slot:
+
+* soft confirmations may be accepted
+* examples:
+  * `sí`
+  * `ok`
+  * `esa`
+  * `esa franja`
+  * `me sirve`
+  * `registre esa`
+
+If there are multiple candidate slots:
+
+* the patient must choose explicitly
+* valid examples:
+  * `la primera`
+  * `la segunda`
+  * `la de las 3`
+  * `la de las 5`
+  * `de 3 a 5`
+  * `de 5 a 7`
+
+Ambiguous replies must not persist an AppointmentRequest when multiple slots exist.
+
+---
+
+## Exact-Hour Behavior
+
+Elvira must not promise exact arrival times.
+
+If the patient asks for an exact hour inside a valid franja:
+
+* explain that care is handled by time windows
+* map the hour to the corresponding available franja when possible
+* ask for confirmation
+* do not persist until the patient confirms the franja
+
+Final confirmation remains with Dra. D'Aleman.
+
+---
+
+## Opt-Out
+
+Opt-out is deterministic and has priority from any conversational state.
+
+Examples of opt-out intent:
+
+```txt
+No quiero recibir más mensajes.
+No me escriban más.
+Salir.
+Dar de baja.
+```
+
+Expected behavior:
+
+```txt
+Any state
+→ opt-out intent detected
+→ nuevo_estado = ST_OPTOUT
+→ patient opt_out = true
+→ future outbound campaigns must exclude that phone
+```
+
+Critical rule:
+
+```txt
+OPTOUT must win from any state.
+```
+
+Google Sheets or campaign exports must never override PostgreSQL opt-out state.
+
+---
+
+## Human Review
+
+Supported internal human-review actions:
+
+* confirm
+* request missing data
+* propose alternative
+* reschedule
+* cancel
+* close
+
+Valid AppointmentRequest states:
+
+* nueva
+* pendiente_datos
+* pendiente_confirmacion
+* confirmada
+* reagendada
+* cancelada
+* cerrada
+
+Forbidden legacy states:
+
+* pendiente
+* contraoferta
+* completada
+
+A proposed alternative remains represented operationally as:
+
+```txt
+pendiente_confirmacion
+```
+
+The internal human-review endpoint is protected by an admin token.
+
+It is not required for the current manual Google Sheets review workflow.
 
 ---
 
 ## Current Production Scope
 
-Included in the controlled MVP:
+Included:
 
-* Official WhatsApp Business Cloud API preparation.
-* Patient-facing answers about services, schedules, and rules.
-* Safe appointment request intake.
-* AppointmentRequest persistence in PostgreSQL.
-* Final patient-facing request-registration message.
-* Human confirmation by Dra. D'Aleman.
-* Production monitoring through logs, database checks, and LangSmith traces.
+* official WhatsApp Business Cloud API
+* real Meta webhook
+* real WhatsApp sending
+* read receipts
+* typing indicator
+* natural minimum typing delay
+* patient-facing service and schedule answers
+* safe appointment request intake
+* AppointmentRequest persistence in PostgreSQL
+* Google Sheets human review inbox
+* deterministic Colombian holidays
+* human confirmation by Dra. D'Aleman
+* production logging
+* LangSmith tracing
+* opt-out persistence
 
-Explicitly out of scope for the initial controlled MVP:
+Not currently implemented or intentionally out of scope:
 
-* Google Sheets appointment handoff.
-* Telegram doctor notification.
-* n8n appointment orchestration.
-* Calendar availability integration.
-* Automatic appointment confirmation.
-* Automatic rescheduling.
-* Automatic cancellation.
-* Payment workflows.
-* Marketing campaigns.
-* Mass outbound messaging.
+* automatic appointment confirmation
+* automatic rescheduling
+* automatic cancellation
+* Calendar synchronization
+* Telegram notifications
+* n8n-owned appointment logic
+* payment workflows
+* uncontrolled mass campaigns
+* uncontrolled real-patient outreach
 
 ---
 
@@ -343,7 +581,7 @@ Explicitly out of scope for the initial controlled MVP:
 Required app identity:
 
 ```env
-APP_ENV=local
+APP_ENV=production
 APP_NAME=elvira-respirarte-agent
 ```
 
@@ -360,12 +598,6 @@ Required for LangSmith:
 LANGSMITH_TRACING=true
 LANGSMITH_ENDPOINT=https://api.smith.langchain.com
 LANGSMITH_API_KEY=your_langsmith_api_key_here
-LANGSMITH_PROJECT=elvira-respirarte-local
-```
-
-Production LangSmith project:
-
-```env
 LANGSMITH_PROJECT=elvira-respirarte-prod
 ```
 
@@ -373,9 +605,10 @@ Required for WhatsApp Cloud API:
 
 ```env
 WHATSAPP_VERIFY_TOKEN=your_meta_verify_token_here
-WHATSAPP_API_URL=https://graph.facebook.com/v19.0
+WHATSAPP_API_URL=https://graph.facebook.com/v25.0
 WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id_here
 WHATSAPP_TOKEN=your_whatsapp_cloud_api_token_here
+WHATSAPP_SENDING_ENABLED=true
 ```
 
 Required for PostgreSQL:
@@ -384,22 +617,27 @@ Required for PostgreSQL:
 DATABASE_URL=postgresql+psycopg://user:password@host:5432/database
 ```
 
-Required safety flags:
+Required for runtime KB:
 
 ```env
-WHATSAPP_SENDING_ENABLED=false
 KB_RUNTIME_ENABLED=true
+```
+
+Required for Google Sheets human review inbox:
+
+```env
+GOOGLE_SHEETS_ENABLED=true
+GOOGLE_SHEETS_SPREADSHEET_ID=your_spreadsheet_id_here
+GOOGLE_SHEETS_SOLICITUDES_CITA_TAB=Solicitudes_Cita
+GOOGLE_SERVICE_ACCOUNT_JSON=your_service_account_json_here
 ```
 
 Important:
 
-`WHATSAPP_SENDING_ENABLED=false` means the webhook can receive and process messages, but Elvira will not send real WhatsApp replies.
-
-Only set this to `true` during an explicitly approved controlled sending activation block.
-
-Never commit `.env`.
-
-Only `.env.example` should be versioned.
+* Never commit `.env`.
+* Only `.env.example` should be versioned.
+* Production values belong in Easypanel environment variables.
+* `WHATSAPP_SENDING_ENABLED=false` remains the emergency stop for outbound replies.
 
 ---
 
@@ -435,7 +673,8 @@ Expected response:
 ```json
 {
   "status": "ok",
-  "service": "elvira-respirarte-agent"
+  "service": "elvira-respirarte-agent",
+  "version": "0.2.1"
 }
 ```
 
@@ -455,35 +694,28 @@ Production readiness endpoint:
 curl https://elvira.genflowautomation.com/ready
 ```
 
-Current expected production readiness:
+Expected production characteristics:
 
 ```txt
-status = ready
 environment = production
-whatsapp_sending_enabled = false
+whatsapp_sending_enabled = true
 kb_runtime_enabled = true
 database = configured
-LangSmith project = elvira-respirarte-prod
-OpenAI configured = true
-WhatsApp configured = true
+OpenAI = configured
+WhatsApp = configured
+Google Sheets = configured when enabled
 hard_failures = []
-real_whatsapp_sending_allowed = false
 ```
 
 ---
 
 ## WhatsApp Webhook
 
-Meta verifies the webhook through:
+Meta verification:
 
 ```txt
 GET /webhook
 ```
-
-The endpoint returns the raw `hub.challenge` as `text/plain` when:
-
-* `hub.mode=subscribe`
-* `hub.verify_token` matches `WHATSAPP_VERIFY_TOKEN`
 
 Production webhook:
 
@@ -497,21 +729,33 @@ Webhook subscribed field:
 messages
 ```
 
-Incoming WhatsApp messages are handled through:
+Inbound WhatsApp messages:
 
 ```txt
 POST /webhook
 ```
 
-Current safety boundary:
+The webhook currently handles:
 
-Real `/webhook` behavior must be reviewed before controlled production activation.
+* payload extraction
+* no-message status callbacks
+* required-field validation
+* deduplication
+* patient loading
+* stateful processing
+* read receipt
+* typing indicator
+* AppointmentRequest runtime
+* WhatsApp sending
+* interaction persistence
+* patient state persistence
+* processed-message persistence
 
 ---
 
 ## Test Endpoints
 
-Safe stateful production dry-run endpoint:
+Safe stateful endpoint:
 
 ```txt
 POST /test/message-stateful
@@ -524,9 +768,9 @@ This endpoint:
 * persists interactions
 * updates patient state
 * can validate AppointmentRequest behavior
-* does not send real WhatsApp messages
+* never sends a WhatsApp message
 
-This is the validated dry-run surface before real WhatsApp activation.
+It remains useful for controlled debugging, but production behavior has already been validated through the real Meta webhook.
 
 ---
 
@@ -538,19 +782,24 @@ Run all tests:
 pytest -q
 ```
 
-Current confirmed local validation:
+Latest confirmed full-suite baseline before the latest WhatsApp UX-only changes:
 
 ```txt
-214 passed
+325 passed
 ```
 
-Do not commit if tests fail.
+Latest WhatsApp UX changes were additionally checked with:
+
+```bash
+python -m py_compile app/main.py app/services/whatsapp.py app/config.py
+git diff --check
+```
+
+Before future non-trivial releases, run the relevant targeted tests and full suite when appropriate.
 
 ---
 
 ## Production DB Inspection
-
-pgweb is available for controlled inspection of the production PostgreSQL database.
 
 Production database:
 
@@ -570,8 +819,10 @@ pgweb may be used to inspect:
 
 Operational rule:
 
+```txt
 pgweb is for inspection and controlled SQL validation.
 Do not use pgweb for casual production edits.
+```
 
 ---
 
@@ -581,29 +832,28 @@ Do not use pgweb for casual production edits.
 * Follow SDD for non-trivial changes.
 * Keep the state machine deterministic.
 * Keep the LLM out of control decisions.
-* Keep tests passing before every commit.
 * Keep `.env` private.
 * Keep WhatsApp as transport only.
 * Prefer small, auditable changes.
 * Do not use memory to decide state.
-* Do not reactivate real WhatsApp sending casually.
-* All production sends must be controlled by `WHATSAPP_SENDING_ENABLED`.
 * Any new database write must be auditable.
 * Any message from Meta must be traceable by `whatsapp_message_id`.
 * PostgreSQL serves runtime KB data.
 * KB informs, but the state machine decides.
 * The LLM writes, but does not control the flow.
-* Medical urgency must be detected deterministically before relying on wording.
+* Medical urgency must be detected deterministically.
 * OPTOUT must win from any state.
 * If `nuevo_estado = ST_OPTOUT`, patient `opt_out` must persist as true.
-* Do not use `git diff` as an operational validation step.
-* Validate documentation changes with `sed`, `grep`, `pytest`, and `git status`.
+* Google Sheets is a human review adapter, not the source of truth.
+* Elvira registers appointment requests but does not confirm them.
+* Do not run uncontrolled outbound campaigns.
+* Production behavior changes must remain auditable and reversible.
 
 ---
 
 ## SDD Protocol
 
-For non-trivial changes, follow:
+For non-trivial changes:
 
 ```txt
 1. SPEC
@@ -616,32 +866,41 @@ For non-trivial changes, follow:
 8. COMMIT
 ```
 
-Production activation work must remain documented and auditable.
+Small operational UX changes may use a reduced controlled workflow when the scope is narrow, observable, and reversible.
 
 ---
 
-## Current Baseline
+## Controlled Production Rollout
 
-Current stable baseline:
+Current recommended rollout:
 
 ```txt
-Branch: main
-Tests: 214 passed
-Production sending: disabled
-Dry-run endpoint: /test/message-stateful
-Real webhook review: pending
-Next block: P6-F.9.19 — Production Activation Checklist
+Phase 1
+→ Dra. D'Aleman shares the official number gradually
+→ real patients contact Elvira
+→ requests appear in Google Sheets
+→ doctor confirms manually
+
+Phase 2
+→ monitor real conversations
+→ review unexpected wording or edge cases
+→ fix only real blockers
+
+Phase 3
+→ publish the number on landing page and social profiles
+→ start organic social content
+→ drive qualified traffic to WhatsApp
 ```
 
-This is the current stable foundation for Elvira as a production-oriented conversational agent preparing for controlled WhatsApp activation.
+Do not begin with uncontrolled mass outbound messaging.
 
 ---
 
 ## Manual Rollback Checklist
 
-If any issue appears during controlled production activation preparation:
+If any production issue appears:
 
-1. Keep real WhatsApp sending disabled:
+1. Stop outbound replies:
 
 ```env
 WHATSAPP_SENDING_ENABLED=false
@@ -682,3 +941,25 @@ Preserve auditability.
 Investigate by whatsapp_message_id.
 Only redeploy after identifying the failing commit or behavior.
 ```
+
+---
+
+## Current Baseline
+
+```txt
+Branch: main
+Production webhook: active
+Real WhatsApp sending: active
+Graph API: v25.0
+KB runtime: active
+Google Sheets human review inbox: active
+Read receipts: active
+Typing indicator: active
+Minimum typing delay: active
+Appointment confirmation: human-only
+Opt-out: deterministic and persistent
+Latest confirmed full suite: 325 passed
+Current production block: P6-F.9.91 CLOSED / GREEN
+```
+
+Elvira is now operating as a controlled production conversational assistant for Respirarte.
