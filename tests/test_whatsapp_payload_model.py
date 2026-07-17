@@ -83,7 +83,7 @@ def test_extract_message_returns_none_for_status_notification():
     assert payload.extract_message() is None
 
 
-def test_extract_message_returns_none_for_unsupported_message_type():
+def test_extract_message_returns_none_for_audio_without_voice_flag():
     payload = WhatsAppPayload(
         object="whatsapp_business_account",
         entry=[
