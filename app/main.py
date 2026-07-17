@@ -11,6 +11,7 @@ from app.models.whatsapp import WhatsAppPayload
 from app.graph.graph import process_message
 from app.services.tracing import traced_process_message
 from app.services.voice_safety import is_voice_phone_allowed
+from app.services.voice_observability import safe_message_content_for_log
 from app.services.outbound_voice import (
     deliver_voice_reply,
     should_send_voice_reply,
@@ -509,6 +510,7 @@ async def receive_webhook(payload: WhatsAppPayload):
                 if should_send_voice_reply(msg_type):
                     voice_delivery = await deliver_voice_reply(
                         telefono=telefono,
+                        whatsapp_message_id=whatsapp_message_id,
                         response_text=result.respuesta,
                     )
                     delivery_status = voice_delivery.delivery_status
@@ -634,7 +636,7 @@ async def receive_webhook(payload: WhatsAppPayload):
                 "event": "whatsapp_webhook_processed",
                 "telefono": telefono,
                 "nombre": nombre,
-                "mensaje": mensaje,
+                "mensaje": safe_message_content_for_log(msg_type=msg_type, mensaje=mensaje),
                 "patient_id": str(patient["id"]),
                 "whatsapp_message_id": whatsapp_message_id,
                 "whatsapp_timestamp": whatsapp_timestamp,

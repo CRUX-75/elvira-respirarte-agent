@@ -98,6 +98,7 @@ def test_deliver_voice_reply_synthesizes_uploads_and_sends(
     result = asyncio.run(
         outbound_voice.deliver_voice_reply(
             telefono="573009450001",
+            whatsapp_message_id="wamid.voice.reply.test",
             response_text="Respuesta determinística.",
         )
     )
@@ -146,6 +147,7 @@ def test_tts_failure_falls_back_to_existing_text(monkeypatch):
     result = asyncio.run(
         outbound_voice.deliver_voice_reply(
             telefono="573009450001",
+            whatsapp_message_id="wamid.voice.reply.test",
             response_text="Respuesta determinística.",
         )
     )
@@ -220,6 +222,7 @@ def test_voice_send_failure_falls_back_without_new_tts(
     result = asyncio.run(
         outbound_voice.deliver_voice_reply(
             telefono="573009450001",
+            whatsapp_message_id="wamid.voice.reply.test",
             response_text="Respuesta determinística.",
         )
     )
@@ -264,6 +267,7 @@ def test_voice_and_text_delivery_failure_raises(monkeypatch):
         asyncio.run(
             outbound_voice.deliver_voice_reply(
                 telefono="573009450001",
+                whatsapp_message_id="wamid.voice.reply.test",
                 response_text="Respuesta determinística.",
             )
         )
