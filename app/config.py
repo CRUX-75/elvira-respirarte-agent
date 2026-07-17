@@ -27,9 +27,6 @@ class Settings(BaseSettings):
     voice_tts_model: str = "gpt-4o-mini-tts"
     voice_tts_voice: str = "marin"
     voice_tts_response_format: str = "opus"
-    voice_tts_model: str = "gpt-4o-mini-tts"
-    voice_tts_voice: str = "marin"
-    voice_tts_response_format: str = "opus"
     voice_max_media_bytes: int = 16777216
 
     database_url: str | None = None
