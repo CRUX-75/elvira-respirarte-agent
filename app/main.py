@@ -10,6 +10,16 @@ from app.models.message import IncomingMessage
 from app.models.whatsapp import WhatsAppPayload
 from app.graph.graph import process_message
 from app.services.tracing import traced_process_message
+from app.services.voice_safety import is_voice_phone_allowed
+from app.services.voice_observability import safe_message_content_for_log
+from app.services.outbound_voice import (
+    deliver_voice_reply,
+    should_send_voice_reply,
+)
+from app.services.inbound_voice import (
+    deliver_voice_failure,
+    process_inbound_voice_note,
+)
 from app.services.whatsapp import (
     mark_whatsapp_message_read_and_show_typing,
     send_whatsapp_message,
@@ -27,6 +37,9 @@ from app.repositories.processed_messages import (
     mark_message_processed,
 )
 from app.repositories.interactions import save_interaction
+from app.repositories.voice_processing_claims import (
+    try_claim_voice_processing,
+)
 from app.repositories.postgres_appointment_request_repository import (
     PostgresAppointmentRequestRepository,
 )
@@ -231,8 +244,15 @@ async def receive_webhook(payload: WhatsAppPayload):
     nombre = extracted.get("nombre")
     whatsapp_message_id = extracted.get("whatsapp_message_id")
     whatsapp_timestamp = extracted.get("whatsapp_timestamp")
+    msg_type = extracted.get("msg_type") or "text"
+    media_id = extracted.get("media_id")
 
-    if not telefono or not mensaje:
+    if (
+        not telefono
+        or msg_type not in {"text", "audio"}
+        or (msg_type == "text" and not mensaje)
+        or (msg_type == "audio" and not media_id)
+    ):
         log_ignored(
             reason="missing_required_message_fields",
             payload_summary=str(
@@ -327,6 +347,77 @@ async def receive_webhook(payload: WhatsAppPayload):
             "whatsapp_timestamp": whatsapp_timestamp,
         }
     
+    if msg_type == "audio" and not settings.voice_input_enabled:
+        log_ignored(
+            reason="voice_input_disabled",
+            payload_summary=str(
+                {
+                    "telefono": telefono,
+                    "whatsapp_message_id": whatsapp_message_id,
+                }
+            ),
+        )
+        return {
+            "status": "ignored",
+            "reason": "voice_input_disabled",
+            "whatsapp_message_id": whatsapp_message_id,
+            "processed_marked": False,
+        }
+
+    if msg_type == "audio" and not is_voice_phone_allowed(telefono):
+        log_ignored(
+            reason="voice_phone_not_allowed",
+            payload_summary=str(
+                {
+                    "whatsapp_message_id": whatsapp_message_id,
+                }
+            ),
+        )
+        return {
+            "status": "ignored",
+            "reason": "voice_phone_not_allowed",
+            "whatsapp_message_id": whatsapp_message_id,
+            "processed_marked": False,
+        }
+
+    if msg_type == "audio":
+        try:
+            voice_claim = try_claim_voice_processing(
+                whatsapp_message_id=whatsapp_message_id,
+                telefono=telefono,
+            )
+        except Exception as claim_error:
+            log_error(
+                telefono=telefono,
+                error=(
+                    "Voice processing claim failed: "
+                    f"{type(claim_error).__name__}: {claim_error}"
+                ),
+            )
+            return {
+                "status": "error",
+                "reason": "voice_processing_claim_failed",
+                "whatsapp_message_id": whatsapp_message_id,
+                "processed_marked": False,
+            }
+
+        if voice_claim is None:
+            log_ignored(
+                reason="voice_processing_in_progress",
+                payload_summary=str(
+                    {
+                        "telefono": telefono,
+                        "whatsapp_message_id": whatsapp_message_id,
+                    }
+                ),
+            )
+            return {
+                "status": "ignored",
+                "reason": "voice_processing_in_progress",
+                "whatsapp_message_id": whatsapp_message_id,
+                "processed_marked": False,
+            }
+
     typing_started_at: float | None = None
 
     if settings.whatsapp_sending_enabled and whatsapp_message_id:
@@ -356,6 +447,28 @@ async def receive_webhook(payload: WhatsAppPayload):
             )
 
     try:
+        if msg_type == "audio":
+            voice_result = await process_inbound_voice_note(extracted)
+
+            if voice_result.status != "success" or not voice_result.text:
+                return await deliver_voice_failure(
+                    telefono=telefono,
+                    whatsapp_message_id=whatsapp_message_id,
+                    whatsapp_timestamp=whatsapp_timestamp,
+                    result=voice_result,
+                )
+
+            mensaje = voice_result.text
+
+            print(
+                {
+                    "event": "whatsapp_voice_transcribed",
+                    "telefono": telefono,
+                    "whatsapp_message_id": whatsapp_message_id,
+                    "stt_latency_ms": voice_result.latency_ms,
+                }
+            )
+
         patient = get_or_create_patient_by_phone(
             telefono=telefono,
             nombre=nombre,
@@ -394,12 +507,24 @@ async def receive_webhook(payload: WhatsAppPayload):
                     if typing_remaining > 0:
                         await asyncio.sleep(typing_remaining)
 
-                await send_whatsapp_message(
-                    telefono=telefono,
-                    mensaje=result.respuesta,
-                )
+                if should_send_voice_reply(msg_type):
+                    voice_delivery = await deliver_voice_reply(
+                        telefono=telefono,
+                        whatsapp_message_id=whatsapp_message_id,
+                        response_text=result.respuesta,
+                    )
+                    delivery_status = voice_delivery.delivery_status
+                    reply_mode = voice_delivery.reply_mode
+                    voice_fallback_used = voice_delivery.voice_fallback_used
+                else:
+                    await send_whatsapp_message(
+                        telefono=telefono,
+                        mensaje=result.respuesta,
+                    )
+                    delivery_status = "sent"
+                    reply_mode = "text"
+                    voice_fallback_used = False
 
-                delivery_status = "sent"
                 logged_response = result.respuesta
 
             except Exception as send_error:
@@ -459,6 +584,8 @@ async def receive_webhook(payload: WhatsAppPayload):
                 }
         else:
             delivery_status = "sending_skipped"
+            reply_mode = "none"
+            voice_fallback_used = False
             logged_response = f"[WHATSAPP_SENDING_DISABLED] {result.respuesta}"
 
         save_interaction(
@@ -509,7 +636,7 @@ async def receive_webhook(payload: WhatsAppPayload):
                 "event": "whatsapp_webhook_processed",
                 "telefono": telefono,
                 "nombre": nombre,
-                "mensaje": mensaje,
+                "mensaje": safe_message_content_for_log(msg_type=msg_type, mensaje=mensaje),
                 "patient_id": str(patient["id"]),
                 "whatsapp_message_id": whatsapp_message_id,
                 "whatsapp_timestamp": whatsapp_timestamp,
@@ -518,6 +645,8 @@ async def receive_webhook(payload: WhatsAppPayload):
                 "nuevo_estado": result.nuevo_estado,
                 "delivery_status": delivery_status,
                 "whatsapp_sending_enabled": settings.whatsapp_sending_enabled,
+                "reply_mode": reply_mode,
+                "voice_fallback_used": voice_fallback_used,
             }
         )
 
@@ -528,6 +657,8 @@ async def receive_webhook(payload: WhatsAppPayload):
             "estado_anterior": estado_actual,
             "nuevo_estado": result.nuevo_estado,
             "whatsapp_sending_enabled": settings.whatsapp_sending_enabled,
+                "reply_mode": reply_mode,
+                "voice_fallback_used": voice_fallback_used,
             "whatsapp_message_id": whatsapp_message_id,
             "whatsapp_timestamp": whatsapp_timestamp,
             "patient_id": str(patient["id"]),

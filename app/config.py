@@ -19,6 +19,19 @@ class Settings(BaseSettings):
     whatsapp_token: str | None = None
     whatsapp_sending_enabled: bool = False
 
+    voice_input_enabled: bool = False
+    voice_replies_enabled: bool = False
+    voice_reply_to_audio_only: bool = True
+    voice_stt_model: str = "gpt-4o-transcribe"
+    voice_stt_language: str = "es"
+    voice_tts_model: str = "gpt-4o-mini-tts"
+    voice_tts_voice: str = "marin"
+    voice_tts_response_format: str = "opus"
+    voice_max_media_bytes: int = 16777216
+    voice_max_duration_seconds: float = 120.0
+    voice_allowed_phone_numbers: str = ""
+    voice_processing_lease_seconds: int = 300
+
     database_url: str | None = None
 
     kb_runtime_enabled: bool = False

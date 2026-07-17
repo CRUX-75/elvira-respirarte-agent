@@ -849,6 +849,15 @@ Wednesday stateful appointment-context carryover regression fixed and Swagger-va
 
 P6-F.9.91
 WhatsApp read receipt, typing indicator, and natural minimum delay validated in production
+
+P6-F.9.92
+Voice interaction architecture closed on the isolated branch; voice remains an I/O layer around the deterministic core
+
+P6-F.9.93
+Inbound WhatsApp voice notes, secure media handling, audio normalization, Spanish STT, webhook integration, and deterministic fallback implemented with voice flags disabled
+
+P6-F.9.94
+Outbound TTS, secure temporary audio, WhatsApp media upload, voice-note delivery, deterministic text fallback, and webhook integration implemented with voice flags disabled
 ```
 
 Detailed closure evidence belongs in Git history and `docs/`, not in this file.
@@ -857,17 +866,31 @@ Detailed closure evidence belongs in Git history and `docs/`, not in this file.
 
 ## Current Next Direction
 
-There is no immediate blocker requiring more appointment-flow engineering.
+Elvira remains online in production serving text conversations. Voice development remains isolated in `feature/p6-f-9-92-voice-interaction`.
 
-The useful next steps are operational:
+The following voice milestones are closed on the isolated branch:
 
-1. finish the Google Sheets ownership handoff to Dra. D'Aleman;
-2. let the doctor begin sharing the official number gradually;
-3. monitor real patient conversations;
-4. prepare organic social content and landing-page traffic;
-5. consider a separate future warm-patient reactivation pilot only after consent/contact rules and templates are defined.
+- P6-F.9.92 — Voice Interaction Architecture;
+- P6-F.9.93 — Inbound Voice Notes;
+- P6-F.9.94 — Outbound Voice Replies.
 
-Do not invent another technical phase merely to keep coding.
+The `marin` voice was approved through a real local OpenAI TTS preview in Colombian Spanish. The generated artifact was validated as OGG/Opus and no production or Meta delivery was used during the preview.
+
+The next engineering phase is P6-F.9.95 — Safety, Observability and Production Activation.
+
+Required scope:
+
+- complete structured voice observability correlated by `whatsapp_message_id`;
+- avoid raw audio and transcript content in new structured logs;
+- evaluate atomic processing claim or lease protection before activation;
+- enforce duration, size, allowlist, cleanup, and timeout controls;
+- validate text fallback and emergency rollback behavior;
+- perform controlled real-device WhatsApp voice-note validation;
+- require explicit approval before changing any production voice flag.
+
+Voice flags remain disabled by default. Production continues serving text independently.
+
+Still out of scope: multitenancy, patient follow-up, campaigns, Realtime, voice cloning, and new conversational or appointment logic.
 
 ---
 
