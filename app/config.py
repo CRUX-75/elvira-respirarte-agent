@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     whatsapp_phone_number_id: str | None = None
     whatsapp_token: str | None = None
     whatsapp_sending_enabled: bool = False
+
+    voice_input_enabled: bool = False
+    voice_replies_enabled: bool = False
+    voice_reply_to_audio_only: bool = True
+    voice_stt_model: str = "gpt-4o-transcribe"
+    voice_stt_language: str = "es"
     voice_max_media_bytes: int = 16777216
 
     database_url: str | None = None
