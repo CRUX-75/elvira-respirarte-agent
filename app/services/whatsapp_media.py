@@ -178,3 +178,125 @@ def temporary_whatsapp_voice_note(
     finally:
         if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)
+
+
+@dataclass(frozen=True)
+class UploadedWhatsAppMedia:
+    media_id: str
+
+
+def _validate_outbound_voice_file(audio_path: Path) -> None:
+    if not audio_path.exists():
+        raise ValueError("Outbound voice file does not exist")
+
+    file_size = audio_path.stat().st_size
+
+    if file_size == 0:
+        raise ValueError("Outbound voice file is empty")
+
+    if file_size > settings.voice_max_media_bytes:
+        raise ValueError("Outbound voice file exceeds size limit")
+
+    with audio_path.open("rb") as audio_file:
+        if audio_file.read(4) != b"OggS":
+            raise ValueError("Outbound voice file is not OGG/Opus")
+
+
+async def upload_whatsapp_voice_media(
+    audio_path: Path,
+    *,
+    client: httpx.AsyncClient | None = None,
+) -> UploadedWhatsAppMedia:
+    if not settings.whatsapp_phone_number_id or not settings.whatsapp_token:
+        raise ValueError("WhatsApp credentials not configured")
+
+    _validate_outbound_voice_file(audio_path)
+    owns_client = client is None
+
+    if client is None:
+        client = httpx.AsyncClient(timeout=MEDIA_TIMEOUT)
+
+    url = (
+        f"{settings.whatsapp_api_url}/"
+        f"{settings.whatsapp_phone_number_id}/media"
+    )
+
+    try:
+        with audio_path.open("rb") as audio_file:
+            response = await client.post(
+                url,
+                headers=_authorization_headers(),
+                data={"messaging_product": "whatsapp"},
+                files={
+                    "file": (
+                        audio_path.name,
+                        audio_file,
+                        SUPPORTED_VOICE_NOTE_MIME_TYPE,
+                    )
+                },
+            )
+
+        response.raise_for_status()
+        payload = response.json()
+        media_id = payload.get("id")
+
+        if not media_id:
+            raise ValueError("WhatsApp media upload returned no ID")
+
+        return UploadedWhatsAppMedia(media_id=media_id)
+
+    finally:
+        if owns_client:
+            await client.aclose()
+
+
+async def send_whatsapp_voice_note(
+    telefono: str,
+    media_id: str,
+    *,
+    client: httpx.AsyncClient | None = None,
+) -> dict:
+    if not settings.whatsapp_phone_number_id or not settings.whatsapp_token:
+        raise ValueError("WhatsApp credentials not configured")
+
+    if not telefono:
+        raise ValueError("WhatsApp recipient is required")
+
+    if not media_id:
+        raise ValueError("WhatsApp media ID is required")
+
+    owns_client = client is None
+
+    if client is None:
+        client = httpx.AsyncClient(timeout=MEDIA_TIMEOUT)
+
+    url = (
+        f"{settings.whatsapp_api_url}/"
+        f"{settings.whatsapp_phone_number_id}/messages"
+    )
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": telefono,
+        "type": "audio",
+        "audio": {
+            "id": media_id,
+            "voice": True,
+        },
+    }
+
+    try:
+        response = await client.post(
+            url,
+            headers={
+                **_authorization_headers(),
+                "Content-Type": "application/json",
+            },
+            json=payload,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    finally:
+        if owns_client:
+            await client.aclose()
