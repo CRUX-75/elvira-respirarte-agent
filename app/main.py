@@ -10,6 +10,10 @@ from app.models.message import IncomingMessage
 from app.models.whatsapp import WhatsAppPayload
 from app.graph.graph import process_message
 from app.services.tracing import traced_process_message
+from app.services.inbound_voice import (
+    deliver_voice_failure,
+    process_inbound_voice_note,
+)
 from app.services.whatsapp import (
     mark_whatsapp_message_read_and_show_typing,
     send_whatsapp_message,
@@ -231,8 +235,15 @@ async def receive_webhook(payload: WhatsAppPayload):
     nombre = extracted.get("nombre")
     whatsapp_message_id = extracted.get("whatsapp_message_id")
     whatsapp_timestamp = extracted.get("whatsapp_timestamp")
+    msg_type = extracted.get("msg_type") or "text"
+    media_id = extracted.get("media_id")
 
-    if not telefono or not mensaje:
+    if (
+        not telefono
+        or msg_type not in {"text", "audio"}
+        or (msg_type == "text" and not mensaje)
+        or (msg_type == "audio" and not media_id)
+    ):
         log_ignored(
             reason="missing_required_message_fields",
             payload_summary=str(
@@ -327,6 +338,23 @@ async def receive_webhook(payload: WhatsAppPayload):
             "whatsapp_timestamp": whatsapp_timestamp,
         }
     
+    if msg_type == "audio" and not settings.voice_input_enabled:
+        log_ignored(
+            reason="voice_input_disabled",
+            payload_summary=str(
+                {
+                    "telefono": telefono,
+                    "whatsapp_message_id": whatsapp_message_id,
+                }
+            ),
+        )
+        return {
+            "status": "ignored",
+            "reason": "voice_input_disabled",
+            "whatsapp_message_id": whatsapp_message_id,
+            "processed_marked": False,
+        }
+
     typing_started_at: float | None = None
 
     if settings.whatsapp_sending_enabled and whatsapp_message_id:
@@ -356,6 +384,28 @@ async def receive_webhook(payload: WhatsAppPayload):
             )
 
     try:
+        if msg_type == "audio":
+            voice_result = await process_inbound_voice_note(extracted)
+
+            if voice_result.status != "success" or not voice_result.text:
+                return await deliver_voice_failure(
+                    telefono=telefono,
+                    whatsapp_message_id=whatsapp_message_id,
+                    whatsapp_timestamp=whatsapp_timestamp,
+                    result=voice_result,
+                )
+
+            mensaje = voice_result.text
+
+            print(
+                {
+                    "event": "whatsapp_voice_transcribed",
+                    "telefono": telefono,
+                    "whatsapp_message_id": whatsapp_message_id,
+                    "stt_latency_ms": voice_result.latency_ms,
+                }
+            )
+
         patient = get_or_create_patient_by_phone(
             telefono=telefono,
             nombre=nombre,
