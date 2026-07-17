@@ -861,3 +861,50 @@ The deterministic Elvira core remains unchanged and authoritative.
 Text fallback is always available.
 No multitenancy, follow-up automation, campaigns, or Realtime are introduced.
 ```
+---
+
+## P6-F.9.94 Closure Record
+
+P6-F.9.94 — Outbound Voice Replies is closed on the isolated voice branch.
+
+Implemented:
+
+- OpenAI request-based TTS using `gpt-4o-mini-tts`;
+- approved built-in voice `marin`;
+- deterministic AI-voice disclosure;
+- exact reuse of the existing deterministic response text;
+- OGG/Opus output validation;
+- private temporary files with guaranteed cleanup;
+- authenticated WhatsApp media upload;
+- WhatsApp audio delivery using an uploaded media ID and `audio.voice=true`;
+- voice replies only when feature flags permit them;
+- text replies preserved when voice replies are disabled;
+- deterministic text fallback after TTS, validation, upload, or voice-send failure;
+- no rerun of the conversational core during fallback;
+- preservation of existing send-failure state and processed-message semantics.
+
+Local voice-quality evidence:
+
+- real OpenAI TTS request completed successfully;
+- output identified as OGG/Opus;
+- `marin` preview listened to and approved;
+- no Meta request and no production activation occurred.
+
+Code integration commit:
+
+```txt
+df203d8
+Repository verification:
+
+361 passed in 527.69s (0:08:47)
+
+Production state remains unchanged:
+
+VOICE_INPUT_ENABLED=false
+VOICE_REPLIES_ENABLED=false
+VOICE_REPLY_TO_AUDIO_ONLY=true
+
+Next phase:
+
+P6-F.9.95 — Safety, Observability and Production Activation
+

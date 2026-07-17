@@ -303,3 +303,32 @@ Voice production activation remains blocked until:
 P6-F.9.95 — Safety, Observability and Production Activation
 
 That phase must validate rollback flags, latency, cleanup, correlation, duplicate-work protection, real-device voice-note rendering, AI-voice disclosure, and controlled activation.
+Post-Activation Addendum — P6-F.9.94 Outbound Voice Closure
+
+P6-F.9.94 is complete on the isolated voice branch.
+
+The implemented outbound path is:
+
+existing deterministic response
+→ OpenAI TTS
+→ OGG/Opus validation
+→ WhatsApp media upload
+→ WhatsApp voice-note delivery
+
+The implementation does not permit TTS to decide or rewrite conversational content. It receives the already-produced deterministic response plus the approved AI-voice disclosure.
+
+The marin voice was validated through a real local OpenAI TTS request, listened to, and approved. This validation did not call Meta and did not affect production.
+
+If synthesis, validation, upload, or voice delivery fails, Elvira sends the existing deterministic response as text without rerunning the core. If both voice and text delivery fail, patient state and processed-message behavior remain unchanged.
+
+Code integration commit:
+
+df203d8
+
+Repository verification:
+
+361 passed in 527.69s (0:08:47)
+
+Production remains text-only. Voice flags remain disabled by default.
+
+The next authorized phase is P6-F.9.95. No production voice activation is authorized without its safety, observability, rollback, duplicate-work, allowlist, and controlled-device gates.
