@@ -849,6 +849,12 @@ Wednesday stateful appointment-context carryover regression fixed and Swagger-va
 
 P6-F.9.91
 WhatsApp read receipt, typing indicator, and natural minimum delay validated in production
+
+P6-F.9.92
+Voice interaction architecture closed on the isolated branch; voice remains an I/O layer around the deterministic core
+
+P6-F.9.93
+Inbound WhatsApp voice notes, secure media handling, audio normalization, Spanish STT, webhook integration, and deterministic fallback implemented with voice flags disabled
 ```
 
 Detailed closure evidence belongs in Git history and `docs/`, not in this file.
@@ -857,17 +863,42 @@ Detailed closure evidence belongs in Git history and `docs/`, not in this file.
 
 ## Current Next Direction
 
-There is no immediate blocker requiring more appointment-flow engineering.
+Elvira remains online in production serving text conversations. Voice development remains isolated in:
 
-The useful next steps are operational:
+```txt
+feature/p6-f-9-92-voice-interaction
+```
 
-1. finish the Google Sheets ownership handoff to Dra. D'Aleman;
-2. let the doctor begin sharing the official number gradually;
-3. monitor real patient conversations;
-4. prepare organic social content and landing-page traffic;
-5. consider a separate future warm-patient reactivation pilot only after consent/contact rules and templates are defined.
+P6-F.9.92 — Voice Interaction Architecture and P6-F.9.93 — Inbound Voice Notes are closed on that branch. No voice code has been merged or activated in production.
 
-Do not invent another technical phase merely to keep coding.
+The next engineering phase is:
+
+```txt
+P6-F.9.94 — Outbound Voice Replies
+```
+
+Authorized scope:
+
+- convert the existing deterministic `result.respuesta` to speech;
+- upload the generated audio through the WhatsApp transport boundary;
+- send it as a WhatsApp voice note;
+- fall back to the existing text response without rerunning the core;
+- keep `VOICE_INPUT_ENABLED=false` and `VOICE_REPLIES_ENABLED=false` by default.
+
+Meta remains transport-only. OpenAI provides STT/TTS. Elvira retains all conversational logic, state, persistence, safety decisions, and fallback behavior.
+
+Still out of scope:
+
+- multitenancy;
+- patient follow-up;
+- campaigns;
+- Realtime;
+- voice cloning;
+- new conversational or appointment logic.
+
+Production activation is not authorized before P6-F.9.95 safety, observability, rollback, and controlled-device validation.
+
+Operational rollout and monitoring of the existing text service continue independently.
 
 ---
 

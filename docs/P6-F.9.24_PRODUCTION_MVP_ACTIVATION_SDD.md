@@ -227,3 +227,79 @@ P6-F.9.24 is closed only when:
 - E2E acceptance requires DB evidence
 - rollback rules are documented
 - the next sprint is clearly defined
+
+---
+
+## Post-Activation Addendum — Phase 2 Conversational Voice
+
+This addendum records the current post-MVP direction. It does not alter the historical P6-F.9.24 activation decision or its original acceptance criteria.
+
+### Production State
+
+Elvira remains online in production and continues serving text conversations.
+
+Voice development is isolated in:
+
+```txt
+feature/p6-f-9-92-voice-interaction
+No voice implementation has been merged into or activated on production.
+
+Closed Voice Milestones
+P6-F.9.92 — Voice Interaction Architecture
+P6-F.9.93 — Inbound Voice Notes
+
+P6-F.9.93 implemented:
+
+parsing of valid WhatsApp audio.voice=true payloads;
+deduplication before media download or STT;
+authenticated WhatsApp media download;
+MIME, size, and SHA-256 validation;
+secure temporary files with guaranteed cleanup;
+OGG/Opus normalization through ffmpeg;
+Spanish transcription through OpenAI;
+reuse of the existing deterministic conversational core;
+deterministic text fallback when media processing or STT fails;
+preservation of the existing text webhook behavior.
+
+Meta remains strictly a WhatsApp transport boundary. It does not provide transcription, synthesis, conversational logic, state, persistence, or safety decisions.
+
+Safety State
+
+The branch defaults remain:
+
+VOICE_INPUT_ENABLED=false
+VOICE_REPLIES_ENABLED=false
+VOICE_REPLY_TO_AUDIO_ONLY=true
+
+WHATSAPP_SENDING_ENABLED remains the master external-delivery switch.
+
+Voice processing must not be activated in production during P6-F.9.94.
+
+Verification Evidence
+
+The complete repository suite passed after inbound voice integration:
+
+347 passed in 528.22s
+
+Final inbound webhook integration commit:
+
+f3120fd — Integrate inbound voice notes into webhook
+Next Voice Milestone
+P6-F.9.94 — Outbound Voice Replies
+
+This phase is limited to:
+
+existing deterministic response
+→ TTS
+→ validated audio
+→ WhatsApp voice-note transport
+
+TTS must not generate or alter conversational content. If synthesis, validation, upload, or voice delivery fails, Elvira must send the already-produced deterministic response as text without rerunning the core.
+
+Production Activation Gate
+
+Voice production activation remains blocked until:
+
+P6-F.9.95 — Safety, Observability and Production Activation
+
+That phase must validate rollback flags, latency, cleanup, correlation, duplicate-work protection, real-device voice-note rendering, AI-voice disclosure, and controlled activation.
