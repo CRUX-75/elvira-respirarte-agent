@@ -10,6 +10,10 @@ from app.models.message import IncomingMessage
 from app.models.whatsapp import WhatsAppPayload
 from app.graph.graph import process_message
 from app.services.tracing import traced_process_message
+from app.services.outbound_voice import (
+    deliver_voice_reply,
+    should_send_voice_reply,
+)
 from app.services.inbound_voice import (
     deliver_voice_failure,
     process_inbound_voice_note,
@@ -444,12 +448,23 @@ async def receive_webhook(payload: WhatsAppPayload):
                     if typing_remaining > 0:
                         await asyncio.sleep(typing_remaining)
 
-                await send_whatsapp_message(
-                    telefono=telefono,
-                    mensaje=result.respuesta,
-                )
+                if should_send_voice_reply(msg_type):
+                    voice_delivery = await deliver_voice_reply(
+                        telefono=telefono,
+                        response_text=result.respuesta,
+                    )
+                    delivery_status = voice_delivery.delivery_status
+                    reply_mode = voice_delivery.reply_mode
+                    voice_fallback_used = voice_delivery.voice_fallback_used
+                else:
+                    await send_whatsapp_message(
+                        telefono=telefono,
+                        mensaje=result.respuesta,
+                    )
+                    delivery_status = "sent"
+                    reply_mode = "text"
+                    voice_fallback_used = False
 
-                delivery_status = "sent"
                 logged_response = result.respuesta
 
             except Exception as send_error:
@@ -509,6 +524,8 @@ async def receive_webhook(payload: WhatsAppPayload):
                 }
         else:
             delivery_status = "sending_skipped"
+            reply_mode = "none"
+            voice_fallback_used = False
             logged_response = f"[WHATSAPP_SENDING_DISABLED] {result.respuesta}"
 
         save_interaction(
@@ -568,6 +585,8 @@ async def receive_webhook(payload: WhatsAppPayload):
                 "nuevo_estado": result.nuevo_estado,
                 "delivery_status": delivery_status,
                 "whatsapp_sending_enabled": settings.whatsapp_sending_enabled,
+                "reply_mode": reply_mode,
+                "voice_fallback_used": voice_fallback_used,
             }
         )
 
@@ -578,6 +597,8 @@ async def receive_webhook(payload: WhatsAppPayload):
             "estado_anterior": estado_actual,
             "nuevo_estado": result.nuevo_estado,
             "whatsapp_sending_enabled": settings.whatsapp_sending_enabled,
+                "reply_mode": reply_mode,
+                "voice_fallback_used": voice_fallback_used,
             "whatsapp_message_id": whatsapp_message_id,
             "whatsapp_timestamp": whatsapp_timestamp,
             "patient_id": str(patient["id"]),
