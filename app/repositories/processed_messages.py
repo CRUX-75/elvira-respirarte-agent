@@ -59,3 +59,13 @@ def mark_message_processed(
                 "telefono": telefono,
             },
         )
+
+        conn.execute(
+            text(
+                """
+                DELETE FROM voice_processing_claims
+                WHERE whatsapp_message_id = :whatsapp_message_id
+                """
+            ),
+            {"whatsapp_message_id": whatsapp_message_id},
+        )

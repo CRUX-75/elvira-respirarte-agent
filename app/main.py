@@ -35,6 +35,9 @@ from app.repositories.processed_messages import (
     mark_message_processed,
 )
 from app.repositories.interactions import save_interaction
+from app.repositories.voice_processing_claims import (
+    try_claim_voice_processing,
+)
 from app.repositories.postgres_appointment_request_repository import (
     PostgresAppointmentRequestRepository,
 )
@@ -358,6 +361,44 @@ async def receive_webhook(payload: WhatsAppPayload):
             "whatsapp_message_id": whatsapp_message_id,
             "processed_marked": False,
         }
+
+    if msg_type == "audio":
+        try:
+            voice_claim = try_claim_voice_processing(
+                whatsapp_message_id=whatsapp_message_id,
+                telefono=telefono,
+            )
+        except Exception as claim_error:
+            log_error(
+                telefono=telefono,
+                error=(
+                    "Voice processing claim failed: "
+                    f"{type(claim_error).__name__}: {claim_error}"
+                ),
+            )
+            return {
+                "status": "error",
+                "reason": "voice_processing_claim_failed",
+                "whatsapp_message_id": whatsapp_message_id,
+                "processed_marked": False,
+            }
+
+        if voice_claim is None:
+            log_ignored(
+                reason="voice_processing_in_progress",
+                payload_summary=str(
+                    {
+                        "telefono": telefono,
+                        "whatsapp_message_id": whatsapp_message_id,
+                    }
+                ),
+            )
+            return {
+                "status": "ignored",
+                "reason": "voice_processing_in_progress",
+                "whatsapp_message_id": whatsapp_message_id,
+                "processed_marked": False,
+            }
 
     typing_started_at: float | None = None
 

@@ -1,7 +1,21 @@
 import asyncio
+import pytest
 from types import SimpleNamespace
 
 import app.main as main
+
+
+@pytest.fixture(autouse=True)
+def stub_voice_processing_claim(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "try_claim_voice_processing",
+        lambda **kwargs: SimpleNamespace(
+            whatsapp_message_id=kwargs["whatsapp_message_id"],
+            claim_token="test-claim-token",
+            lease_expires_at=None,
+        ),
+    )
 
 
 class FakeVoicePayload:
@@ -195,3 +209,32 @@ def test_audio_webhook_uses_voice_delivery_when_flags_allow_it(
     assert response["status"] == "sent"
     assert response["reply_mode"] == "voice"
     assert response["voice_fallback_used"] is False
+
+
+def test_voice_webhook_ignores_active_processing_claim(monkeypatch):
+    monkeypatch.setattr(main.settings, "voice_input_enabled", True)
+    monkeypatch.setattr(main, "is_message_processed", lambda value: False)
+    monkeypatch.setattr(
+        main,
+        "try_claim_voice_processing",
+        lambda **kwargs: None,
+    )
+    monkeypatch.setattr(main, "log_ignored", lambda **kwargs: None)
+
+    async def unexpected_voice_processing(extracted):
+        raise AssertionError("Media and STT must not run")
+
+    monkeypatch.setattr(
+        main,
+        "process_inbound_voice_note",
+        unexpected_voice_processing,
+    )
+
+    response = asyncio.run(main.receive_webhook(FakeVoicePayload()))
+
+    assert response == {
+        "status": "ignored",
+        "reason": "voice_processing_in_progress",
+        "whatsapp_message_id": "wamid.voice.webhook.001",
+        "processed_marked": False,
+    }

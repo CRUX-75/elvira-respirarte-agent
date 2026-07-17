@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     voice_tts_voice: str = "marin"
     voice_tts_response_format: str = "opus"
     voice_max_media_bytes: int = 16777216
+    voice_processing_lease_seconds: int = 300
 
     database_url: str | None = None
 
