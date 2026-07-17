@@ -238,3 +238,41 @@ def test_voice_webhook_ignores_active_processing_claim(monkeypatch):
         "whatsapp_message_id": "wamid.voice.webhook.001",
         "processed_marked": False,
     }
+
+
+@pytest.fixture(autouse=True)
+def stub_voice_phone_allowlist(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "is_voice_phone_allowed",
+        lambda telefono: True,
+    )
+
+
+def test_voice_webhook_rejects_phone_outside_allowlist(monkeypatch):
+    monkeypatch.setattr(main.settings, "voice_input_enabled", True)
+    monkeypatch.setattr(main, "is_message_processed", lambda value: False)
+    monkeypatch.setattr(
+        main,
+        "is_voice_phone_allowed",
+        lambda telefono: False,
+    )
+    monkeypatch.setattr(main, "log_ignored", lambda **kwargs: None)
+
+    def unexpected_claim(**kwargs):
+        raise AssertionError("Lease must not be acquired")
+
+    monkeypatch.setattr(
+        main,
+        "try_claim_voice_processing",
+        unexpected_claim,
+    )
+
+    response = asyncio.run(main.receive_webhook(FakeVoicePayload()))
+
+    assert response == {
+        "status": "ignored",
+        "reason": "voice_phone_not_allowed",
+        "whatsapp_message_id": "wamid.voice.webhook.001",
+        "processed_marked": False,
+    }

@@ -1,4 +1,5 @@
 from app.config import settings
+from app.services.voice_safety import configured_voice_phone_numbers
 
 
 APP_VERSION = "0.2.1"
@@ -26,6 +27,8 @@ def build_ready_report() -> dict:
         and _configured(settings.langsmith_project)
     )
 
+    allowed_voice_phone_count = len(configured_voice_phone_numbers())
+
     if not database_configured:
         hard_failures.append("database_url_missing")
 
@@ -34,6 +37,24 @@ def build_ready_report() -> dict:
 
     if not whatsapp_configured:
         hard_failures.append("whatsapp_config_missing")
+
+    if (
+        settings.voice_input_enabled
+        and allowed_voice_phone_count == 0
+    ):
+        hard_failures.append("voice_allowed_phone_numbers_missing")
+
+    if (
+        settings.voice_replies_enabled
+        and not settings.voice_input_enabled
+    ):
+        hard_failures.append("voice_replies_require_voice_input")
+
+    if (
+        settings.voice_replies_enabled
+        and not settings.voice_reply_to_audio_only
+    ):
+        hard_failures.append("voice_reply_scope_not_controlled")
 
     status = "ready" if not hard_failures else "not_ready"
 
@@ -51,6 +72,7 @@ def build_ready_report() -> dict:
             "patients": "configured",
             "interactions": "configured",
             "processed_messages": "configured",
+            "voice_processing_claims": "configured",
             "kb": "configured",
         },
         "langsmith": {
@@ -61,8 +83,27 @@ def build_ready_report() -> dict:
         "openai_configured": openai_configured,
         "whatsapp_configured": whatsapp_configured,
         "hard_failures": hard_failures,
+        "voice": {
+            "input_enabled": settings.voice_input_enabled,
+            "replies_enabled": settings.voice_replies_enabled,
+            "reply_to_audio_only": settings.voice_reply_to_audio_only,
+            "allowed_phone_count": allowed_voice_phone_count,
+            "max_media_bytes": settings.voice_max_media_bytes,
+            "max_duration_seconds": settings.voice_max_duration_seconds,
+            "processing_lease_seconds": (
+                settings.voice_processing_lease_seconds
+            ),
+        },
         "safety": {
-            "real_whatsapp_sending_allowed": settings.whatsapp_sending_enabled,
-            "p6a_rule": "WHATSAPP_SENDING_ENABLED must remain false during P6-A",
+            "real_whatsapp_sending_allowed": (
+                settings.whatsapp_sending_enabled
+            ),
+            "voice_activation_allowed": (
+                settings.voice_input_enabled
+                and allowed_voice_phone_count > 0
+            ),
+            "p6a_rule": (
+                "WHATSAPP_SENDING_ENABLED must remain false during P6-A"
+            ),
         },
     }

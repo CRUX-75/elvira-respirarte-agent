@@ -4,6 +4,7 @@ from app.config import settings
 from app.repositories.logs import log_error
 from app.repositories.processed_messages import mark_message_processed
 from app.services.audio_normalization import prepare_audio_for_stt
+from app.services.voice_safety import validate_voice_note_duration
 from app.services.speech_to_text import transcribe_spanish_voice_note
 from app.services.whatsapp import send_whatsapp_message
 from app.services.whatsapp_media import (
@@ -38,6 +39,7 @@ async def process_inbound_voice_note(
             expected_mime_type=extracted.get("mime_type"),
             expected_sha256=extracted.get("sha256"),
         ) as source_path:
+            validate_voice_note_duration(source_path)
             with prepare_audio_for_stt(source_path) as normalized_path:
                 transcription = await transcribe_spanish_voice_note(
                     normalized_path,

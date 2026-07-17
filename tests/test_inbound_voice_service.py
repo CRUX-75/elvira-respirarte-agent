@@ -1,8 +1,18 @@
 import asyncio
+import pytest
 from contextlib import contextmanager
 from types import SimpleNamespace
 
 import app.services.inbound_voice as inbound_voice
+
+
+@pytest.fixture(autouse=True)
+def stub_voice_duration_validation(monkeypatch):
+    monkeypatch.setattr(
+        inbound_voice,
+        "validate_voice_note_duration",
+        lambda path: 10.0,
+    )
 
 
 def test_process_inbound_voice_note_returns_transcript(

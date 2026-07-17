@@ -10,6 +10,7 @@ from app.models.message import IncomingMessage
 from app.models.whatsapp import WhatsAppPayload
 from app.graph.graph import process_message
 from app.services.tracing import traced_process_message
+from app.services.voice_safety import is_voice_phone_allowed
 from app.services.outbound_voice import (
     deliver_voice_reply,
     should_send_voice_reply,
@@ -358,6 +359,22 @@ async def receive_webhook(payload: WhatsAppPayload):
         return {
             "status": "ignored",
             "reason": "voice_input_disabled",
+            "whatsapp_message_id": whatsapp_message_id,
+            "processed_marked": False,
+        }
+
+    if msg_type == "audio" and not is_voice_phone_allowed(telefono):
+        log_ignored(
+            reason="voice_phone_not_allowed",
+            payload_summary=str(
+                {
+                    "whatsapp_message_id": whatsapp_message_id,
+                }
+            ),
+        )
+        return {
+            "status": "ignored",
+            "reason": "voice_phone_not_allowed",
             "whatsapp_message_id": whatsapp_message_id,
             "processed_marked": False,
         }
