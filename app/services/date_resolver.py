@@ -68,9 +68,13 @@ ABSOLUTE_DATE_PATTERN = re.compile(
     r"(?P<month>"
     r"enero|febrero|marzo|abril|mayo|junio|julio|agosto|"
     r"septiembre|setiembre|octubre|noviembre|diciembre"
-    r")\s+de\s+"
-    r"(?P<year>\d{4})"
+    r")"
+    r"(?:\s+de\s+(?P<year>\d{4}))?"
     r"\b"
+)
+
+NUMERIC_ABSOLUTE_DATE_PATTERN = re.compile(
+    r"\b(?P<day>\d{1,2})[/-](?P<month>\d{1,2})[/-](?P<year>\d{4})\b"
 )
 
 COLOMBIA_HOLIDAYS_2026 = {
@@ -125,6 +129,14 @@ def _normalize_text(text: str | None) -> str:
     return normalized
 
 
+def contains_absolute_date_reference(message: str | None) -> bool:
+    normalized_message = _normalize_text(message)
+    return bool(
+        ABSOLUTE_DATE_PATTERN.search(normalized_message)
+        or NUMERIC_ABSOLUTE_DATE_PATTERN.search(normalized_message)
+    )
+
+
 NEXT_WEEK_MARKERS = (
     "proximo",
     "proxima",
@@ -139,14 +151,24 @@ def _has_explicit_next_week_marker(normalized_message: str) -> bool:
 
 def _resolve_absolute_date_reference(
     normalized_message: str,
+    *,
+    default_year: int,
 ) -> date | None:
     match = ABSOLUTE_DATE_PATTERN.search(normalized_message)
-    if match is None:
-        return None
 
-    day = int(match.group("day"))
-    month = MONTH_WORDS_ES[match.group("month")]
-    year = int(match.group("year"))
+    if match is not None:
+        day = int(match.group("day"))
+        month = MONTH_WORDS_ES[match.group("month")]
+        year_text = match.group("year")
+        year = int(year_text) if year_text else default_year
+    else:
+        match = NUMERIC_ABSOLUTE_DATE_PATTERN.search(normalized_message)
+        if match is None:
+            return None
+
+        day = int(match.group("day"))
+        month = int(match.group("month"))
+        year = int(match.group("year"))
 
     try:
         return date(year, month, day)
@@ -195,7 +217,10 @@ def resolve_requested_date(
     normalized_message = _normalize_text(message)
     fecha_actual_colombia = get_today_colombia(now)
 
-    requested_date = _resolve_absolute_date_reference(normalized_message)
+    requested_date = _resolve_absolute_date_reference(
+        normalized_message,
+        default_year=fecha_actual_colombia.year,
+    )
 
     if requested_date is None:
         if (
