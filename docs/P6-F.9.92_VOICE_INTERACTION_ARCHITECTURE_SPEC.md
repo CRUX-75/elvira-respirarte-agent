@@ -454,13 +454,13 @@ The TTS input is exactly `result.respuesta` plus any required, approved AI-voice
 
 End users must receive a clear disclosure that the voice is AI-generated and not a human recording.
 
-During the initial rollout, every generated voice reply begins with a short disclosure:
+The first generated voice reply for a patient in `ST_INIT` begins with a short disclosure:
 
 ```txt
 Soy Elvira, la asistente virtual de Respirarte.
 ```
 
-This keeps Elvira natural and human-friendly without impersonating Dra. D'Aleman or another real person. A later persisted one-time disclosure may be evaluated, but disclosure cannot be silently removed.
+This keeps Elvira natural and human-friendly without impersonating Dra. D'Aleman or another real person. Subsequent stateful voice replies omit this introduction; disclosure remains required for `ST_INIT`.
 
 ---
 

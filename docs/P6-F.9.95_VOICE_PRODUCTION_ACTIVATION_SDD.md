@@ -207,7 +207,7 @@ Send audio from the allowlisted number.
 Confirm deterministic processing.
 Confirm TTS preserves the deterministic response.
 Confirm WhatsApp receives an OGG/Opus voice note.
-Confirm the AI disclosure is present.
+Confirm the AI disclosure is present on the initial voice reply and is not repeated in subsequent stateful replies.
 Confirm text input still receives text output.
 Confirm voice failure falls back to text once.
 Confirm no duplicate state transition.

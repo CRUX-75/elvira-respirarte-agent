@@ -898,7 +898,7 @@ production privacy fix was merged in 571b19e;
 voice logs now redact content as msg=None | resp=None;
 full suite passed with 377 tests.
 
-The production voice is functional and understandable. Natural intonation and consistently clear pronunciation of “Elvira” remain future quality improvements, not functional blockers.
+The production voice is functional and understandable. Natural intonation and consistently clear pronunciation of “Elvira” remain future quality improvements, not functional blockers. Post-closure stabilization fixed repeated AI disclosure in `393d659`, merged in `277fd05`; `ST_INIT` retains disclosure while later states omit it. The full suite passed with 385 tests, health and readiness returned 200, and controlled WhatsApp validation passed.
 
 Duplicate-work, non-allowlisted sender, and delivery-fallback contracts remain covered by automated regression tests. Global rollout requires a separate explicit decision.
 
