@@ -36,6 +36,10 @@ def should_send_voice_reply(inbound_message_type: str) -> bool:
     return True
 
 
+def should_include_voice_disclosure(patient_state: str) -> bool:
+    return patient_state == "ST_INIT"
+
+
 class VoiceDeliveryError(RuntimeError):
     pass
 
@@ -94,8 +98,12 @@ async def deliver_voice_reply(
     telefono: str,
     whatsapp_message_id: str,
     response_text: str,
+    include_disclosure: bool,
 ) -> VoiceDeliveryResult:
-    synthesis = await synthesize_voice_reply(response_text)
+    synthesis = await synthesize_voice_reply(
+        response_text,
+        include_disclosure=include_disclosure,
+    )
 
     if synthesis.status != "success" or not synthesis.audio_content:
         error_reason = synthesis.error_reason or "tts_failed"

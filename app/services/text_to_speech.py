@@ -36,16 +36,23 @@ class SpeechSynthesisResult:
     error_reason: str | None = None
 
 
-def build_voice_reply_text(response_text: str) -> str:
+def build_voice_reply_text(
+    response_text: str,
+    *,
+    include_disclosure: bool = True,
+) -> str:
     normalized = response_text.strip()
 
     if not normalized:
         raise ValueError("Deterministic response text is empty")
 
-    if normalized.startswith(AI_VOICE_DISCLOSURE):
-        tts_input = normalized
-    else:
+    if (
+        include_disclosure
+        and not normalized.startswith(AI_VOICE_DISCLOSURE)
+    ):
         tts_input = f"{AI_VOICE_DISCLOSURE} {normalized}"
+    else:
+        tts_input = normalized
 
     if len(tts_input) > MAX_TTS_INPUT_CHARACTERS:
         raise ValueError("TTS input exceeds character limit")
@@ -56,6 +63,7 @@ def build_voice_reply_text(response_text: str) -> str:
 async def synthesize_voice_reply(
     response_text: str,
     *,
+    include_disclosure: bool = True,
     client: Any | None = None,
     clock: Callable[[], float] = time.perf_counter,
 ) -> SpeechSynthesisResult:
@@ -82,7 +90,10 @@ async def synthesize_voice_reply(
         )
 
     try:
-        tts_input = build_voice_reply_text(response_text)
+        tts_input = build_voice_reply_text(
+            response_text,
+            include_disclosure=include_disclosure,
+        )
     except ValueError as exc:
         return result(
             audio_content=None,
