@@ -906,7 +906,23 @@ Still out of scope: multitenancy, patient follow-up, campaigns, Realtime, voice 
 
 Patient follow-up remains the next major roadmap candidate after voice stabilization, but it is not yet authorized.
 
-Maintenance Rule for This File
+## Current Independent Debugging Status
+
+DBG-001 — Absolute Date Resolution Regression is closed.
+
+Production merge `c0c150c` restores deterministic support for textual dates without a year and numeric `DD/MM/YYYY` or `DD-MM-YYYY` dates. Production `/health` and `/ready` returned HTTP 200, and the three reported cases passed through the non-persistent production test endpoint.
+
+Validation coverage was completed in two partitions: 94 critical appointment tests plus 289 remaining repository tests, for 383 tests total.
+
+Rollback reference: `pre-dbg-001-absolute-date-fix-2026-07-18`.
+
+No environment variable, database schema, voice behavior or roadmap milestone changed.
+
+DBG-002 — Slot Range Mapping Regression remains separate and has not started.
+
+---
+
+## Maintenance Rule for This File
 
 
 When project status changes:
