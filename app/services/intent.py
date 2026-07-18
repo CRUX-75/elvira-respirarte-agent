@@ -1,6 +1,7 @@
 import re
 
 from app.graph.state import Intent
+from app.services.date_resolver import contains_absolute_date_reference
 from app.services.slot_confirmation_guard import (
     is_simple_affirmative_slot_confirmation,
 )
@@ -107,6 +108,9 @@ def classify_intent(
     }
 
     if current_state in date_context_states:
+        if contains_absolute_date_reference(msg):
+            return "fecha_cita"
+
         clarification_patterns = [
             r"\bcual fecha\b",
             r"\bque fecha\b",
