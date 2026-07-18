@@ -10,11 +10,11 @@ logging.basicConfig(
 
 def log_interaction(
     telefono: str,
-    mensaje: str,
+    mensaje: str | None,
     intent: str,
     estado_anterior: str,
     nuevo_estado: str,
-    respuesta: str,
+    respuesta: str | None,
 ) -> None:
     logger.info(
         "INTERACTION | telefono=%s | intent=%s | estado=%s->%s | msg=%r | resp=%r",
