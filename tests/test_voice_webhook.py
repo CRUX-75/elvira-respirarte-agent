@@ -131,10 +131,17 @@ def test_audio_webhook_uses_voice_delivery_when_flags_allow_it(
     async def fake_sleep(seconds):
         return None
 
-    async def fake_voice_delivery(*, telefono, whatsapp_message_id, response_text):
+    async def fake_voice_delivery(
+        *,
+        telefono,
+        whatsapp_message_id,
+        response_text,
+        include_disclosure,
+    ):
         captured["telefono"] = telefono
         captured["whatsapp_message_id"] = whatsapp_message_id
         captured["response_text"] = response_text
+        captured["include_disclosure"] = include_disclosure
         return SimpleNamespace(
             delivery_status="sent",
             reply_mode="voice",
@@ -209,6 +216,7 @@ def test_audio_webhook_uses_voice_delivery_when_flags_allow_it(
         "telefono": "573009450001",
         "whatsapp_message_id": "wamid.voice.webhook.001",
         "response_text": "Con gusto le ayudo.",
+        "include_disclosure": True,
     }
     assert response["status"] == "sent"
     assert response["reply_mode"] == "voice"

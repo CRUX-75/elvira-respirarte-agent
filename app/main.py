@@ -14,6 +14,7 @@ from app.services.voice_safety import is_voice_phone_allowed
 from app.services.voice_observability import safe_message_content_for_log
 from app.services.outbound_voice import (
     deliver_voice_reply,
+    should_include_voice_disclosure,
     should_send_voice_reply,
 )
 from app.services.inbound_voice import (
@@ -512,6 +513,9 @@ async def receive_webhook(payload: WhatsAppPayload):
                         telefono=telefono,
                         whatsapp_message_id=whatsapp_message_id,
                         response_text=result.respuesta,
+                        include_disclosure=(
+                            should_include_voice_disclosure(estado_actual)
+                        ),
                     )
                     delivery_status = voice_delivery.delivery_status
                     reply_mode = voice_delivery.reply_mode

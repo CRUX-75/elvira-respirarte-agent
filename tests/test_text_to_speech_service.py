@@ -36,6 +36,15 @@ def test_synthesize_voice_reply_preserves_response_and_adds_disclosure(
     )
 
 
+def test_build_voice_reply_text_omits_disclosure_when_not_required():
+    result = tts.build_voice_reply_text(
+        "La doctora le confirmará la cita.",
+        include_disclosure=False,
+    )
+
+    assert result == "La doctora le confirmará la cita."
+
+
 def test_synthesize_voice_reply_returns_safe_provider_error():
     class FailingSpeech:
         async def create(self, **kwargs):

@@ -33,6 +33,14 @@ def test_should_send_voice_reply_respects_flags(monkeypatch):
     assert outbound_voice.should_send_voice_reply("text") is False
 
 
+def test_voice_disclosure_is_only_used_for_initial_state():
+    assert outbound_voice.should_include_voice_disclosure("ST_INIT") is True
+    assert (
+        outbound_voice.should_include_voice_disclosure("ST_CITA_FRANJA")
+        is False
+    )
+
+
 def test_deliver_voice_reply_synthesizes_uploads_and_sends(
     monkeypatch,
     tmp_path,
@@ -42,8 +50,8 @@ def test_deliver_voice_reply_synthesizes_uploads_and_sends(
     audio_path = tmp_path / "reply.ogg"
     audio_path.write_bytes(b"OggSvoice-data")
 
-    async def fake_synthesis(response_text):
-        calls.append(("tts", response_text))
+    async def fake_synthesis(response_text, *, include_disclosure):
+        calls.append(("tts", response_text, include_disclosure))
         return SimpleNamespace(
             audio_content=b"OggSvoice-data",
             model="gpt-4o-mini-tts",
@@ -100,6 +108,7 @@ def test_deliver_voice_reply_synthesizes_uploads_and_sends(
             telefono="573009450001",
             whatsapp_message_id="wamid.voice.reply.test",
             response_text="Respuesta determinística.",
+            include_disclosure=False,
         )
     )
 
@@ -107,7 +116,7 @@ def test_deliver_voice_reply_synthesizes_uploads_and_sends(
     assert result.reply_mode == "voice"
     assert result.voice_fallback_used is False
     assert calls == [
-        ("tts", "Respuesta determinística."),
+        ("tts", "Respuesta determinística.", False),
         ("temporary", b"OggSvoice-data"),
         ("upload", audio_path),
         ("voice", "573009450001", "media-reply-001"),
@@ -118,7 +127,7 @@ def test_tts_failure_falls_back_to_existing_text(monkeypatch):
     enable_voice_replies(monkeypatch)
     sent = {}
 
-    async def failed_synthesis(response_text):
+    async def failed_synthesis(response_text, *, include_disclosure):
         return SimpleNamespace(
             audio_content=None,
             model="gpt-4o-mini-tts",
@@ -149,6 +158,7 @@ def test_tts_failure_falls_back_to_existing_text(monkeypatch):
             telefono="573009450001",
             whatsapp_message_id="wamid.voice.reply.test",
             response_text="Respuesta determinística.",
+            include_disclosure=False,
         )
     )
 
@@ -167,7 +177,7 @@ def test_voice_send_failure_falls_back_without_new_tts(
     audio_path = tmp_path / "reply.ogg"
     audio_path.write_bytes(b"OggSvoice-data")
 
-    async def fake_synthesis(response_text):
+    async def fake_synthesis(response_text, *, include_disclosure):
         calls["tts"] += 1
         return SimpleNamespace(
             audio_content=b"OggSvoice-data",
@@ -224,6 +234,7 @@ def test_voice_send_failure_falls_back_without_new_tts(
             telefono="573009450001",
             whatsapp_message_id="wamid.voice.reply.test",
             response_text="Respuesta determinística.",
+            include_disclosure=False,
         )
     )
 
@@ -238,7 +249,7 @@ def test_voice_send_failure_falls_back_without_new_tts(
 def test_voice_and_text_delivery_failure_raises(monkeypatch):
     enable_voice_replies(monkeypatch)
 
-    async def failed_synthesis(response_text):
+    async def failed_synthesis(response_text, *, include_disclosure):
         return SimpleNamespace(
             audio_content=None,
             model="gpt-4o-mini-tts",
@@ -269,6 +280,7 @@ def test_voice_and_text_delivery_failure_raises(monkeypatch):
                 telefono="573009450001",
                 whatsapp_message_id="wamid.voice.reply.test",
                 response_text="Respuesta determinística.",
+            include_disclosure=False,
             )
         )
     except outbound_voice.VoiceDeliveryError as exc:
