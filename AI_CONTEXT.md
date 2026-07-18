@@ -858,6 +858,9 @@ Inbound WhatsApp voice notes, secure media handling, audio normalization, Spanis
 
 P6-F.9.94
 Outbound TTS, secure temporary audio, WhatsApp media upload, voice-note delivery, deterministic text fallback, and webhook integration implemented with voice flags disabled
+
+P6-F.9.95
+Atomic voice-processing lease, allowlist and media safety gates, privacy-safe observability, rollback validation, and controlled production voice activation completed
 ```
 
 Detailed closure evidence belongs in Git history and `docs/`, not in this file.
@@ -866,35 +869,45 @@ Detailed closure evidence belongs in Git history and `docs/`, not in this file.
 
 ## Current Next Direction
 
-Elvira remains online in production serving text conversations. Voice development remains isolated in `feature/p6-f-9-92-voice-interaction`.
+Elvira remains online in production. Existing text conversations continue operating normally.
 
-The following voice milestones are closed on the isolated branch:
+Voice phases P6-F.9.92 through P6-F.9.95 are closed.
 
-- P6-F.9.92 — Voice Interaction Architecture;
-- P6-F.9.93 — Inbound Voice Notes;
-- P6-F.9.94 — Outbound Voice Replies.
+Current controlled production state:
 
-The `marin` voice was approved through a real local OpenAI TTS preview in Colombian Spanish. The generated artifact was validated as OGG/Opus and no production or Meta delivery was used during the preview.
+```env
+VOICE_INPUT_ENABLED=true
+VOICE_REPLIES_ENABLED=true
+VOICE_REPLY_TO_AUDIO_ONLY=true
+VOICE_ALLOWED_PHONE_NUMBERS=<one controlled test number>
+```
 
-The next engineering phase is P6-F.9.95 — Safety, Observability and Production Activation.
+Voice is active only for one allowlisted operator-controlled number. Global voice activation is not authorized.
 
-Required scope:
+Production validation completed:
 
-- complete structured voice observability correlated by `whatsapp_message_id`;
-- avoid raw audio and transcript content in new structured logs;
-- evaluate atomic processing claim or lease protection before activation;
-- enforce duration, size, allowlist, cleanup, and timeout controls;
-- validate text fallback and emergency rollback behavior;
-- perform controlled real-device WhatsApp voice-note validation;
-- require explicit approval before changing any production voice flag.
+PostgreSQL backup and Git rollback tag created;
+additive voice_processing_claims migration applied;
+/health and /ready returned 200;
+production text regression passed;
+inbound audio-to-text passed;
+outbound audio-to-audio passed;
+configuration rollback was validated;
+privacy stop condition was detected and corrected;
+production privacy fix was merged in 571b19e;
+voice logs now redact content as msg=None | resp=None;
+full suite passed with 377 tests.
 
-Voice flags remain disabled by default. Production continues serving text independently.
+The production voice is functional and understandable. Natural intonation and consistently clear pronunciation of “Elvira” remain future quality improvements, not functional blockers.
+
+Duplicate-work, non-allowlisted sender, and delivery-fallback contracts remain covered by automated regression tests. Global rollout requires a separate explicit decision.
 
 Still out of scope: multitenancy, patient follow-up, campaigns, Realtime, voice cloning, and new conversational or appointment logic.
 
----
+Patient follow-up remains the next major roadmap candidate after voice stabilization, but it is not yet authorized.
 
-## Maintenance Rule for This File
+Maintenance Rule for This File
+
 
 When project status changes:
 

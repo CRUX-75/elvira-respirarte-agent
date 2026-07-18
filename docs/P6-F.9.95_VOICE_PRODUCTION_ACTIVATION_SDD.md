@@ -3,7 +3,7 @@
 ## Status
 
 - Date: 2026-07-17
-- Status: Ready for controlled production execution
+- Status: Closed — controlled production activation
 - Branch: `feature/p6-f-9-92-voice-interaction`
 - Production rollback tag: `pre-voice-production-2026-07-17`
 - Global production voice activation: Not authorized
@@ -118,6 +118,7 @@ VOICE_MAX_MEDIA_BYTES=16777216
 VOICE_MAX_DURATION_SECONDS=120
 VOICE_PROCESSING_LEASE_SECONDS=300
 VOICE_ALLOWED_PHONE_NUMBERS=
+```
 
 Only these are activation flags:
 
@@ -305,4 +306,68 @@ Add the P6-F.9.95 closure to the voice architecture spec.
 Update the production SDD with verified evidence.
 Commit documentation closure separately.
 
-Until then, production voice activation remains pending.
+Controlled production activation is complete. Global activation remains pending and unauthorized.
+
+---
+
+## Controlled Production Activation Closure — 2026-07-18
+
+### Deployment Evidence
+
+- Initial production voice merge: `f811406`
+- Privacy correction commit: `687aa23`
+- Production privacy-fix merge: `571b19e`
+- Full regression suite: `377 passed in 525.06s`
+- Easypanel deployment: Success
+- PostgreSQL migration: `voice_processing_claims`
+- `/health`: 200
+- `/ready`: 200
+- Existing production text conversation: Passed
+
+### Recovery Evidence
+
+- Git rollback tag: `pre-voice-production-2026-07-17`
+- PostgreSQL backup: Success
+- Database: `elvira_respirarte_prod`
+- Backup path: `elvira/elvira_respirarte_prod/2026-07-17T14:28:31.086Z.sql.gz`
+- Backup size: 41 kB
+- Configuration rollback validated with both voice flags disabled, empty allowlist, and readiness 200
+- Production text remained operational during rollback
+
+### Controlled Voice Evidence
+
+Inbound voice-to-text and outbound voice-to-voice passed on a real allowlisted WhatsApp number.
+
+Final outbound validation:
+
+- Intent: `fecha_cita`
+- STT latency: 1548 ms
+- TTS model: `gpt-4o-mini-tts`
+- TTS voice: `marin`
+- TTS latency: 2492 ms
+- Output format: OGG/Opus
+- Output size: 134362 bytes
+- WhatsApp upload and delivery: Success
+- Reply mode: `voice`
+- Voice fallback used: False
+- Legacy interaction log: `msg=None | resp=None`
+- Deterministic appointment and holiday behavior: Preserved
+
+A privacy stop condition was detected during the first controlled inbound validation because the legacy interaction logger exposed transcript and response content. Voice was immediately disabled, rollback was verified, the defect was corrected, and Stage 1 and Stage 2 were repeated successfully.
+
+### Final Production State
+
+```env
+VOICE_INPUT_ENABLED=true
+VOICE_REPLIES_ENABLED=true
+VOICE_REPLY_TO_AUDIO_ONLY=true
+VOICE_ALLOWED_PHONE_NUMBERS=<one controlled test number>
+```
+
+Controlled production voice is approved only for the single allowlisted number.
+
+Global voice activation is not authorized.
+
+Natural intonation and consistently clear pronunciation of “Elvira” remain future quality improvements and do not block controlled functional closure.
+
+Duplicate-webhook, non-allowlisted sender, and delivery-fallback contracts remain covered by the passing automated regression suite rather than expanded production testing.

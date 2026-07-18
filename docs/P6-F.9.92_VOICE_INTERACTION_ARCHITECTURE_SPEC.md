@@ -894,6 +894,7 @@ Code integration commit:
 
 ```txt
 df203d8
+```
 Repository verification:
 
 361 passed in 527.69s (0:08:47)
@@ -908,3 +909,44 @@ Next phase:
 
 P6-F.9.95 — Safety, Observability and Production Activation
 
+
+---
+
+## P6-F.9.95 Closure Record — Controlled Production Voice
+
+P6-F.9.95 is closed with controlled production activation.
+
+The complete voice layer operates around the unchanged deterministic core:
+
+```txt
+WhatsApp audio
+→ STT
+→ deterministic Elvira core
+→ TTS
+→ WhatsApp voice note
+```
+
+Verified safety and production controls:
+
+- atomic processing leases;
+- fail-closed telephone allowlist;
+- media size and duration limits;
+- secure temporary-file cleanup;
+- privacy-safe structured events;
+- transcript and response redaction in legacy interaction logs;
+- configuration-only rollback;
+- production text behavior preserved;
+- controlled real-device inbound and outbound voice;
+- full suite passing with 377 tests.
+
+Production privacy correction:
+
+- correction commit: `687aa23`;
+- production merge: `571b19e`;
+- production revalidation: Passed.
+
+Voice remains restricted to one allowlisted number.
+
+Global activation, multitenancy, patient follow-up, campaigns, Realtime, and voice cloning remain unauthorized.
+
+Natural intonation and clear pronunciation of “Elvira” remain future quality improvements.

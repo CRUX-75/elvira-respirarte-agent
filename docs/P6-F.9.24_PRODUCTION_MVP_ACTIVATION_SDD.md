@@ -242,6 +242,7 @@ Voice development is isolated in:
 
 ```txt
 feature/p6-f-9-92-voice-interaction
+```
 No voice implementation has been merged into or activated on production.
 
 Closed Voice Milestones
@@ -332,3 +333,40 @@ Repository verification:
 Production remains text-only. Voice flags remain disabled by default.
 
 The next authorized phase is P6-F.9.95. No production voice activation is authorized without its safety, observability, rollback, duplicate-work, allowlist, and controlled-device gates.
+
+---
+
+## Post-Activation Addendum — P6-F.9.95 Controlled Voice Activation
+
+Elvira remained available for production text conversations throughout deployment and validation.
+
+P6-F.9.95 introduced an additive voice layer without changing the deterministic conversational core, appointment logic, or existing patient-state semantics.
+
+Verified controls:
+
+- PostgreSQL backup before deployment;
+- Git rollback tag before deployment;
+- voice flags disabled during initial deployment;
+- additive processing-claim migration;
+- health, readiness, and text regression validation;
+- controlled single-number allowlist;
+- successful inbound and outbound voice validation;
+- privacy stop condition detected during controlled activation;
+- immediate configuration rollback completed successfully;
+- privacy correction deployed and revalidated;
+- transcript and response content removed from production voice logs.
+
+Current activation is controlled and limited to one allowlisted number. Global production voice remains unauthorized.
+
+The operational rollback remains:
+
+```env
+VOICE_INPUT_ENABLED=false
+VOICE_REPLIES_ENABLED=false
+VOICE_REPLY_TO_AUDIO_ONLY=true
+VOICE_ALLOWED_PHONE_NUMBERS=
+```
+
+Ordinary voice rollback does not require database restoration.
+
+Naturalness and expressive intonation remain quality improvements outside the functional activation gate.
