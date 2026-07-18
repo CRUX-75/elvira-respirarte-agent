@@ -100,12 +100,14 @@ def test_voice_transcript_enters_existing_deterministic_core(monkeypatch):
         lambda **kwargs: None,
     )
     monkeypatch.setattr(main, "mark_message_processed", lambda **kwargs: None)
-    monkeypatch.setattr(main, "log_interaction", lambda **kwargs: None)
+    monkeypatch.setattr(main, "log_interaction", lambda **kwargs: captured.setdefault("legacy_log", kwargs))
     monkeypatch.setattr(main, "log_ignored", lambda **kwargs: None)
 
     response = asyncio.run(main.receive_webhook(FakeVoicePayload()))
 
     assert captured["mensaje"] == "Quiero pedir una cita"
+    assert captured["legacy_log"]["mensaje"] is None
+    assert captured["legacy_log"]["respuesta"] is None
     assert response["status"] == "sending_skipped"
     assert response["intent"] == "solicitud_cita"
 

@@ -624,11 +624,11 @@ async def receive_webhook(payload: WhatsAppPayload):
         # Keep old console/file logging during P4 for compatibility.
         log_interaction(
             telefono=telefono,
-            mensaje=mensaje,
+            mensaje=safe_message_content_for_log(msg_type=msg_type, mensaje=mensaje),
             intent=result.intent,
             estado_anterior=estado_actual,
             nuevo_estado=result.nuevo_estado,
-            respuesta=logged_response,
+            respuesta=safe_message_content_for_log(msg_type=msg_type, mensaje=logged_response),
         )
 
         print(
