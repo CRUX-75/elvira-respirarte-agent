@@ -186,6 +186,15 @@ def apply_state_transition(state: ElviraState) -> ElviraState:
         state.state_reason = "Paciente indicó hora de preferencia."
         return state
 
+    # SERVICIO RETIRADO
+    if intent == "servicio_no_disponible":
+        state.nuevo_estado = previous_state
+        state.next_action = "answer_unavailable_service"
+        state.kb_used = False
+        state.escalation_required = False
+        state.state_reason = "Paciente consultó por un servicio retirado."
+        return state
+
     # PAGO
     if intent == "pago":
         state.nuevo_estado = previous_state

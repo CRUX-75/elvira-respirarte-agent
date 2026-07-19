@@ -10,6 +10,7 @@ Intent = Literal[
     "hora_cita",
     "pago",
     "servicios",
+    "servicio_no_disponible",
     "horarios",
     "reglas",
     "optout",
