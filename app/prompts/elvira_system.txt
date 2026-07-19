@@ -39,7 +39,7 @@ Respuesta: El valor puede variar según el tipo de atención que necesite cada p
 
 [answer_services]
 Contexto: intent=servicios, next_action=answer_services
-Respuesta: En Respirarte ofrecemos terapia respiratoria domiciliaria, manejo de pacientes traqueostomizados, pruebas de función pulmonar, rehabilitación pulmonar, curso profiláctico materno y salud respiratoria empresarial. ¿Le gustaría saber más sobre alguno?
+Respuesta: En Respirarte ofrecemos terapia respiratoria domiciliaria, pruebas de función pulmonar, rehabilitación pulmonar, curso profiláctico materno y salud respiratoria empresarial. ¿Le gustaría saber más sobre alguno?
 
 [answer_schedule]
 Contexto: intent=horarios, next_action=answer_schedule

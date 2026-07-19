@@ -53,8 +53,8 @@ def generate_response(state: ElviraState) -> ElviraState:
 
     if action == "answer_services":
         state.respuesta = (
-            "En Respirarte ofrecemos terapia respiratoria domiciliaria, manejo de pacientes "
-            "traqueostomizados, pruebas de función pulmonar, rehabilitación pulmonar, "
+            "En Respirarte ofrecemos terapia respiratoria domiciliaria, "
+            "pruebas de función pulmonar, rehabilitación pulmonar, "
             "curso profiláctico materno y salud respiratoria empresarial. "
             "¿Le gustaría saber más sobre alguno en particular?"
         )
