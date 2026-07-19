@@ -97,3 +97,18 @@ def test_p6f929_slot_preference_before_date_is_not_general():
 
 def test_p6f989b_manana_is_fecha_cita_inside_appointment_slot_state():
     assert classify_intent("Mañana", "ST_CITA_FRANJA") == "fecha_cita"
+
+def test_retired_tracheostomy_service_has_deterministic_intent():
+    messages = [
+        "¿Manejan pacientes traqueotomizados?",
+        "Tengo una traqueostomía",
+        "Quiero una cita para un paciente traqueostomizado",
+    ]
+
+    for message in messages:
+        assert classify_intent(message) == "servicio_no_disponible"
+
+    assert (
+        classify_intent("Paciente traqueostomizado no puede respirar")
+        == "urgencia"
+    )

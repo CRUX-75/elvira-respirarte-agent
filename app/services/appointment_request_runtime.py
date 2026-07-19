@@ -187,6 +187,7 @@ class AppointmentPersistenceDecision:
 _NON_APPOINTMENT_INTENTS = {
     "general",
     "servicios",
+    "servicio_no_disponible",
     "horarios",
     "pago",
     "reglas",

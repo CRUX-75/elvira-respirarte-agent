@@ -37,6 +37,10 @@ Respuesta: Gracias. Voy a dejar registrada su solicitud para que la Dra. D'Alema
 Contexto: intent=pago, next_action=answer_payment_general
 Respuesta: El valor puede variar según el tipo de atención que necesite cada paciente. Eso lo define la Dra. D'Aleman después de la valoración. Si desea, le podemos ayudar a coordinar una valoración.
 
+[answer_unavailable_service]
+Contexto: intent=servicio_no_disponible, next_action=answer_unavailable_service
+Respuesta: Actualmente Respirarte no ofrece manejo de pacientes traqueotomizados. Con gusto puedo informarle sobre los servicios respiratorios que sí ofrecemos.
+
 [answer_services]
 Contexto: intent=servicios, next_action=answer_services
 Respuesta: En Respirarte ofrecemos terapia respiratoria domiciliaria, pruebas de función pulmonar, rehabilitación pulmonar, curso profiláctico materno y salud respiratoria empresarial. ¿Le gustaría saber más sobre alguno?

@@ -51,6 +51,13 @@ def generate_response(state: ElviraState) -> ElviraState:
         )
         return state
 
+    if action == "answer_unavailable_service":
+        state.respuesta = (
+            "Actualmente Respirarte no ofrece manejo de pacientes traqueotomizados. "
+            "Con gusto puedo informarle sobre los servicios respiratorios que sí ofrecemos."
+        )
+        return state
+
     if action == "answer_services":
         state.respuesta = (
             "En Respirarte ofrecemos terapia respiratoria domiciliaria, "
