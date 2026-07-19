@@ -50,3 +50,21 @@ def test_pending_appointment_thanks_does_not_restart_conversation():
         "solicitud" in result.respuesta.lower()
         or "quedamos atentos" in result.respuesta.lower()
     )
+
+def test_answer_services_excludes_retired_tracheostomy_service():
+    state = ElviraState(
+        telefono="573000000000",
+        mensaje_original="¿Qué servicios ofrecen?",
+        sanitized_input="que servicios ofrecen",
+        estado_actual="ST_GENERAL",
+        estado_anterior="ST_GENERAL",
+        nuevo_estado="ST_GENERAL",
+        intent="servicios",
+        next_action="answer_services",
+    )
+
+    result = generate_response(state)
+
+    assert result.respuesta is not None
+    assert "traque" not in result.respuesta.lower()
+    assert "terapia respiratoria" in result.respuesta.lower()
