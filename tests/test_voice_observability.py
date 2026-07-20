@@ -6,7 +6,7 @@ from app.services.voice_observability import (
 )
 
 
-def test_voice_event_drops_raw_content(capsys):
+def test_voice_event_drops_raw_content_and_hashes_wamid(capsys):
     emit_voice_event(
         "voice_stt_succeeded",
         whatsapp_message_id="wamid.voice.obs.001",
@@ -20,7 +20,7 @@ def test_voice_event_drops_raw_content(capsys):
 
     assert event == {
         "event": "voice_stt_succeeded",
-        "whatsapp_message_id": "wamid.voice.obs.001",
+        "whatsapp_message_id": "sha256:88654754679e",
         "status": "success",
         "transcript_length": 25,
     }

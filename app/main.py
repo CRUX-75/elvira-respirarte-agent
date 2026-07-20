@@ -12,6 +12,7 @@ from app.graph.graph import process_message
 from app.services.tracing import traced_process_message
 from app.services.voice_safety import is_voice_phone_allowed
 from app.services.voice_observability import safe_message_content_for_log
+from app.services.log_privacy import print_safe_event
 from app.services.outbound_voice import (
     deliver_voice_reply,
     should_include_voice_disclosure,
@@ -133,7 +134,7 @@ def apply_human_review_action(
 ):
     _validate_internal_admin_token(x_internal_admin_token)
 
-    print(
+    print_safe_event(
         {
             "event": "human_review_callback_received",
             "id_solicitud": action.id_solicitud,
@@ -147,7 +148,7 @@ def apply_human_review_action(
         service = HumanReviewService(repository=repository)
         result = service.apply_action(action)
     except Exception as exc:
-        print(
+        print_safe_event(
             {
                 "event": "human_review_processing_error",
                 "id_solicitud": action.id_solicitud,
@@ -160,7 +161,7 @@ def apply_human_review_action(
         raise
 
     if result.success:
-        print(
+        print_safe_event(
             {
                 "event": "human_review_transition_applied",
                 "id_solicitud": result.id_solicitud,
@@ -171,7 +172,7 @@ def apply_human_review_action(
             }
         )
     elif result.error_code == "request_not_found":
-        print(
+        print_safe_event(
             {
                 "event": "human_review_request_not_found",
                 "id_solicitud": result.id_solicitud,
@@ -182,7 +183,7 @@ def apply_human_review_action(
         )
 
     elif result.error_code == "forbidden_transition":
-        print(
+        print_safe_event(
             {
                 "event": "human_review_transition_not_applied",
                 "id_solicitud": result.id_solicitud,
@@ -195,7 +196,7 @@ def apply_human_review_action(
         )
 
     elif result.error_code == "invalid_action":
-        print(
+        print_safe_event(
             {
                 "event": "human_review_callback_ignored",
                 "id_solicitud": result.id_solicitud,
@@ -219,7 +220,7 @@ async def receive_webhook(payload: WhatsAppPayload):
             error=f"Payload extraction failed: {error_type}: {error_message}",
         )
 
-        print(
+        print_safe_event(
             {
                 "event": "whatsapp_webhook_payload_extraction_failed",
                 "error_type": error_type,
@@ -265,7 +266,7 @@ async def receive_webhook(payload: WhatsAppPayload):
             ),
         )
 
-        print(
+        print_safe_event(
             {
                 "event": "whatsapp_webhook_missing_required_fields",
                 "has_telefono": bool(telefono),
@@ -299,7 +300,7 @@ async def receive_webhook(payload: WhatsAppPayload):
             error=f"Deduplication check failed: {error_type}: {error_message}",
         )
 
-        print(
+        print_safe_event(
             {
                 "event": "whatsapp_webhook_deduplication_failed",
                 "telefono": telefono,
@@ -332,7 +333,7 @@ async def receive_webhook(payload: WhatsAppPayload):
             ),
         )
 
-        print(
+        print_safe_event(
             {
                 "event": "whatsapp_webhook_duplicate_ignored",
                 "telefono": telefono,
@@ -428,7 +429,7 @@ async def receive_webhook(payload: WhatsAppPayload):
             )
             typing_started_at = time.monotonic()
 
-            print(
+            print_safe_event(
                 {
                     "event": "whatsapp_read_and_typing_sent",
                     "telefono": telefono,
@@ -437,7 +438,7 @@ async def receive_webhook(payload: WhatsAppPayload):
             )
 
         except Exception as indicator_error:
-            print(
+            print_safe_event(
                 {
                     "event": "whatsapp_read_and_typing_failed",
                     "telefono": telefono,
@@ -461,7 +462,7 @@ async def receive_webhook(payload: WhatsAppPayload):
 
             mensaje = voice_result.text
 
-            print(
+            print_safe_event(
                 {
                     "event": "whatsapp_voice_transcribed",
                     "telefono": telefono,
@@ -563,7 +564,7 @@ async def receive_webhook(payload: WhatsAppPayload):
                     error=f"WhatsApp send failed: {error_type}: {error_message}",
                 )
 
-                print(
+                print_safe_event(
                     {
                         "event": "whatsapp_send_failed",
                         "telefono": telefono,
@@ -635,7 +636,7 @@ async def receive_webhook(payload: WhatsAppPayload):
             respuesta=safe_message_content_for_log(msg_type=msg_type, mensaje=logged_response),
         )
 
-        print(
+        print_safe_event(
             {
                 "event": "whatsapp_webhook_processed",
                 "telefono": telefono,
@@ -676,7 +677,7 @@ async def receive_webhook(payload: WhatsAppPayload):
 
         log_error(telefono=telefono, error=f"{error_type}: {error_message}")
 
-        print(
+        print_safe_event(
             {
                 "event": "whatsapp_webhook_processing_failed",
                 "telefono": telefono,

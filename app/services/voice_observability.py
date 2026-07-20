@@ -1,3 +1,4 @@
+from app.services.log_privacy import print_safe_event
 from typing import Any
 
 
@@ -35,7 +36,7 @@ def emit_voice_event(
         and isinstance(value, (str, int, float, bool, type(None)))
     }
 
-    print(
+    print_safe_event(
         {
             "event": event,
             "whatsapp_message_id": (
