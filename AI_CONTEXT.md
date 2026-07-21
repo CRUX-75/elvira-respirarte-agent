@@ -867,6 +867,35 @@ Detailed closure evidence belongs in Git history and `docs/`, not in this file.
 
 ---
 
+## Current Active Sprint — P6-F.9.97
+
+P6-F.9.97 — Conversational Continuity and KB-Grounded Services is active.
+
+Primary objectives:
+
+- greet only in `ST_INIT`;
+- interpret contextual numeric slot selections in `ST_CITA_FRANJA`;
+- prioritize the current message over stale appointment context;
+- ground service claims in active `KB_Servicios` rows;
+- use a deterministic fallback for unknown procedures;
+- preserve pending appointment requests unless modification is explicit;
+- never present candidate slots as confirmed availability;
+- verify the existing `whatsapp_message_id` idempotency contract.
+
+Specification:
+
+`docs/P6-F.9.97_CONVERSATIONAL_CONTINUITY_KB_GROUNDED_SERVICES_SDD.md`
+
+No PostgreSQL or Google Sheets changes are authorized for this sprint.
+
+Clinical descriptions, aliases, preparation requirements, schedulability and
+doctor-escalation rules absent from the KB remain pending validation by the
+Dra. D’Aleman. Elvira must not invent them.
+
+P6-F.9.96 global voice activation is not yet recorded as merged and deployed.
+Its local wildcard changes have been preserved separately and must not be assumed
+to be closed.
+
 ## Current Next Direction
 
 Elvira remains online in production. Existing text conversations continue operating normally.
