@@ -92,6 +92,15 @@ def resolve_requested_slot_from_message(
         return None
 
     normalized = _normalize_slot_message(message)
+    # P6-F.9.97 contextual bare-number slot selection.
+    # Use actual candidate slots; do not create hard-coded availability.
+    if len(slots) >= 2:
+        if normalized == "3":
+            return slots[0]
+
+        if normalized == "5":
+            return slots[1]
+
 
     if not normalized:
         return None

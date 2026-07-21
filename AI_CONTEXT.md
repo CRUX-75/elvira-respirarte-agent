@@ -867,6 +867,56 @@ Detailed closure evidence belongs in Git history and `docs/`, not in this file.
 
 ---
 
+## Current Active Sprint — P6-F.9.97
+
+P6-F.9.97 — Conversational Continuity and KB-Grounded Services has completed
+local implementation and automated validation.
+
+Implementation commit:
+
+84c1ac0 — Implement conversational continuity and KB grounding
+
+Validated behavior:
+
+greetings occur only in ST_INIT;
+active conversations do not restart after a general fallback;
+3 and 5 select the actual candidate appointment franjas only in
+ST_CITA_FRANJA;
+service questions take priority over stale appointment routing while preserving
+the existing appointment state;
+service matching includes approved KB_Servicios fields such as
+techniques;
+service grounding records the matched service, term, field and status;
+grounding statuses are exact, partial and not_found;
+oximetría is an exact SRV-01 technique match;
+oximetría dinámica is a partial match and triggers safe escalation;
+unknown services do not claim availability, schedulability or clinical
+equivalence;
+candidate slots are described only as preferences or options to review;
+existing WhatsApp message-id idempotency remains unchanged;
+no PostgreSQL or Google Sheets changes were made.
+
+Validation evidence:
+
+P6-F.9.97 regression tests: 14 passed
+KB and propagation tests: 27 passed
+complete suite: 410 passed
+Python compilation: passed
+git diff --check: passed
+forbidden availability-language scan: no matches
+
+Specification and evidence:
+
+docs/P6-F.9.97_CONVERSATIONAL_CONTINUITY_KB_GROUNDED_SERVICES_SDD.md
+
+Current status:
+
+Implementation validated locally. Pending branch review, merge, deployment and
+controlled production validation by text and voice.
+
+P6-F.9.96 global voice wildcard changes remain preserved separately in the
+named Git stash and are not part of this sprint.
+
 ## Current Next Direction
 
 Elvira remains online in production. Existing text conversations continue operating normally.

@@ -45,6 +45,31 @@ def classify_intent(
     current_state: str = "ST_INIT",
 ) -> Intent:
     msg = normalize_text(message)
+    # P6-F.9.97 contextual slot and service procedure routing.
+    # Bare numeric selections are appointment intents only while a slot is expected.
+    if current_state == "ST_CITA_FRANJA" and msg in {"3", "5"}:
+        return "hora_cita"
+
+    # These terms identify an informational service/procedure question.
+    # Clinical answers still require grounding in KB_Servicios.
+    service_procedure_terms = (
+        "aerosolterapia",
+        "drenaje postural",
+        "higiene bronquial",
+        "oxigenoterapia",
+        "inhaloterapia",
+        "oximetria",
+        "espirometria",
+        "caminata de seis minutos",
+        "test de cooper",
+        "yoga respiratorio",
+        "rehabilitacion pulmonar",
+        "funcion pulmonar",
+    )
+
+    if any(term in msg for term in service_procedure_terms):
+        return "servicios"
+
 
     if not msg:
         return "general"

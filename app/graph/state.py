@@ -37,6 +37,10 @@ class ElviraState(BaseModel):
     kb_used: bool = False
     kb_sources: list[str] = Field(default_factory=list)
     kb_context: Optional[str] = None
+    matched_service_id: Optional[str] = None
+    matched_service_term: Optional[str] = None
+    matched_service_field: Optional[str] = None
+    service_grounding_status: Optional[str] = None
 
     state_reason: Optional[str] = None
     router_version: str = "intent-v1"

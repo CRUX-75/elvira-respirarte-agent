@@ -105,6 +105,23 @@ Reglas para usar este contexto:
 
 
 def generate_llm_response(state: ElviraState) -> ElviraState:
+    # P6-F.9.97 deterministic pre-LLM safety responses.
+    if state.next_action == "escalate_unknown_service":
+        state.escalation_required = True
+        state.respuesta = (
+            "No tengo información confirmada suficiente sobre ese procedimiento. "
+            "Voy a remitir su consulta a la Dra. D’Aleman para que pueda "
+            "orientarle correctamente."
+        )
+        return state
+
+    if state.next_action == "clarify_pending_appointment":
+        state.respuesta = (
+            "Ya tiene una solicitud de cita pendiente de confirmación. "
+            "¿Desea modificar esa solicitud o registrar una nueva?"
+        )
+        return state
+
     """
     Elvira redacta — el LLM no decide flujo.
 
@@ -190,7 +207,7 @@ def generate_llm_response(state: ElviraState) -> ElviraState:
             state.respuesta = (
                 f"Perfecto, se refiere a {date_reference}. "
                 "La doctora solo atiende consultas domiciliarias en la tarde. "
-                f"Para ese día solo tenemos disponible la franja de {slot} "
+                f"Para ese día solo podemos revisar la franja de {slot} "
                 "¿Desea que registre esa franja como preferencia?"
             )
             return state
@@ -204,7 +221,7 @@ def generate_llm_response(state: ElviraState) -> ElviraState:
             state.respuesta = (
                 f"Perfecto, se refiere a {date_reference}. "
                 "La doctora solo atiende consultas domiciliarias en la tarde. "
-                f"Para ese día tengo disponibles {slots} "
+                f"Para ese día podemos revisar {slots} "
                 "¿Cuál le sirve mejor?"
             )
         else:
@@ -218,7 +235,7 @@ def generate_llm_response(state: ElviraState) -> ElviraState:
 
     if state.next_action == "ask_specific_time_slot":
         state.respuesta = (
-            "Para continuar, por favor elija una de las franjas disponibles: "
+            "Para continuar, por favor elija una de las franjas que podemos revisar: "
             "de 3:00 p. m. a 5:00 p. m. o de 5:00 p. m. a 7:00 p. m. "
             "¿Cuál le queda mejor?"
         )
@@ -247,7 +264,7 @@ def generate_llm_response(state: ElviraState) -> ElviraState:
             state.respuesta = (
                 "Con gusto. Le aclaro que las atenciones domiciliarias se manejan por franjas, "
                 "no por una hora exacta garantizada. "
-                f"Para ese día tenemos disponible la franja de {slot}. "
+                f"Para ese día podemos revisar la franja de {slot}. "
                 "¿Desea que registre esa franja como preferencia?"
             )
             return state
@@ -260,7 +277,7 @@ def generate_llm_response(state: ElviraState) -> ElviraState:
             state.respuesta = (
                 "Con gusto. Le aclaro que las atenciones domiciliarias se manejan por franjas, "
                 "no por una hora exacta garantizada. "
-                f"Para continuar, por favor elija una de las franjas disponibles: {slots}. "
+                f"Para continuar, por favor elija una de las franjas que podemos revisar: {slots}. "
                 "¿Cuál le queda mejor?"
             )
             return state
