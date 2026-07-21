@@ -105,3 +105,21 @@ def test_validate_voice_note_duration_requires_ffprobe(tmp_path):
         assert str(exc) == "ffprobe is not available"
     else:
         raise AssertionError("Expected ffprobe failure")
+
+
+def test_voice_phone_allowlist_wildcard_allows_any_valid_phone(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        voice_safety.settings,
+        "voice_allowed_phone_numbers",
+        "573001112233, *",
+    )
+
+    assert voice_safety.configured_voice_phone_numbers() == {
+        "573001112233",
+        "*",
+    }
+    assert voice_safety.is_voice_phone_allowed("+57 300 999 9999") is True
+    assert voice_safety.is_voice_phone_allowed("573008887777") is True
+    assert voice_safety.is_voice_phone_allowed(None) is False
