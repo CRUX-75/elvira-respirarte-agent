@@ -869,32 +869,53 @@ Detailed closure evidence belongs in Git history and `docs/`, not in this file.
 
 ## Current Active Sprint — P6-F.9.97
 
-P6-F.9.97 — Conversational Continuity and KB-Grounded Services is active.
+P6-F.9.97 — Conversational Continuity and KB-Grounded Services has completed
+local implementation and automated validation.
 
-Primary objectives:
+Implementation commit:
 
-- greet only in `ST_INIT`;
-- interpret contextual numeric slot selections in `ST_CITA_FRANJA`;
-- prioritize the current message over stale appointment context;
-- ground service claims in active `KB_Servicios` rows;
-- use a deterministic fallback for unknown procedures;
-- preserve pending appointment requests unless modification is explicit;
-- never present candidate slots as confirmed availability;
-- verify the existing `whatsapp_message_id` idempotency contract.
+84c1ac0 — Implement conversational continuity and KB grounding
 
-Specification:
+Validated behavior:
 
-`docs/P6-F.9.97_CONVERSATIONAL_CONTINUITY_KB_GROUNDED_SERVICES_SDD.md`
+greetings occur only in ST_INIT;
+active conversations do not restart after a general fallback;
+3 and 5 select the actual candidate appointment franjas only in
+ST_CITA_FRANJA;
+service questions take priority over stale appointment routing while preserving
+the existing appointment state;
+service matching includes approved KB_Servicios fields such as
+techniques;
+service grounding records the matched service, term, field and status;
+grounding statuses are exact, partial and not_found;
+oximetría is an exact SRV-01 technique match;
+oximetría dinámica is a partial match and triggers safe escalation;
+unknown services do not claim availability, schedulability or clinical
+equivalence;
+candidate slots are described only as preferences or options to review;
+existing WhatsApp message-id idempotency remains unchanged;
+no PostgreSQL or Google Sheets changes were made.
 
-No PostgreSQL or Google Sheets changes are authorized for this sprint.
+Validation evidence:
 
-Clinical descriptions, aliases, preparation requirements, schedulability and
-doctor-escalation rules absent from the KB remain pending validation by the
-Dra. D’Aleman. Elvira must not invent them.
+P6-F.9.97 regression tests: 14 passed
+KB and propagation tests: 27 passed
+complete suite: 410 passed
+Python compilation: passed
+git diff --check: passed
+forbidden availability-language scan: no matches
 
-P6-F.9.96 global voice activation is not yet recorded as merged and deployed.
-Its local wildcard changes have been preserved separately and must not be assumed
-to be closed.
+Specification and evidence:
+
+docs/P6-F.9.97_CONVERSATIONAL_CONTINUITY_KB_GROUNDED_SERVICES_SDD.md
+
+Current status:
+
+Implementation validated locally. Pending branch review, merge, deployment and
+controlled production validation by text and voice.
+
+P6-F.9.96 global voice wildcard changes remain preserved separately in the
+named Git stash and are not part of this sprint.
 
 ## Current Next Direction
 

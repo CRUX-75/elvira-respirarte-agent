@@ -3,7 +3,7 @@
 ## Status
 
 - Date: 2026-07-21
-- Status: In progress — specification and design
+- Status: Implementation validated locally — pending merge and production validation
 - Branch: `feature/p6-f-9-97-conversational-continuity-kb-services`
 - Production service: Elvira remains online
 - Database changes: None authorized
@@ -561,3 +561,109 @@ P6-F.9.97 closes only when:
 - existing idempotency coverage remains green;
 - controlled text and voice validation pass;
 - SDD closure evidence and `AI_CONTEXT.md` are updated.
+
+## Implementation Evidence
+
+### Implementation commit
+
+`84c1ac0` — Implement conversational continuity and KB grounding
+
+### Implemented behavior
+
+- Initial greeting is limited to `ST_INIT`.
+- General follow-up messages outside `ST_INIT` no longer restart the conversation.
+- Existing responses for `ST_CITA_PENDIENTE` retain priority over the generic continuity fallback.
+- Bare `3` and `5` are interpreted as slot selections only in `ST_CITA_FRANJA`.
+- Numeric slot selection maps to the actual `slots_candidatos`.
+- Bare numeric messages remain `general` outside the slot-selection state.
+- Procedure terms such as `oximetría` are classified as service questions.
+- Service matching searches approved KB fields, including `techniques`.
+- Service context includes confirmed procedures from `KB_Servicios`.
+- Service questions preserve an existing appointment state.
+- Unknown procedures use a deterministic safe-escalation response.
+- `oximetría` is treated as an exact KB match.
+- `oximetría dinámica` is treated as a partial match because `dinámica` is not confirmed in the KB.
+- Partial and missing service matches are escalated without claiming that the procedure is offered, schedulable or clinically equivalent.
+- Service grounding exposes `matched_service_id`, `matched_service_term`, `matched_service_field` and `service_grounding_status`.
+- Supported grounding statuses are `exact`, `partial` and `not_found`.
+- Candidate appointment slots are presented only as options to review or preferences to register.
+- Patient-facing copy no longer claims unconfirmed availability.
+- The duplicate test-function name in `tests/test_state_machine.py` was corrected.
+- Existing WhatsApp message-id idempotency architecture was preserved.
+- No PostgreSQL or Google Sheets changes were made.
+
+### Automated validation
+
+Directed P6-F.9.97 regression suite:
+
+```text
+14 passed
+```
+
+KB and state-propagation suite:
+
+```text
+27 passed
+```
+
+Complete automated suite:
+
+```text
+410 passed in 555.87s
+```
+
+Static validation:
+
+```text
+python -m py_compile: passed
+git diff --check: passed
+forbidden availability-language search: no matches
+```
+
+### Clinical grounding result
+
+Confirmed from the current KB:
+
+```text
+oximetría
+→ matched_service_id=SRV-01
+→ matched_service_field=techniques
+→ service_grounding_status=exact
+```
+
+Not yet clinically confirmed:
+
+```text
+oximetría dinámica
+→ matched_service_id=SRV-01
+→ matched_service_field=techniques
+→ service_grounding_status=partial
+→ escalation_required=true
+```
+
+Elvira must continue using the safe escalation response until the Dra. D’Aleman confirms whether `oximetría dinámica` is an approved procedure or alias.
+
+### Remaining closure work
+
+P6-F.9.97 is locally validated but is not yet production-closed.
+
+Remaining steps:
+
+1. Review the final branch diff.
+2. Merge the feature branch into `main`.
+3. Push the merge.
+4. Redeploy production.
+5. Verify `/health` and `/ready`.
+6. Run controlled text and voice conversations.
+7. Record production evidence.
+8. Mark the sprint closed.
+
+### Separate P6-F.9.96 work
+
+The local wildcard activation changes for P6-F.9.96 remain preserved in:
+
+```text
+stash@{0}: WIP P6-F.9.96 global voice wildcard before P6-F.9.97
+```
+
+They were not included in the P6-F.9.97 implementation.
