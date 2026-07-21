@@ -142,7 +142,7 @@ def test_p6f8_valid_relative_tomorrow_repeats_absolute_date_and_pm_window(monkey
     assert result.respuesta == (
         "Perfecto, se refiere a mañana, jueves 14 de mayo. "
         "La doctora solo atiende consultas domiciliarias en la tarde. "
-        "Para ese día tengo disponibles entre 3:00 p. m. y 5:00 p. m. "
+        "Para ese día podemos revisar entre 3:00 p. m. y 5:00 p. m. "
         "o entre 5:00 p. m. y 7:00 p. m. "
         "¿Cuál le sirve mejor?"
     )
@@ -178,7 +178,7 @@ def test_p6f8_day_after_tomorrow_morning_request_is_redirected_to_pm_window(monk
     assert result.respuesta == (
         "Perfecto, se refiere a pasado mañana, viernes 15 de mayo. "
         "La doctora solo atiende consultas domiciliarias en la tarde. "
-        "Para ese día tengo disponibles entre 3:00 p. m. y 5:00 p. m. "
+        "Para ese día podemos revisar entre 3:00 p. m. y 5:00 p. m. "
         "o entre 5:00 p. m. y 7:00 p. m. "
         "¿Cuál le sirve mejor?"
     )
@@ -464,7 +464,7 @@ def test_p6f91423_generic_afternoon_reply_with_multiple_slots_stays_in_slot_sele
     assert result.appointment_request_decision.should_persist is False if hasattr(result, "appointment_request_decision") else True
 
 
-def test_p6f91423_generic_afternoon_reply_with_multiple_slots_stays_in_slot_selection():
+def test_p6f91423_generic_afternoon_reply_with_multiple_slots_uses_safe_candidate_copy():
     msg = IncomingMessage(
         telefono="573001112233",
         mensaje="En la tarde",
@@ -477,7 +477,7 @@ def test_p6f91423_generic_afternoon_reply_with_multiple_slots_stays_in_slot_sele
     assert result.nuevo_estado == "ST_CITA_FRANJA"
     assert result.next_action == "ask_specific_time_slot"
     assert result.state_reason == "ambiguous_slot_selection_guard"
-    assert "franjas disponibles" in result.respuesta.lower()
+    assert "franjas que podemos revisar" in result.respuesta.lower()
     assert "3:00 p. m." in result.respuesta
     assert "5:00 p. m." in result.respuesta
 

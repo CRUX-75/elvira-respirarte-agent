@@ -71,6 +71,14 @@ def apply_state_transition(state: ElviraState) -> ElviraState:
 
     # CITA — inicio del flujo
     if intent == "cita":
+        if previous_state == "ST_CITA_PENDIENTE":
+            state.nuevo_estado = "ST_CITA_PENDIENTE"
+            state.next_action = "clarify_pending_appointment"
+            state.state_reason = (
+                "pending_appointment_requires_intent_clarification"
+            )
+            return state
+
         if _has_unavailable_appointment_context(state):
             state.nuevo_estado = "ST_CITA_FECHA"
             state.next_action = "ask_preferred_date"

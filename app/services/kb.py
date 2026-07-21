@@ -136,47 +136,296 @@ def _split_search_terms(search_terms: str | None) -> list[str]:
     ]
 
 
-def _service_matches_search_terms(
+_SERVICE_MATCH_FIELDS = (
+    "service_name",
+    "category",
+    "objective",
+    "techniques",
+    "patient_scope",
+    "modality",
+    "public_answer_short",
+    "public_answer_long",
+    "search_terms",
+)
+
+
+_GENERIC_PROCEDURE_TOKENS = {
+    "acerca",
+    "algun",
+    "alguna",
+    "algunos",
+    "algunas",
+    "como",
+    "con",
+    "cual",
+    "cuales",
+    "de",
+    "del",
+    "doctora",
+    "doctor",
+    "el",
+    "en",
+    "este",
+    "esta",
+    "esto",
+    "favor",
+    "hacen",
+    "hacer",
+    "informacion",
+    "info",
+    "la",
+    "las",
+    "le",
+    "los",
+    "mas",
+    "me",
+    "necesito",
+    "ofrece",
+    "ofrecen",
+    "para",
+    "podria",
+    "podrian",
+    "por",
+    "procedimiento",
+    "procedimientos",
+    "que",
+    "quiero",
+    "quisiera",
+    "realiza",
+    "realizan",
+    "respirarte",
+    "saber",
+    "se",
+    "servicio",
+    "servicios",
+    "sobre",
+    "tienen",
+    "tiene",
+    "toma",
+    "una",
+    "uno",
+    "ustedes",
+    "y",
+}
+
+
+_GENERIC_SERVICE_PORTFOLIO_MARKERS = {
+    "que servicios",
+    "cuales servicios",
+    "servicios ofrecen",
+    "servicios ofrece",
+    "servicios tienen",
+    "servicios tiene",
+    "portafolio",
+}
+
+
+def _split_match_fragments(value: str) -> list[str]:
+    fragments: list[str] = []
+
+    for line in value.splitlines():
+        fragments.extend(re.split(r"[,;|]+", line))
+
+    return [
+        fragment.strip()
+        for fragment in fragments
+        if len(fragment.strip()) >= 3
+    ]
+
+
+def _iter_service_match_terms(
+    row: dict[str, Any],
+) -> list[tuple[str, str]]:
+    terms: list[tuple[str, str]] = []
+
+    for field_name in _SERVICE_MATCH_FIELDS:
+        raw_value = row.get(field_name)
+
+        if raw_value is None:
+            continue
+
+        normalized_value = _normalize(str(raw_value))
+
+        if not normalized_value:
+            continue
+
+        if field_name in {"techniques", "search_terms"}:
+            fragments = _split_match_fragments(normalized_value)
+        else:
+            fragments = [normalized_value]
+
+        for fragment in fragments:
+            terms.append((field_name, fragment))
+
+    return sorted(
+        terms,
+        key=lambda item: len(item[1]),
+        reverse=True,
+    )
+
+
+def _significant_tokens(text: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[a-z0-9]+", _normalize(text))
+        if len(token) >= 3
+    }
+
+
+def _technique_match_status(
+    row: dict[str, Any],
+    term: str,
+    normalized_message: str,
+) -> str:
+    """
+    Distinguish a confirmed KB procedure from an unvalidated variant.
+
+    Examples:
+    - "información sobre oximetría" -> exact
+    - "oximetría domiciliaria" -> exact when modality is Domiciliaria
+    - "oximetría dinámica" -> partial when "dinámica" is absent from the KB row
+    """
+    known_tokens = _significant_tokens(term)
+
+    for field_name in (
+        "service_name",
+        "category",
+        "modality",
+    ):
+        known_tokens.update(
+            _significant_tokens(str(row.get(field_name) or ""))
+        )
+
+    message_tokens = _significant_tokens(normalized_message)
+
+    unknown_tokens = (
+        message_tokens
+        - known_tokens
+        - _GENERIC_PROCEDURE_TOKENS
+    )
+
+    return "partial" if unknown_tokens else "exact"
+
+
+def _build_service_match(
+    row: dict[str, Any],
+    *,
+    field_name: str,
+    term: str,
+    normalized_message: str,
+) -> dict[str, Any]:
+    if field_name == "techniques":
+        status = _technique_match_status(
+            row,
+            term,
+            normalized_message,
+        )
+    else:
+        status = "exact"
+
+    return {
+        "matched_service_id": row.get("service_id"),
+        "matched_service_term": term,
+        "matched_service_field": field_name,
+        "service_grounding_status": status,
+    }
+
+
+def _match_service_row(
     row: dict[str, Any],
     normalized_message: str,
-) -> bool:
-    """
-    Match colloquial patient language against service-owned search terms.
-
-    This is not clinical reasoning. It only maps patient language to the most
-    likely Respirarte service category so the response can stay safe and the
-    doctor can review the case.
-    """
-    for term in _split_search_terms(row.get("search_terms")):
+) -> dict[str, Any] | None:
+    for field_name, term in _iter_service_match_terms(row):
         if term in normalized_message:
-            return True
+            return _build_service_match(
+                row,
+                field_name=field_name,
+                term=term,
+                normalized_message=normalized_message,
+            )
 
-        # Support natural WhatsApp variants like:
-        # "el niño está muy mocoso" vs search term "niño mocoso"
-        # "le saquen los mocos" vs search terms containing "mocos"
-        tokens = re.findall(r"[a-z0-9]+", term)
-        relevant_tokens = [token for token in tokens if len(token) >= 4]
+        if field_name not in {
+            "service_name",
+            "category",
+            "techniques",
+            "search_terms",
+        }:
+            continue
 
-        if len(relevant_tokens) == 1 and relevant_tokens[0] in normalized_message:
-            return True
+        term_tokens = _significant_tokens(term)
 
-        if len(relevant_tokens) >= 2 and all(
-            token in normalized_message for token in relevant_tokens
-        ):
-            return True
+        if not term_tokens:
+            continue
 
-    return False
+        message_tokens = _significant_tokens(normalized_message)
+
+        if term_tokens.issubset(message_tokens):
+            return _build_service_match(
+                row,
+                field_name=field_name,
+                term=term,
+                normalized_message=normalized_message,
+            )
+
+    return None
+
+
+def _find_service_matches(
+    rows: list[dict[str, Any]],
+    normalized_message: str,
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    exact_rows: list[dict[str, Any]] = []
+    partial_rows: list[dict[str, Any]] = []
+    exact_metadata: dict[str, Any] | None = None
+    partial_metadata: dict[str, Any] | None = None
+
+    for row in rows:
+        match = _match_service_row(
+            row,
+            normalized_message,
+        )
+
+        if not match:
+            continue
+
+        if match["service_grounding_status"] == "exact":
+            exact_rows.append(row)
+
+            if exact_metadata is None:
+                exact_metadata = match
+        else:
+            partial_rows.append(row)
+
+            if partial_metadata is None:
+                partial_metadata = match
+
+    if exact_rows:
+        return exact_rows, exact_metadata
+
+    if partial_rows:
+        return partial_rows, partial_metadata
+
+    return [], None
 
 
 def _filter_services_by_search_terms(
     rows: list[dict[str, Any]],
     normalized_message: str,
 ) -> list[dict[str, Any]]:
-    return [
-        row
-        for row in rows
-        if _service_matches_search_terms(row, normalized_message)
-    ]
+    matched_rows, _ = _find_service_matches(
+        rows,
+        normalized_message,
+    )
+    return matched_rows
+
+
+def _is_generic_service_portfolio_question(
+    normalized_message: str,
+) -> bool:
+    return any(
+        marker in normalized_message
+        for marker in _GENERIC_SERVICE_PORTFOLIO_MARKERS
+    )
 
 
 def _is_simple_greeting(text: str) -> bool:
@@ -202,6 +451,7 @@ def _build_services_context(rows: list[dict[str, Any]]) -> str:
         service_name = row.get("service_name") or "Servicio"
         short_answer = row.get("public_answer_short") or row.get("objective") or ""
         modality = row.get("modality") or ""
+        procedures = row.get("techniques") or ""
         escalation_required = row.get("escalation_required")
 
         line = f"- {service_name}"
@@ -209,6 +459,8 @@ def _build_services_context(rows: list[dict[str, Any]]) -> str:
             line += f" ({modality})"
         if short_answer:
             line += f": {short_answer}"
+        if procedures:
+            line += f" | procedimientos: {procedures}"
         if escalation_required:
             line += " Requiere revisión o escalamiento."
 
@@ -283,14 +535,10 @@ def get_kb_context(
     estado_actual: str | None = None,
 ) -> dict[str, Any]:
     """
-    Deterministic KB context builder.
+    Build deterministic and traceable KB context.
 
-    Responsibilities:
-    - Read informational context from PostgreSQL KB tables.
-    - Return compact context for response generation.
-    - Never decide or modify intent, state, next_action, opt-out, or escalation.
-
-    The state machine remains the source of truth for control decisions.
+    This layer may identify service grounding, but it does not independently
+    decide conversational state transitions.
     """
     normalized_message = _normalize(message)
     normalized_intent = _normalize(intent)
@@ -299,12 +547,24 @@ def get_kb_context(
     contexts: list[str] = []
     sources: list[str] = []
 
+    matched_service_id: str | None = None
+    matched_service_term: str | None = None
+    matched_service_field: str | None = None
+    service_grounding_status: str | None = None
+
     explicit_service_intent = normalized_intent in {
         "servicio",
         "servicios",
         "service",
         "services",
     }
+
+    generic_service_question = (
+        explicit_service_intent
+        and _is_generic_service_portfolio_question(
+            normalized_message
+        )
+    )
 
     simple_general_greeting = (
         normalized_intent == "general"
@@ -324,69 +584,134 @@ def get_kb_context(
     )
 
     should_use_rules = (
-        normalized_intent in {"precio", "price", "pago", "urgencia", "cancelacion"}
+        normalized_intent
+        in {
+            "precio",
+            "price",
+            "pago",
+            "urgencia",
+            "cancelacion",
+        }
         or appointment_state_requires_rules
-        or _contains_any(normalized_message, RULE_KEYWORDS)
+        or _contains_any(
+            normalized_message,
+            RULE_KEYWORDS,
+        )
     )
 
     should_use_services = (
         explicit_service_intent
         or normalized_intent == "general"
-        or _contains_any(normalized_message, SERVICE_KEYWORDS)
+        or _contains_any(
+            normalized_message,
+            SERVICE_KEYWORDS,
+        )
     )
 
     should_use_schedules = (
         not explicit_service_intent
         and (
-            normalized_intent in {"cita", "schedule", "horario"}
+            normalized_intent
+            in {
+                "cita",
+                "schedule",
+                "horario",
+            }
             or normalized_state.startswith("st_cita")
-            or _contains_any(normalized_message, SCHEDULE_KEYWORDS)
+            or _contains_any(
+                normalized_message,
+                SCHEDULE_KEYWORDS,
+            )
         )
     )
 
     if should_use_services:
-        service_rows = search_services(engine, normalized_message)
+        service_rows = search_services(
+            engine,
+            normalized_message,
+        )
 
-        if not service_rows:
-            active_service_rows = get_active_services(engine)
-            matched_service_rows = _filter_services_by_search_terms(
-                active_service_rows,
+        if generic_service_question:
+            # A portfolio question does not name one individual service.
+            # Preserve rows already returned by the repository. If the search
+            # returned none, load the complete active portfolio.
+            if not service_rows:
+                service_rows = get_active_services(engine)
+
+            match_metadata = {
+                "matched_service_id": None,
+                "matched_service_term": "servicios",
+                "matched_service_field": "portfolio",
+                "service_grounding_status": "exact",
+            }
+        else:
+            matched_rows, match_metadata = _find_service_matches(
+                service_rows,
                 normalized_message,
             )
 
-            # If the KB has service-owned search terms, prefer them over the
-            # old full-portfolio fallback. This prevents colloquial patient
-            # messages like "le silva el pecho" or "niño mocoso" from loading
-            # unrelated services such as Curso Materno or SST.
-            has_search_terms = any(
-                bool((row.get("search_terms") or "").strip())
-                for row in active_service_rows
-            )
-
-            if matched_service_rows:
-                service_rows = matched_service_rows
-            elif has_search_terms and not _contains_any(
-                normalized_message,
-                {"servicio", "servicios", "ofrecen", "ofrece", "portafolio"},
-            ):
-                service_rows = []
+            if matched_rows:
+                service_rows = matched_rows
             else:
-                service_rows = active_service_rows
+                active_service_rows = get_active_services(engine)
+
+                matched_rows, match_metadata = _find_service_matches(
+                    active_service_rows,
+                    normalized_message,
+                )
+
+                has_search_terms = any(
+                    bool((row.get("search_terms") or "").strip())
+                    for row in active_service_rows
+                )
+
+                if matched_rows:
+                    service_rows = matched_rows
+                elif explicit_service_intent:
+                    service_rows = []
+                elif has_search_terms:
+                    service_rows = []
+                else:
+                    service_rows = active_service_rows
+
+        if match_metadata:
+            matched_service_id = match_metadata.get(
+                "matched_service_id"
+            )
+            matched_service_term = match_metadata.get(
+                "matched_service_term"
+            )
+            matched_service_field = match_metadata.get(
+                "matched_service_field"
+            )
+            service_grounding_status = match_metadata.get(
+                "service_grounding_status"
+            )
 
         service_rows = _compact_rows(service_rows)
-        service_context = _build_services_context(service_rows)
+        service_context = _build_services_context(
+            service_rows
+        )
 
         if service_context:
             contexts.append(service_context)
             sources.append("kb_services")
+        elif explicit_service_intent:
+            service_grounding_status = "not_found"
 
     if should_use_schedules:
-        schedule_rows = search_schedules(engine, normalized_message)
+        schedule_rows = search_schedules(
+            engine,
+            normalized_message,
+        )
+
         if not schedule_rows:
             schedule_rows = get_all_schedules(engine)
 
         schedule_rows = _compact_rows(schedule_rows)
-        schedule_context = _build_schedules_context(schedule_rows)
+        schedule_context = _build_schedules_context(
+            schedule_rows
+        )
 
         if schedule_context:
             contexts.append(schedule_context)
@@ -394,9 +719,15 @@ def get_kb_context(
 
     if should_use_rules:
         if appointment_state_requires_rules:
-            rule_rows = get_rules_by_type(engine, "agendamiento")
+            rule_rows = get_rules_by_type(
+                engine,
+                "agendamiento",
+            )
         else:
-            rule_rows = search_rules(engine, normalized_message)
+            rule_rows = search_rules(
+                engine,
+                normalized_message,
+            )
 
         if not rule_rows:
             rule_rows = get_active_rules(engine)
@@ -410,8 +741,23 @@ def get_kb_context(
 
     kb_context = "\n\n".join(contexts).strip()
 
-    return {
+    result = {
         "kb_used": bool(kb_context),
         "kb_sources": sources,
         "kb_context": kb_context,
     }
+
+    if explicit_service_intent or matched_service_id:
+        result.update(
+            {
+                "matched_service_id": matched_service_id,
+                "matched_service_term": matched_service_term,
+                "matched_service_field": matched_service_field,
+                "service_grounding_status": (
+                    service_grounding_status
+                    or "not_found"
+                ),
+            }
+        )
+
+    return result

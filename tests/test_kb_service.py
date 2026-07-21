@@ -226,6 +226,10 @@ def test_kb_context_unknown_service_does_not_invent_kb_context():
         "kb_used": False,
         "kb_sources": [],
         "kb_context": "",
+        "matched_service_id": None,
+        "matched_service_term": None,
+        "matched_service_field": None,
+        "service_grounding_status": "not_found",
     }
 
 def test_kb_context_maps_colombian_colloquial_respiratory_language_to_single_service():

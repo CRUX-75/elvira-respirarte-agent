@@ -28,7 +28,7 @@ def test_preferred_time_response_is_deterministic_with_slots():
     assert result.respuesta == (
         "Perfecto, se refiere a mañana, martes 12 de mayo. "
         "La doctora solo atiende consultas domiciliarias en la tarde. "
-        "Para ese día tengo disponibles entre 3:00 p. m. y 5:00 p. m. "
+        "Para ese día podemos revisar entre 3:00 p. m. y 5:00 p. m. "
         "o entre 5:00 p. m. y 7:00 p. m. "
         "¿Cuál le sirve mejor?"
     )
@@ -60,7 +60,7 @@ def test_preferred_time_response_with_single_slot_does_not_ask_which_one():
     assert result.respuesta == (
         "Perfecto, se refiere a miércoles 13 de mayo. "
         "La doctora solo atiende consultas domiciliarias en la tarde. "
-        "Para ese día solo tenemos disponible la franja de 3:00 p. m. a 6:00 p. m. "
+        "Para ese día solo podemos revisar la franja de 3:00 p. m. a 6:00 p. m. "
         "¿Desea que registre esa franja como preferencia?"
     )
     assert "¿Cuál le sirve mejor?" not in result.respuesta
@@ -212,7 +212,7 @@ def test_preferred_time_response_clarifies_afternoon_for_day_after_tomorrow_morn
     assert result.respuesta == (
         "Perfecto, se refiere a pasado mañana, viernes 15 de mayo. "
         "La doctora solo atiende consultas domiciliarias en la tarde. "
-        "Para ese día tengo disponibles entre 3:00 p. m. y 5:00 p. m. "
+        "Para ese día podemos revisar entre 3:00 p. m. y 5:00 p. m. "
         "o entre 5:00 p. m. y 7:00 p. m. "
         "¿Cuál le sirve mejor?"
     )

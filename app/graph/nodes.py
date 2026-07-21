@@ -155,6 +155,40 @@ def node_load_kb_context(state: ElviraState) -> ElviraState:
         state.kb_used = bool(result.get("kb_used", False))
         state.kb_sources = list(result.get("kb_sources", []))
         state.kb_context = result.get("kb_context") or None
+        state.matched_service_id = result.get(
+            "matched_service_id"
+        )
+        state.matched_service_term = result.get(
+            "matched_service_term"
+        )
+        state.matched_service_field = result.get(
+            "matched_service_field"
+        )
+        state.service_grounding_status = result.get(
+            "service_grounding_status"
+        )
+
+        # P6-F.9.97 service grounding guard.
+        if (
+            state.intent == "servicios"
+            and (
+                not state.kb_used
+                or state.service_grounding_status
+                in {"partial", "not_found"}
+            )
+        ):
+            state.next_action = "escalate_unknown_service"
+            state.escalation_required = True
+
+            if state.service_grounding_status == "partial":
+                state.state_reason = (
+                    "partial_service_match_requires_grounded_review"
+                )
+            else:
+                state.service_grounding_status = "not_found"
+                state.state_reason = (
+                    "unknown_service_requires_grounded_review"
+                )
 
     except Exception as exc:
         # KB failure must not block the conversational core.

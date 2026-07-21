@@ -2,6 +2,55 @@ from app.graph.state import ElviraState
 
 
 def generate_response(state: ElviraState) -> ElviraState:
+    # P6-F.9.97 deterministic continuity and grounding guards.
+    pending_appointment_context = "ST_CITA_PENDIENTE" in {
+        state.estado_anterior,
+        state.estado_actual,
+        state.nuevo_estado,
+    }
+
+    if (
+        state.next_action == "answer_general"
+        and state.estado_anterior != "ST_INIT"
+        and not pending_appointment_context
+    ):
+        state.respuesta = (
+            "Claro. Cuénteme un poco más para poder continuar ayudándole."
+        )
+        return state
+
+    normalized_message = (state.mensaje_original or "").strip().lower()
+    generic_service_question = any(
+        marker in normalized_message
+        for marker in (
+            "qué servicios",
+            "que servicios",
+            "cuáles servicios",
+            "cuales servicios",
+            "servicios ofrecen",
+            "servicios tiene",
+        )
+    )
+
+    if (
+        state.next_action == "answer_services"
+        and not generic_service_question
+        and (
+            state.service_grounding_status == "partial"
+            or not state.kb_used
+            or "kb_services" not in (state.kb_sources or [])
+            or not state.kb_context
+        )
+    ):
+        state.next_action = "escalate_unknown_service"
+        state.escalation_required = True
+        state.respuesta = (
+            "No tengo información confirmada suficiente sobre ese procedimiento. "
+            "Voy a remitir su consulta a la Dra. D’Aleman para que pueda "
+            "orientarle correctamente."
+        )
+        return state
+
     """
     Generador de respuestas basado en reglas para Sprint P1.
     Sin LLM. Sin memoria. Sin tools.
