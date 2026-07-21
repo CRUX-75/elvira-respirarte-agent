@@ -19,12 +19,21 @@ def normalize_whatsapp_phone(telefono: str | None) -> str:
 
 def configured_voice_phone_numbers() -> set[str]:
     configured = settings.voice_allowed_phone_numbers or ""
+    allowed_numbers: set[str] = set()
 
-    return {
-        normalized
-        for raw_phone in configured.split(",")
-        if (normalized := normalize_whatsapp_phone(raw_phone))
-    }
+    for raw_phone in configured.split(","):
+        configured_value = raw_phone.strip()
+
+        if configured_value == "*":
+            allowed_numbers.add("*")
+            continue
+
+        normalized_phone = normalize_whatsapp_phone(configured_value)
+
+        if normalized_phone:
+            allowed_numbers.add(normalized_phone)
+
+    return allowed_numbers
 
 
 def is_voice_phone_allowed(telefono: str | None) -> bool:
@@ -38,6 +47,9 @@ def is_voice_phone_allowed(telefono: str | None) -> bool:
     # Fail closed: an empty allowlist authorizes nobody.
     if not allowed_numbers:
         return False
+
+    if "*" in allowed_numbers:
+        return True
 
     return normalized_phone in allowed_numbers
 
