@@ -763,6 +763,6 @@ def test_retired_service_preserves_state_and_returns_explicit_negative():
     assert result.intent == "servicio_no_disponible"
     assert result.next_action == "answer_unavailable_service"
     assert result.nuevo_estado == "ST_CITA_PENDIENTE"
-    assert result.escalation_required is False
+    assert result.escalation_required is True
     assert result.respuesta is not None
     assert "no ofrece" in result.respuesta.lower()

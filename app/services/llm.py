@@ -1,3 +1,8 @@
+from app.services.dynamic_oximetry_policy import apply_dynamic_oximetry_policy
+from app.services.approved_service_catalog import (
+    get_unavailable_service_response,
+    unavailable_service_requires_escalation,
+)
 from pathlib import Path
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -106,6 +111,23 @@ Reglas para usar este contexto:
 
 def generate_llm_response(state: ElviraState) -> ElviraState:
     # P6-F.9.97 deterministic pre-LLM safety responses.
+    dynamic_oximetry_state = apply_dynamic_oximetry_policy(
+        state
+    )
+    if dynamic_oximetry_state is not None:
+        return dynamic_oximetry_state
+
+    if state.next_action == "answer_unavailable_service":
+        state.escalation_required = (
+            unavailable_service_requires_escalation(
+                state.mensaje_original
+            )
+        )
+        state.respuesta = get_unavailable_service_response(
+            state.mensaje_original
+        )
+        return state
+
     if state.next_action == "escalate_unknown_service":
         state.escalation_required = True
         state.respuesta = (
