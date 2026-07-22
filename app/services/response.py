@@ -1,4 +1,10 @@
 from app.graph.state import ElviraState
+from app.services.dynamic_oximetry_policy import apply_dynamic_oximetry_policy
+from app.services.approved_service_catalog import (
+    get_active_portfolio_response,
+    get_unavailable_service_response,
+    unavailable_service_requires_escalation,
+)
 
 
 def generate_response(state: ElviraState) -> ElviraState:
@@ -18,6 +24,12 @@ def generate_response(state: ElviraState) -> ElviraState:
             "Claro. Cuénteme un poco más para poder continuar ayudándole."
         )
         return state
+
+    dynamic_oximetry_state = apply_dynamic_oximetry_policy(
+        state
+    )
+    if dynamic_oximetry_state is not None:
+        return dynamic_oximetry_state
 
     normalized_message = (state.mensaje_original or "").strip().lower()
     generic_service_question = any(
@@ -101,19 +113,18 @@ def generate_response(state: ElviraState) -> ElviraState:
         return state
 
     if action == "answer_unavailable_service":
-        state.respuesta = (
-            "Actualmente Respirarte no ofrece manejo de pacientes traqueotomizados. "
-            "Con gusto puedo informarle sobre los servicios respiratorios que sí ofrecemos."
+        state.escalation_required = (
+            unavailable_service_requires_escalation(
+                state.mensaje_original
+            )
+        )
+        state.respuesta = get_unavailable_service_response(
+            state.mensaje_original
         )
         return state
 
     if action == "answer_services":
-        state.respuesta = (
-            "En Respirarte ofrecemos terapia respiratoria domiciliaria, "
-            "pruebas de función pulmonar, rehabilitación pulmonar, "
-            "curso profiláctico materno y salud respiratoria empresarial. "
-            "¿Le gustaría saber más sobre alguno en particular?"
-        )
+        state.respuesta = get_active_portfolio_response()
         return state
 
     if action == "answer_schedule":

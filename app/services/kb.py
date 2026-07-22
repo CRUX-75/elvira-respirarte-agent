@@ -9,6 +9,10 @@ from sqlalchemy.engine import Engine
 from app.repositories.kb_rules import get_active_rules, get_rules_by_type, search_rules
 from app.repositories.kb_schedules import get_all_schedules, search_schedules
 from app.repositories.kb_services import get_active_services, search_services
+from app.services.approved_service_catalog import (
+    get_active_approved_services,
+    get_approved_service_by_id,
+)
 
 
 SERVICE_KEYWORDS = {
@@ -441,26 +445,58 @@ def _compact_rows(rows: list[dict[str, Any]], max_rows: int = 5) -> list[dict[st
     return rows[:max_rows]
 
 
-def _build_services_context(rows: list[dict[str, Any]]) -> str:
+def _build_services_context(
+    rows: list[dict[str, Any]],
+) -> str:
     if not rows:
         return ""
 
     lines = ["Servicios activos de Respirarte:"]
+    seen_service_ids: set[str] = set()
 
-    for row in rows:
+    for source_row in rows:
+        row = dict(source_row)
+        service_id = str(row.get("service_id") or "")
+
+        approved_row = (
+            get_approved_service_by_id(service_id)
+            if service_id
+            else None
+        )
+
+        if approved_row is not None:
+            if approved_row.get("is_active") is not True:
+                continue
+
+            row = approved_row
+
+        if service_id and service_id in seen_service_ids:
+            continue
+
+        if service_id:
+            seen_service_ids.add(service_id)
+
         service_name = row.get("service_name") or "Servicio"
-        short_answer = row.get("public_answer_short") or row.get("objective") or ""
+        short_answer = (
+            row.get("public_answer_short")
+            or row.get("objective")
+            or ""
+        )
         modality = row.get("modality") or ""
         procedures = row.get("techniques") or ""
         escalation_required = row.get("escalation_required")
 
         line = f"- {service_name}"
+
         if modality:
             line += f" ({modality})"
+
         if short_answer:
             line += f": {short_answer}"
+
         if procedures:
             line += f" | procedimientos: {procedures}"
+
         if escalation_required:
             line += " Requiere revisión o escalamiento."
 
@@ -566,6 +602,31 @@ def get_kb_context(
         )
     )
 
+    if (
+        explicit_service_intent
+        and (
+            "oximetria dinamica" in normalized_message
+            or normalized_state
+            == "st_oximetria_dinamica_validacion"
+        )
+    ):
+        dynamic_service = get_approved_service_by_id("SRV-07")
+
+        if dynamic_service and dynamic_service.get("is_active") is True:
+            service_context = _build_services_context(
+                [dynamic_service]
+            )
+
+            return {
+                "kb_used": True,
+                "kb_sources": ["kb_services"],
+                "kb_context": service_context,
+                "matched_service_id": "SRV-07",
+                "matched_service_term": "oximetria dinamica",
+                "matched_service_field": "service_name",
+                "service_grounding_status": "exact",
+            }
+
     simple_general_greeting = (
         normalized_intent == "general"
         and _is_simple_greeting(normalized_message)
@@ -636,7 +697,7 @@ def get_kb_context(
             # Preserve rows already returned by the repository. If the search
             # returned none, load the complete active portfolio.
             if not service_rows:
-                service_rows = get_active_services(engine)
+                service_rows = get_active_approved_services()
 
             match_metadata = {
                 "matched_service_id": None,

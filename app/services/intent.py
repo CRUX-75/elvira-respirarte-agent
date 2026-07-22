@@ -56,7 +56,6 @@ def classify_intent(
         "aerosolterapia",
         "drenaje postural",
         "higiene bronquial",
-        "oxigenoterapia",
         "inhaloterapia",
         "oximetria",
         "espirometria",
@@ -113,10 +112,19 @@ def classify_intent(
     if any(re.search(pattern, msg) for pattern in urgency_patterns):
         return "urgencia"
 
+    if current_state == "ST_OXIMETRIA_DINAMICA_VALIDACION":
+        return "servicios"
+
     # SERVICIO RETIRADO — prioridad antes de citas
     retired_service_patterns = [
         r"\btraqueotom(?:ia|izad[oa]s?)\b",
         r"\btraqueostom(?:ia|izad[oa]s?)\b",
+        r"\boxigenoterapia(?: domiciliaria)?\b",
+        r"\boxigeno domiciliario\b",
+        r"\bterapia de oxigeno\b",
+        r"\bcurso psicoprofilactico(?: materno)?\b",
+        r"\bcurso profilactico materno\b",
+        r"\bcurso para gestantes\b",
     ]
     if any(re.search(pattern, msg) for pattern in retired_service_patterns):
         return "servicio_no_disponible"

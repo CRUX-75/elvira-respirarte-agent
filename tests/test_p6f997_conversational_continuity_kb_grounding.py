@@ -275,72 +275,21 @@ def test_p6f997_state_machine_test_names_are_unique():
     assert duplicates == [], f"Duplicate test names found: {duplicates}"
 
 
-def test_p6f997_dynamic_oximetry_is_partial_not_exact():
-    engine = Mock()
+def test_p6f998_dynamic_oximetry_is_exact_approved_service():
+    from app.services.kb import get_kb_context
 
-    respiratory_service = {
-        "service_id": "SRV-01",
-        "service_name": "Terapia Respiratoria",
-        "category": "Atención domiciliaria",
-        "objective": "Atención respiratoria domiciliaria.",
-        "techniques": (
-            "Aerosolterapia, drenaje postural, higiene bronquial, "
-            "oxigenoterapia, inhaloterapia, oximetría"
-        ),
-        "patient_scope": "Pacientes respiratorios.",
-        "modality": "Domiciliaria",
-        "is_active": True,
-        "public_answer_short": (
-            "Ofrecemos terapia respiratoria domiciliaria."
-        ),
-        "public_answer_long": "",
-        "search_terms": "",
-        "escalation_required": False,
-    }
+    result = get_kb_context(
+        None,
+        intent="servicios",
+        message="Toma de oximetría dinámica.",
+        estado_actual="ST_GENERAL",
+    )
 
-    with (
-        patch(
-            "app.services.kb.search_services",
-            return_value=[],
-        ),
-        patch(
-            "app.services.kb.get_active_services",
-            return_value=[respiratory_service],
-        ),
-        patch(
-            "app.services.kb.search_schedules",
-            return_value=[],
-        ),
-        patch(
-            "app.services.kb.get_all_schedules",
-            return_value=[],
-        ),
-        patch(
-            "app.services.kb.search_rules",
-            return_value=[],
-        ),
-        patch(
-            "app.services.kb.get_active_rules",
-            return_value=[],
-        ),
-        patch(
-            "app.services.kb.get_rules_by_type",
-            return_value=[],
-        ),
-    ):
-        result = get_kb_context(
-            engine,
-            intent="servicios",
-            message="Toma de oximetría dinámica.",
-            estado_actual="ST_CITA_PENDIENTE",
-        )
-
-    assert result["kb_used"] is True
     assert result["kb_sources"] == ["kb_services"]
-    assert result["matched_service_id"] == "SRV-01"
-    assert result["matched_service_term"] == "oximetria"
-    assert result["matched_service_field"] == "techniques"
-    assert result["service_grounding_status"] == "partial"
+    assert result["matched_service_id"] == "SRV-07"
+    assert result["matched_service_term"] == "oximetria dinamica"
+    assert result["service_grounding_status"] == "exact"
+    assert "orden médica" in result["kb_context"].lower()
 
 
 def test_p6f997_partial_service_match_is_promoted_to_safe_escalation():
