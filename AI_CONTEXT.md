@@ -988,3 +988,202 @@ Target size:
 ```txt
 A practical operational brief, not a 160,000-character archive.
 ```
+
+<!-- BEGIN P6-F.9.98-P6-F.10 CONTEXT -->
+
+## Current baseline — P6-F.9.98 to P6-F.10
+
+### Repository and production
+
+- Repository: `elvira-respirarte-agent`.
+- Working baseline: `main`.
+- Elvira remains online in production during development.
+- Before controlled production tests, verify that Easypanel is running the latest `main`.
+- Do not change production environment variables unless the active sprint explicitly requires it.
+
+### Current voice configuration
+
+- `VOICE_INPUT_ENABLED=true`
+- `VOICE_REPLIES_ENABLED=true`
+- `VOICE_REPLY_TO_AUDIO_ONLY=true`
+- `VOICE_ALLOWED_PHONE_NUMBERS=*`
+- `VOICE_TTS_MODEL=gpt-4o-mini-tts`
+- `VOICE_TTS_VOICE=marin`
+- `VOICE_TTS_RESPONSE_FORMAT=opus`
+
+Voice pipeline:
+
+`WhatsApp audio -> STT -> deterministic core -> TTS -> WhatsApp voice note`
+
+Voice and text share the same deterministic clinical and appointment core.
+
+### P6-F.9.98 — Clinical KB Services Update
+
+Status: **closed**.
+
+The approved clinical catalog is versioned in:
+
+- `data/kb/datakbKB_Servicios.csv`
+- `app/services/approved_service_catalog.py`
+
+The approved catalog acts as a read-only runtime overlay so that stale PostgreSQL content cannot override the current clinical service information.
+
+PostgreSQL and Google Sheets were not modified during this sprint.
+
+Current clinical service policy:
+
+#### Respiratory Therapy
+
+- Active.
+- Domiciliary.
+- Does not require a prior medical order.
+- Approximate duration: 30 to 45 minutes.
+- Requires three hours of fasting.
+- Includes aerosol therapy, postural drainage, bronchial hygiene, inhalotherapy and oximetry.
+- Does not include domiciliary oxygen therapy.
+
+#### Dynamic Oximetry — `SRV-07`
+
+- Active and independent domiciliary service.
+- Requires a medical order.
+- Requires prior clinical validation.
+- An informational question does not begin an appointment flow.
+- A service request enters `ST_OXIMETRIA_DINAMICA_VALIDACION`.
+- No medical order:
+  - `escalation_required=true`
+  - `next_action=escalate_dynamic_oximetry_missing_order`
+- Oxygen support for 15 days or more:
+  - `escalation_required=true`
+  - `next_action=escalate_dynamic_oximetry_long_oxygen_support`
+- Medical order and fewer than 15 days with oxygen:
+  - continues to `ST_CITA_FECHA`
+  - `next_action=ask_preferred_date`
+
+#### Temporarily inactive or retired services
+
+- Tracheostomized patients:
+  - temporarily inactive;
+  - cannot be scheduled;
+  - requires specialist assessment;
+  - escalation is required.
+- Domiciliary oxygen therapy:
+  - not offered by Respirarte;
+  - only available institutionally when an appropriate oxygen point exists.
+- Maternal psychoprophylactic course:
+  - retired.
+
+Pulmonary function tests, pulmonary rehabilitation and business services were also updated in the approved catalog.
+
+### P6-F.9.99 — Voice Naturalness and Conversational Prosody
+
+Status: **closed**.
+
+Implemented:
+
+- `app/services/voice_text_normalizer.py`
+- integration immediately before TTS in `app/services/text_to_speech.py`
+
+The speech normalizer:
+
+- converts written hours into natural spoken hours;
+- converts quantities and numeric ranges;
+- expands safe abbreviations such as `Dra.`;
+- converts visual lists into spoken pauses;
+- preserves clinical facts and meaning;
+- does not modify `state.respuesta`;
+- does not modify intent, state, `next_action` or escalation;
+- does not modify the original WhatsApp text fallback.
+
+Examples:
+
+- `3:00 p. m. a 5:00 p. m.` becomes `tres de la tarde a cinco de la tarde`.
+- `entre 30 y 45 minutos` becomes `entre treinta y cuarenta y cinco minutos`.
+- `3 horas de ayuno` becomes `tres horas de ayuno`.
+- `Dra. D'Aleman` becomes `doctora D'Aleman`.
+
+Approved TTS configuration:
+
+- Model: `gpt-4o-mini-tts`
+- Voice: `marin`
+- Format: OGG/Opus
+- Spanish: neutral Colombian
+- Pronunciation: soft Bogota-style pronunciation
+- Latin American seseo
+- Avoid Spanish peninsular pronunciation, rhythm and intonation
+- Warm, calm and professional conversational delivery
+
+Final validation:
+
+- Real TTS preview listened to and approved.
+- **444 tests passed**.
+- Python compilation passed.
+- `git diff --check` passed.
+
+### Next sprint — P6-F.10 Human Escalation via WhatsApp
+
+Status: **planned; implementation not started**.
+
+Confirmed business decision:
+
+> Human escalation notifications must be delivered to the WhatsApp number of Dr. Paola D'Aleman.
+
+Elvira can already detect escalation conditions through:
+
+- `escalation_required=true`
+- a specific `next_action`
+- a clinical or operational reason
+- a safe conversational state
+
+The actual outbound WhatsApp notification to the doctor has not yet been implemented.
+
+Target flow:
+
+`Elvira detects escalation`
+`-> creates or records a human-review event`
+`-> sends a WhatsApp notification to Dr. D'Aleman`
+`-> records pending, sent or failed`
+`-> prevents duplicates`
+`-> supports safe retry`
+`-> preserves the link to the patient and conversation`
+
+Initial escalation cases:
+
+- Dynamic oximetry without a medical order.
+- Dynamic oximetry with oxygen support for 15 days or more.
+- Tracheostomized patient requiring specialist assessment.
+- Special clinical conditions or insufficient information.
+- Existing flows that already produce `escalation_required=true`.
+
+The doctor's WhatsApp number must:
+
+- come from secure configuration;
+- never be hardcoded;
+- not be confused with `VOICE_ALLOWED_PHONE_NUMBERS`;
+- not be exposed in logs, tests or documentation.
+
+### Active restrictions
+
+- Keep Elvira online in production.
+- Do not implement multitenant.
+- Do not resume P7.
+- Do not implement patient follow-up yet.
+- Do not change the approved clinical rules from P6-F.9.98.
+- Do not change the approved Marin voice.
+- Do not change `VOICE_ALLOWED_PHONE_NUMBERS=*`.
+- Do not modify PostgreSQL or Google Sheets without an explicit, justified technical need.
+- Do not send raw voice audio to the doctor.
+- Do not log full clinical messages or unnecessary patient data.
+- The user executes all commands.
+- Avoid splitting commands unnecessarily.
+- Avoid repetitive validation rounds.
+- Use targeted tests before the full suite.
+
+### P6-F.10 design document
+
+The initial design document is:
+
+`docs/sdd/P6-F.10_HUMAN_ESCALATION_WHATSAPP_SDD.md`
+
+The new sprint must begin with one focused architecture audit before finalizing persistence and delivery details.
+
+<!-- END P6-F.9.98-P6-F.10 CONTEXT -->

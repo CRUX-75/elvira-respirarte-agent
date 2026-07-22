@@ -63,6 +63,9 @@ from app.services.human_review_service import HumanReviewService
 from app.db.session import engine
 from app.config import settings
 from app.services.readiness import build_ready_report
+from app.services.human_escalation_runtime import (
+    dispatch_human_escalation_best_effort,
+)
 
 
 app = FastAPI(
@@ -624,6 +627,15 @@ async def receive_webhook(payload: WhatsAppPayload):
         mark_message_processed(
             whatsapp_message_id=whatsapp_message_id,
             telefono=telefono,
+        )
+
+        await dispatch_human_escalation_best_effort(
+            patient_id=str(patient["id"]),
+            patient_name=nombre,
+            patient_phone=telefono,
+            inbound_whatsapp_message_id=whatsapp_message_id,
+            result=result,
+            conversation_state=result.nuevo_estado,
         )
 
         # Keep old console/file logging during P4 for compatibility.

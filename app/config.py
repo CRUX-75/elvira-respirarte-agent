@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     whatsapp_token: str | None = None
     whatsapp_sending_enabled: bool = False
 
+    human_escalation_enabled: bool = False
+    human_escalation_whatsapp_number: str = ""
+    human_escalation_delivery_lease_seconds: int = 120
+
     voice_input_enabled: bool = False
     voice_replies_enabled: bool = False
     voice_reply_to_audio_only: bool = True
