@@ -9,6 +9,7 @@ from typing import Any, Callable, Iterator
 from openai import AsyncOpenAI
 
 from app.config import settings
+from app.services.voice_text_normalizer import normalize_text_for_speech
 
 
 AI_VOICE_DISCLOSURE = (
@@ -16,8 +17,17 @@ AI_VOICE_DISCLOSURE = (
 )
 
 TTS_INSTRUCTIONS = (
-    "Hable en español colombiano neutro, con tono profesional, cálido "
-    "y sereno. Articule nombres, fechas, horas y números con claridad. "
+    "Hable exclusivamente en español colombiano neutro, con una "
+    "pronunciación bogotana suave y natural. Use seseo latinoamericano: "
+    "pronuncie la letra z y la letra c delante de e o i con sonido de s. "
+    "Evite completamente la pronunciación, el ritmo y la entonación "
+    "peninsular o castellana de España. Mantenga un tono profesional, "
+    "cálido y sereno, como una asistente colombiana atendiendo a un "
+    "paciente por WhatsApp. Use un ritmo conversacional ligeramente "
+    "pausado, con pausas breves y naturales en comas y puntos. Varíe "
+    "suavemente la entonación en explicaciones, preguntas y "
+    "confirmaciones. Evite el tono de locución y de lectura mecánica. "
+    "Articule nombres, fechas, horas y números con claridad. "
     "No agregue, cambie ni omita contenido."
 )
 
@@ -41,7 +51,9 @@ def build_voice_reply_text(
     *,
     include_disclosure: bool = True,
 ) -> str:
-    normalized = response_text.strip()
+    normalized = normalize_text_for_speech(
+        response_text
+    )
 
     if not normalized:
         raise ValueError("Deterministic response text is empty")

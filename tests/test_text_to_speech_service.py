@@ -93,3 +93,64 @@ def test_temporary_synthesized_voice_note_rejects_non_ogg():
         assert str(exc) == "Synthesized voice audio is not OGG/Opus"
     else:
         raise AssertionError("Expected invalid OGG rejection")
+
+
+def test_p6f999_build_voice_reply_uses_spoken_version_without_mutating_source():
+    written = (
+        "La franja es de 3:00 p. m. a 5:00 p. m. "
+        "Debe guardar 3 horas de ayuno."
+    )
+
+    spoken = tts.build_voice_reply_text(
+        written,
+        include_disclosure=False,
+    )
+
+    assert written == (
+        "La franja es de 3:00 p. m. a 5:00 p. m. "
+        "Debe guardar 3 horas de ayuno."
+    )
+    assert spoken == (
+        "La franja es de tres de la tarde a cinco de la tarde. "
+        "Debe guardar tres horas de ayuno."
+    )
+
+
+def test_p6f999_disclosure_is_added_after_spoken_normalization():
+    spoken = tts.build_voice_reply_text(
+        "La cita es a las 3:00 p. m.",
+        include_disclosure=True,
+    )
+
+    assert spoken == (
+        "Soy Elvira, la asistente virtual de Respirarte. "
+        "La cita es a las tres de la tarde."
+    )
+
+
+
+def test_p6f999_uses_colombian_spanish_tts_instructions(monkeypatch):
+    captured = {}
+
+    class FakeSpeech:
+        async def create(self, **kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(content=b"OggSvoice-data")
+
+    client = SimpleNamespace(
+        audio=SimpleNamespace(speech=FakeSpeech()),
+    )
+
+    result = asyncio.run(
+        tts.synthesize_voice_reply(
+            "La cita es el cinco de septiembre.",
+            include_disclosure=False,
+            client=client,
+        )
+    )
+
+    assert result.status == "success"
+    assert captured["voice"] == "marin"
+    assert "español colombiano neutro" in captured["instructions"]
+    assert "seseo latinoamericano" in captured["instructions"]
+    assert "peninsular" in captured["instructions"]
