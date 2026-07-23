@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from uuid import uuid4
 
 from app.models.human_escalation_event import HumanEscalationEvent
@@ -52,12 +53,25 @@ class HumanEscalationEventService:
             token=token,
         )
 
+    def record_accepted(
+        self,
+        *,
+        claim: HumanEscalationDeliveryClaim,
+        provider_message_id: str,
+    ) -> HumanEscalationEvent | None:
+        return self.repository.mark_accepted(
+            event_id=claim.event.id,
+            claim_token=claim.token,
+            provider_message_id=provider_message_id,
+        )
+
     def record_sent(
         self,
         *,
         claim: HumanEscalationDeliveryClaim,
         provider_message_id: str | None,
     ) -> HumanEscalationEvent | None:
+        """Compatibility method retained for pre-P6-F.10.5 callers."""
         return self.repository.mark_sent(
             event_id=claim.event.id,
             claim_token=claim.token,
@@ -76,4 +90,19 @@ class HumanEscalationEventService:
             claim_token=claim.token,
             error_category=error_category,
             retryable=retryable,
+        )
+
+    def record_provider_status(
+        self,
+        *,
+        provider_message_id: str,
+        provider_status: str,
+        occurred_at: datetime | None,
+        error_category: str | None = None,
+    ) -> HumanEscalationEvent | None:
+        return self.repository.apply_provider_status(
+            provider_message_id=provider_message_id,
+            provider_status=provider_status,
+            occurred_at=occurred_at,
+            error_category=error_category,
         )

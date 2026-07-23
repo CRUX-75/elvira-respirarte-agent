@@ -23,8 +23,12 @@ class HumanEscalationDispatchResult:
     retryable: bool | None = None
 
     @property
+    def accepted(self) -> bool:
+        return self.outcome == "accepted"
+
+    @property
     def delivered(self) -> bool:
-        return self.outcome == "sent"
+        return self.outcome == "delivered"
 
 
 @dataclass(frozen=True)
@@ -156,14 +160,14 @@ def classify_delivery_error(
 
 
 class HumanEscalationDispatcher:
-    """Best-effort dispatcher isolated from patient processing."""
+    """Best-effort template dispatcher isolated from patient processing."""
 
     def __init__(
         self,
         *,
         event_service: Any,
         config: HumanEscalationConfig,
-        send_text: Any,
+        send_template: Any,
         lease_seconds: int = 120,
     ):
         if lease_seconds < 1:
@@ -173,7 +177,7 @@ class HumanEscalationDispatcher:
 
         self.event_service = event_service
         self.config = config
-        self.send_text = send_text
+        self.send_template = send_template
         self.lease_seconds = lease_seconds
 
     def _record_delivery_failure(
@@ -240,11 +244,19 @@ class HumanEscalationDispatcher:
                 event_id=event.id,
             )
 
-        if not self.config.whatsapp_number:
+        if not self.config.ready:
             return HumanEscalationDispatchResult(
                 outcome="configuration_missing",
                 event_id=event.id,
-                error_category="missing_destination_number",
+                error_category="missing_template_delivery_configuration",
+                retryable=False,
+            )
+
+        if len(event.template_parameters) != 10:
+            return HumanEscalationDispatchResult(
+                outcome="configuration_missing",
+                event_id=event.id,
+                error_category="invalid_template_parameter_count",
                 retryable=False,
             )
 
@@ -260,12 +272,14 @@ class HumanEscalationDispatcher:
                 retryable=True,
             )
 
-        if (
-            persisted_event.status
-            == HumanEscalationStatus.SENT
-        ):
+        if persisted_event.status in {
+            HumanEscalationStatus.ACCEPTED,
+            HumanEscalationStatus.SENT,
+            HumanEscalationStatus.DELIVERED,
+            HumanEscalationStatus.READ,
+        }:
             return HumanEscalationDispatchResult(
-                outcome="already_sent",
+                outcome="already_submitted",
                 event_id=persisted_event.id,
                 provider_message_id=(
                     persisted_event.provider_message_id
@@ -293,9 +307,11 @@ class HumanEscalationDispatcher:
             )
 
         try:
-            send_response = self.send_text(
+            send_response = self.send_template(
                 to=self.config.whatsapp_number,
-                message=claim.event.notification_text,
+                template_name=self.config.template_name,
+                language_code=self.config.template_language,
+                body_parameters=claim.event.template_parameters,
             )
 
             if inspect.isawaitable(send_response):
@@ -311,8 +327,14 @@ class HumanEscalationDispatcher:
             send_response
         )
 
+        if not provider_message_id:
+            return self._record_ambiguous_outcome(
+                claim=claim,
+                provider_message_id=None,
+            )
+
         try:
-            sent_event = self.event_service.record_sent(
+            accepted_event = self.event_service.record_accepted(
                 claim=claim,
                 provider_message_id=provider_message_id,
             )
@@ -322,15 +344,15 @@ class HumanEscalationDispatcher:
                 provider_message_id=provider_message_id,
             )
 
-        if sent_event is None:
+        if accepted_event is None:
             return self._record_ambiguous_outcome(
                 claim=claim,
                 provider_message_id=provider_message_id,
             )
 
         return HumanEscalationDispatchResult(
-            outcome="sent",
-            event_id=sent_event.id,
+            outcome="accepted",
+            event_id=accepted_event.id,
             provider_message_id=provider_message_id,
             retryable=False,
         )

@@ -44,6 +44,7 @@ def build_event(**updates) -> HumanEscalationEvent:
         "escalation_action": "escalate_unknown_service",
         "reason_code": "escalate_unknown_service",
         "notification_text": "Escalamiento de prueba",
+        "template_parameters": [f"valor-{index}" for index in range(1, 11)],
         "status": HumanEscalationStatus.PENDING,
         "attempt_count": 0,
         "retryable": True,
@@ -99,7 +100,7 @@ def test_disabled_dispatcher_does_nothing():
             enabled=False,
             whatsapp_number=None,
         ),
-        send_text=sender,
+        send_template=sender,
     )
 
     result = asyncio.run(
@@ -121,7 +122,7 @@ def test_missing_destination_does_not_persist_or_send():
             enabled=True,
             whatsapp_number=None,
         ),
-        send_text=sender,
+        send_template=sender,
     )
 
     result = asyncio.run(
@@ -134,7 +135,7 @@ def test_missing_destination_does_not_persist_or_send():
     sender.assert_not_called()
 
 
-def test_already_sent_event_is_not_sent_twice():
+def test_already_submitted_event_is_not_sent_twice():
     event_service = Mock()
     sender = Mock()
 
@@ -148,14 +149,14 @@ def test_already_sent_event_is_not_sent_twice():
     dispatcher = HumanEscalationDispatcher(
         event_service=event_service,
         config=ready_config(),
-        send_text=sender,
+        send_template=sender,
     )
 
     result = asyncio.run(
         dispatcher.dispatch(build_event())
     )
 
-    assert result.outcome == "already_sent"
+    assert result.outcome == "already_submitted"
     assert result.provider_message_id == "wamid.previous"
     event_service.claim_for_delivery.assert_not_called()
     sender.assert_not_called()
@@ -171,7 +172,7 @@ def test_active_claim_prevents_duplicate_send():
     dispatcher = HumanEscalationDispatcher(
         event_service=event_service,
         config=ready_config(),
-        send_text=sender,
+        send_template=sender,
     )
 
     result = asyncio.run(
@@ -203,33 +204,36 @@ def test_successful_send_records_provider_message_id():
 
     event_service.create_or_reuse.return_value = event
     event_service.claim_for_delivery.return_value = claim
-    event_service.record_sent.return_value = build_event(
-        status=HumanEscalationStatus.SENT,
+    event_service.record_accepted.return_value = build_event(
+        status=HumanEscalationStatus.ACCEPTED,
         retryable=False,
         provider_message_id="wamid.doctor",
-        sent_at=NOW,
+        accepted_at=NOW,
     )
 
     dispatcher = HumanEscalationDispatcher(
         event_service=event_service,
         config=ready_config(),
-        send_text=sender,
+        send_template=sender,
     )
 
     result = asyncio.run(
         dispatcher.dispatch(event)
     )
 
-    assert result.outcome == "sent"
-    assert result.delivered is True
+    assert result.outcome == "accepted"
+    assert result.accepted is True
+    assert result.delivered is False
     assert result.provider_message_id == "wamid.doctor"
 
     sender.assert_called_once_with(
         to="573000000001",
-        message="Escalamiento de prueba",
+        template_name="revision_humana",
+        language_code="es_CO",
+        body_parameters=event.template_parameters,
     )
 
-    event_service.record_sent.assert_called_once_with(
+    event_service.record_accepted.assert_called_once_with(
         claim=claim,
         provider_message_id="wamid.doctor",
     )
@@ -259,7 +263,7 @@ def test_timeout_is_recorded_as_retryable():
     dispatcher = HumanEscalationDispatcher(
         event_service=event_service,
         config=ready_config(),
-        send_text=sender,
+        send_template=sender,
     )
 
     result = asyncio.run(
@@ -318,7 +322,7 @@ def test_persistence_failure_never_calls_sender():
     dispatcher = HumanEscalationDispatcher(
         event_service=event_service,
         config=ready_config(),
-        send_text=sender,
+        send_template=sender,
     )
 
     result = asyncio.run(
@@ -338,6 +342,6 @@ def test_invalid_lease_is_rejected():
         HumanEscalationDispatcher(
             event_service=Mock(),
             config=ready_config(),
-            send_text=Mock(),
+            send_template=Mock(),
             lease_seconds=0,
         )

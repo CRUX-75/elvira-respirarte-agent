@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import text
@@ -15,6 +17,7 @@ _EVENT_COLUMNS = """
     escalation_action,
     reason_code,
     notification_text,
+    template_parameters,
     status,
     attempt_count,
     retryable,
@@ -24,7 +27,10 @@ _EVENT_COLUMNS = """
     claim_expires_at,
     created_at,
     last_attempt_at,
-    sent_at
+    accepted_at,
+    sent_at,
+    delivered_at,
+    read_at
 """
 
 
@@ -36,12 +42,7 @@ def _event_from_row(row: Any | None) -> HumanEscalationEvent | None:
 
 
 class HumanEscalationEventRepository:
-    """
-    PostgreSQL repository for idempotent escalation delivery.
-
-    The database engine is injected so repository tests do not need a
-    production connection and runtime wiring remains separate.
-    """
+    """PostgreSQL repository for idempotent escalation delivery."""
 
     def __init__(self, engine: Any):
         self.engine = engine
@@ -60,6 +61,7 @@ class HumanEscalationEventRepository:
                 escalation_action,
                 reason_code,
                 notification_text,
+                template_parameters,
                 status,
                 attempt_count,
                 retryable,
@@ -69,7 +71,10 @@ class HumanEscalationEventRepository:
                 claim_expires_at,
                 created_at,
                 last_attempt_at,
-                sent_at
+                accepted_at,
+                sent_at,
+                delivered_at,
+                read_at
             )
             VALUES (
                 :id,
@@ -79,6 +84,7 @@ class HumanEscalationEventRepository:
                 :escalation_action,
                 :reason_code,
                 :notification_text,
+                CAST(:template_parameters AS JSONB),
                 :status,
                 :attempt_count,
                 :retryable,
@@ -88,7 +94,10 @@ class HumanEscalationEventRepository:
                 :claim_expires_at,
                 :created_at,
                 :last_attempt_at,
-                :sent_at
+                :accepted_at,
+                :sent_at,
+                :delivered_at,
+                :read_at
             )
             ON CONFLICT (
                 inbound_whatsapp_message_id,
@@ -112,6 +121,10 @@ class HumanEscalationEventRepository:
 
         params = event.model_dump(mode="python")
         params["status"] = event.status.value
+        params["template_parameters"] = json.dumps(
+            event.template_parameters,
+            ensure_ascii=False,
+        )
 
         source_params = {
             "inbound_whatsapp_message_id": (
@@ -173,6 +186,31 @@ class HumanEscalationEventRepository:
 
         return _event_from_row(row)
 
+    def get_by_provider_message_id(
+        self,
+        provider_message_id: str,
+    ) -> HumanEscalationEvent | None:
+        statement = text(
+            f"""
+            SELECT {_EVENT_COLUMNS}
+            FROM human_escalation_events
+            WHERE provider_message_id = :provider_message_id
+            LIMIT 1
+            """
+        )
+
+        with self.engine.begin() as connection:
+            row = (
+                connection.execute(
+                    statement,
+                    {"provider_message_id": provider_message_id},
+                )
+                .mappings()
+                .first()
+            )
+
+        return _event_from_row(row)
+
     def try_claim_delivery(
         self,
         *,
@@ -196,7 +234,10 @@ class HumanEscalationEventRepository:
                 attempt_count = attempt_count + 1,
                 last_attempt_at = NOW()
             WHERE id = :event_id
+              AND status <> 'accepted'
               AND status <> 'sent'
+              AND status <> 'delivered'
+              AND status <> 'read'
               AND retryable = TRUE
               AND (
                     claim_token IS NULL
@@ -223,6 +264,50 @@ class HumanEscalationEventRepository:
 
         return _event_from_row(row)
 
+    def mark_accepted(
+        self,
+        *,
+        event_id: str,
+        claim_token: str,
+        provider_message_id: str,
+    ) -> HumanEscalationEvent | None:
+        statement = text(
+            f"""
+            UPDATE human_escalation_events
+            SET
+                status = 'accepted',
+                retryable = FALSE,
+                provider_message_id = :provider_message_id,
+                last_error_category = NULL,
+                accepted_at = NOW(),
+                claim_token = NULL,
+                claim_expires_at = NULL
+            WHERE id = :event_id
+              AND claim_token = :claim_token
+              AND status <> 'accepted'
+              AND status <> 'sent'
+              AND status <> 'delivered'
+              AND status <> 'read'
+            RETURNING {_EVENT_COLUMNS}
+            """
+        )
+
+        with self.engine.begin() as connection:
+            row = (
+                connection.execute(
+                    statement,
+                    {
+                        "event_id": event_id,
+                        "claim_token": claim_token,
+                        "provider_message_id": provider_message_id,
+                    },
+                )
+                .mappings()
+                .first()
+            )
+
+        return _event_from_row(row)
+
     def mark_sent(
         self,
         *,
@@ -230,6 +315,7 @@ class HumanEscalationEventRepository:
         claim_token: str,
         provider_message_id: str | None,
     ) -> HumanEscalationEvent | None:
+        """Compatibility method retained for pre-P6-F.10.5 tests/tools."""
         statement = text(
             f"""
             UPDATE human_escalation_events
@@ -283,7 +369,10 @@ class HumanEscalationEventRepository:
                 claim_expires_at = NULL
             WHERE id = :event_id
               AND claim_token = :claim_token
+              AND status <> 'accepted'
               AND status <> 'sent'
+              AND status <> 'delivered'
+              AND status <> 'read'
             RETURNING {_EVENT_COLUMNS}
             """
         )
@@ -305,6 +394,80 @@ class HumanEscalationEventRepository:
 
         return _event_from_row(row)
 
+    def apply_provider_status(
+        self,
+        *,
+        provider_message_id: str,
+        provider_status: str,
+        occurred_at: datetime | None,
+        error_category: str | None = None,
+    ) -> HumanEscalationEvent | None:
+        allowed = {"sent", "delivered", "read", "failed"}
+
+        if provider_status not in allowed:
+            raise ValueError("Unsupported WhatsApp provider status.")
+
+        if provider_status == "sent":
+            set_clause = """
+                status = 'sent',
+                sent_at = COALESCE(sent_at, :occurred_at, NOW()),
+                retryable = FALSE,
+                last_error_category = NULL
+            """
+            allowed_current = "('accepted', 'sent')"
+        elif provider_status == "delivered":
+            set_clause = """
+                status = 'delivered',
+                delivered_at = COALESCE(delivered_at, :occurred_at, NOW()),
+                retryable = FALSE,
+                last_error_category = NULL
+            """
+            allowed_current = "('accepted', 'sent', 'delivered')"
+        elif provider_status == "read":
+            set_clause = """
+                status = 'read',
+                read_at = COALESCE(read_at, :occurred_at, NOW()),
+                retryable = FALSE,
+                last_error_category = NULL
+            """
+            allowed_current = "('accepted', 'sent', 'delivered', 'read')"
+        else:
+            set_clause = """
+                status = 'failed',
+                retryable = FALSE,
+                last_error_category = COALESCE(
+                    :error_category,
+                    'provider_status_failed'
+                )
+            """
+            allowed_current = "('accepted', 'sent', 'failed')"
+
+        statement = text(
+            f"""
+            UPDATE human_escalation_events
+            SET {set_clause}
+            WHERE provider_message_id = :provider_message_id
+              AND status IN {allowed_current}
+            RETURNING {_EVENT_COLUMNS}
+            """
+        )
+
+        with self.engine.begin() as connection:
+            row = (
+                connection.execute(
+                    statement,
+                    {
+                        "provider_message_id": provider_message_id,
+                        "occurred_at": occurred_at,
+                        "error_category": error_category,
+                    },
+                )
+                .mappings()
+                .first()
+            )
+
+        return _event_from_row(row)
+
     def list_retryable(
         self,
         *,
@@ -317,7 +480,10 @@ class HumanEscalationEventRepository:
             f"""
             SELECT {_EVENT_COLUMNS}
             FROM human_escalation_events
-            WHERE status <> 'sent'
+            WHERE status <> 'accepted'
+              AND status <> 'sent'
+              AND status <> 'delivered'
+              AND status <> 'read'
               AND retryable = TRUE
               AND (
                     claim_token IS NULL

@@ -65,6 +65,7 @@ from app.config import settings
 from app.services.readiness import build_ready_report
 from app.services.human_escalation_runtime import (
     dispatch_human_escalation_best_effort,
+    process_human_escalation_status_updates_best_effort,
 )
 
 
@@ -212,6 +213,25 @@ def apply_human_review_action(
     return result.model_dump()
 @app.post("/webhook")
 async def receive_webhook(payload: WhatsAppPayload):
+    status_extractor = getattr(
+        payload,
+        "extract_status_updates",
+        None,
+    )
+
+    status_updates = (
+        status_extractor()
+        if callable(status_extractor)
+        else []
+    )
+
+    if status_updates:
+        return await (
+            process_human_escalation_status_updates_best_effort(
+                status_updates
+            )
+        )
+
     try:
         extracted = payload.extract_message()
     except Exception as e:

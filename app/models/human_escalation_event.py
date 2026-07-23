@@ -9,7 +9,10 @@ from pydantic import BaseModel, Field
 
 class HumanEscalationStatus(str, Enum):
     PENDING = "pending"
+    ACCEPTED = "accepted"
     SENT = "sent"
+    DELIVERED = "delivered"
+    READ = "read"
     FAILED = "failed"
 
 
@@ -23,6 +26,7 @@ class HumanEscalationEvent(BaseModel):
     escalation_action: str
     reason_code: str
     notification_text: str
+    template_parameters: list[str] = Field(default_factory=list)
     status: HumanEscalationStatus = HumanEscalationStatus.PENDING
     attempt_count: int = 0
     retryable: bool = True
@@ -32,4 +36,7 @@ class HumanEscalationEvent(BaseModel):
     claim_expires_at: datetime | None = None
     created_at: datetime
     last_attempt_at: datetime | None = None
+    accepted_at: datetime | None = None
     sent_at: datetime | None = None
+    delivered_at: datetime | None = None
+    read_at: datetime | None = None

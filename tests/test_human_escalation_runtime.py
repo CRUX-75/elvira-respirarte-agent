@@ -18,13 +18,15 @@ from app.services.human_escalation_event_service import (
 from app.services.human_escalation_runtime import (
     dispatch_human_escalation_best_effort,
     send_human_escalation_whatsapp,
+    process_human_escalation_status_updates_best_effort,
 )
 
 
 class FakeEventService:
     def __init__(self):
         self.event = None
-        self.sent_provider_message_id = None
+        self.accepted_provider_message_id = None
+        self.status_calls = []
 
     def create_or_reuse(self, event):
         self.event = event
@@ -45,25 +47,39 @@ class FakeEventService:
             token="claim-test",
         )
 
-    def record_sent(
+    def record_accepted(
         self,
         *,
         claim,
         provider_message_id,
     ):
-        self.sent_provider_message_id = (
-            provider_message_id
-        )
+        self.accepted_provider_message_id = provider_message_id
 
         return claim.event.model_copy(
             update={
-                "status": HumanEscalationStatus.SENT,
+                "status": HumanEscalationStatus.ACCEPTED,
                 "retryable": False,
-                "provider_message_id": (
-                    provider_message_id
-                ),
+                "provider_message_id": provider_message_id,
             }
         )
+
+    def record_provider_status(
+        self,
+        *,
+        provider_message_id,
+        provider_status,
+        occurred_at,
+        error_category,
+    ):
+        self.status_calls.append(
+            {
+                "provider_message_id": provider_message_id,
+                "provider_status": provider_status,
+                "occurred_at": occurred_at,
+                "error_category": error_category,
+            }
+        )
+        return SimpleNamespace(id="event-status")
 
     def record_failed(
         self,
@@ -161,12 +177,16 @@ def test_runtime_dispatches_using_safe_minimal_event():
     async def fake_sender(
         *,
         to,
-        message,
+        template_name,
+        language_code,
+        body_parameters,
     ):
         send_calls.append(
             {
                 "to": to,
-                "message": message,
+                "template_name": template_name,
+                "language_code": language_code,
+                "body_parameters": body_parameters,
             }
         )
 
@@ -193,21 +213,22 @@ def test_runtime_dispatches_using_safe_minimal_event():
                 whatsapp_number="573000000001",
             ),
             event_service=service,
-            send_text=fake_sender,
+            send_template=fake_sender,
         )
     )
 
-    assert result.outcome == "sent"
+    assert result.outcome == "accepted"
     assert result.provider_message_id == "wamid.doctor"
     assert len(send_calls) == 1
 
-    notification = send_calls[0]["message"]
-
     assert send_calls[0]["to"] == "573000000001"
-    assert "Paciente: Paciente" in notification
-    assert "Teléfono: 573000000002" in notification
-    assert "Estado: ST_GENERAL" in notification
-    assert "Requiere revisión humana." in notification
+    assert send_calls[0]["template_name"] == "revision_humana"
+    assert send_calls[0]["language_code"] == "es_CO"
+    parameters = send_calls[0]["body_parameters"]
+    assert len(parameters) == 10
+    assert parameters[0] == "Paciente"
+    assert parameters[1] == "573000000002"
+    assert parameters[7] == "ST_GENERAL"
 
 
 def test_invalid_source_identifier_is_contained():
@@ -237,11 +258,18 @@ def test_existing_whatsapp_transport_adapter(
     captured = {}
 
     async def fake_whatsapp_send(
+        *,
         telefono,
-        mensaje,
+        template_name,
+        language_code,
+        body_parameters,
     ):
-        captured["telefono"] = telefono
-        captured["mensaje"] = mensaje
+        captured.update(
+            telefono=telefono,
+            template_name=template_name,
+            language_code=language_code,
+            body_parameters=body_parameters,
+        )
 
         return {
             "messages": [
@@ -254,7 +282,7 @@ def test_existing_whatsapp_transport_adapter(
     monkeypatch.setattr(
         (
             "app.services.human_escalation_runtime."
-            "send_whatsapp_message"
+            "send_whatsapp_template_message"
         ),
         fake_whatsapp_send,
     )
@@ -262,13 +290,17 @@ def test_existing_whatsapp_transport_adapter(
     response = asyncio.run(
         send_human_escalation_whatsapp(
             to="573000000001",
-            message="Mensaje de prueba",
+            template_name="revision_humana",
+            language_code="es_CO",
+            body_parameters=[f"valor-{index}" for index in range(1, 11)],
         )
     )
 
     assert captured == {
         "telefono": "573000000001",
-        "mensaje": "Mensaje de prueba",
+        "template_name": "revision_humana",
+        "language_code": "es_CO",
+        "body_parameters": [f"valor-{index}" for index in range(1, 11)],
     }
     assert response["messages"][0]["id"] == (
         "wamid.adapter"
@@ -300,3 +332,53 @@ def test_main_wiring_runs_after_patient_persistence():
     assert processed_index != -1
     assert state_index < dispatch_index
     assert processed_index < dispatch_index
+
+
+def test_status_updates_are_applied_without_feature_flag():
+    service = FakeEventService()
+
+    result = asyncio.run(
+        process_human_escalation_status_updates_best_effort(
+            [
+                {
+                    "provider_message_id": "wamid.doctor",
+                    "status": "delivered",
+                    "timestamp": "1790000001",
+                    "error_code": None,
+                }
+            ],
+            event_service=service,
+        )
+    )
+
+    assert result == {
+        "status": "status_updates_processed",
+        "updates_received": 1,
+        "updates_matched": 1,
+        "updates_ignored": 0,
+        "updates_failed": 0,
+    }
+    assert service.status_calls[0]["provider_status"] == "delivered"
+    assert service.status_calls[0]["provider_message_id"] == "wamid.doctor"
+
+
+def test_failed_status_persists_only_safe_error_code():
+    service = FakeEventService()
+
+    asyncio.run(
+        process_human_escalation_status_updates_best_effort(
+            [
+                {
+                    "provider_message_id": "wamid.doctor",
+                    "status": "failed",
+                    "timestamp": "1790000002",
+                    "error_code": "131026",
+                }
+            ],
+            event_service=service,
+        )
+    )
+
+    assert service.status_calls[0]["error_category"] == (
+        "provider_status_failed_131026"
+    )

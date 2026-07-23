@@ -7,14 +7,25 @@ from typing import Mapping
 from app.services.human_escalation import normalize_whatsapp_number
 
 
+DEFAULT_TEMPLATE_NAME = "revision_humana"
+DEFAULT_TEMPLATE_LANGUAGE = "es_CO"
+
+
 @dataclass(frozen=True)
 class HumanEscalationConfig:
     enabled: bool
     whatsapp_number: str | None
+    template_name: str = DEFAULT_TEMPLATE_NAME
+    template_language: str = DEFAULT_TEMPLATE_LANGUAGE
 
     @property
     def ready(self) -> bool:
-        return self.enabled and self.whatsapp_number is not None
+        return bool(
+            self.enabled
+            and self.whatsapp_number
+            and self.template_name
+            and self.template_language
+        )
 
 
 def _parse_bool(value: object) -> bool:
@@ -54,6 +65,29 @@ def _setting_value(
         uppercase_name,
         None,
     )
+
+
+def _string_setting(
+    settings_obj: object | None,
+    env: Mapping[str, str],
+    *,
+    lowercase_name: str,
+    uppercase_name: str,
+    default: str,
+) -> str:
+    configured = _setting_value(
+        settings_obj,
+        lowercase_name=lowercase_name,
+        uppercase_name=uppercase_name,
+    )
+
+    raw = (
+        configured
+        if configured not in {None, ""}
+        else env.get(uppercase_name, default)
+    )
+
+    return str(raw or "").strip()
 
 
 def load_human_escalation_config(
@@ -97,5 +131,19 @@ def load_human_escalation_config(
         enabled=_parse_bool(enabled_raw),
         whatsapp_number=normalize_whatsapp_number(
             str(number_raw or "")
+        ),
+        template_name=_string_setting(
+            settings_obj,
+            env,
+            lowercase_name="human_escalation_template_name",
+            uppercase_name="HUMAN_ESCALATION_TEMPLATE_NAME",
+            default=DEFAULT_TEMPLATE_NAME,
+        ),
+        template_language=_string_setting(
+            settings_obj,
+            env,
+            lowercase_name="human_escalation_template_language",
+            uppercase_name="HUMAN_ESCALATION_TEMPLATE_LANGUAGE",
+            default=DEFAULT_TEMPLATE_LANGUAGE,
         ),
     )

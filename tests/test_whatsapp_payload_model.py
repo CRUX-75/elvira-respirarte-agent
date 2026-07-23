@@ -83,6 +83,49 @@ def test_extract_message_returns_none_for_status_notification():
     assert payload.extract_message() is None
 
 
+
+
+def test_extract_status_updates_returns_minimal_safe_fields():
+    payload = WhatsAppPayload(
+        object="whatsapp_business_account",
+        entry=[
+            {
+                "id": "123456789",
+                "changes": [
+                    {
+                        "value": {
+                            "messaging_product": "whatsapp",
+                            "statuses": [
+                                {
+                                    "id": "wamid.status.001",
+                                    "status": "failed",
+                                    "timestamp": "1790000001",
+                                    "recipient_id": "573009450001",
+                                    "errors": [
+                                        {
+                                            "code": 131026,
+                                            "title": "Provider detail",
+                                        }
+                                    ],
+                                }
+                            ],
+                        },
+                        "field": "messages",
+                    }
+                ],
+            }
+        ],
+    )
+
+    assert payload.extract_status_updates() == [
+        {
+            "provider_message_id": "wamid.status.001",
+            "status": "failed",
+            "timestamp": "1790000001",
+            "error_code": "131026",
+        }
+    ]
+
 def test_extract_message_returns_none_for_audio_without_voice_flag():
     payload = WhatsAppPayload(
         object="whatsapp_business_account",
@@ -282,3 +325,66 @@ def test_real_webhook_accepts_meta_text_payload_with_sending_disabled(monkeypatc
         "whatsapp_message_id": "wamid.p6f945.webhook.001",
         "telefono": "573009450001",
     }
+
+
+def test_real_webhook_routes_status_updates_before_message_processing(
+    monkeypatch,
+):
+    import asyncio
+
+    import app.main as main
+
+    captured = {}
+
+    async def fake_status_processor(updates):
+        captured["updates"] = updates
+        return {
+            "status": "status_updates_processed",
+            "updates_received": 1,
+            "updates_matched": 1,
+            "updates_ignored": 0,
+            "updates_failed": 0,
+        }
+
+    monkeypatch.setattr(
+        main,
+        "process_human_escalation_status_updates_best_effort",
+        fake_status_processor,
+    )
+
+    payload = WhatsAppPayload(
+        object="whatsapp_business_account",
+        entry=[
+            {
+                "id": "123456789",
+                "changes": [
+                    {
+                        "value": {
+                            "messaging_product": "whatsapp",
+                            "statuses": [
+                                {
+                                    "id": "wamid.status.002",
+                                    "status": "read",
+                                    "timestamp": "1790000004",
+                                    "recipient_id": "573009450001",
+                                }
+                            ],
+                        },
+                        "field": "messages",
+                    }
+                ],
+            }
+        ],
+    )
+
+    response = asyncio.run(main.receive_webhook(payload))
+
+    assert response["status"] == "status_updates_processed"
+    assert captured["updates"] == [
+        {
+            "provider_message_id": "wamid.status.002",
+            "status": "read",
+            "timestamp": "1790000004",
+            "error_code": None,
+        }
+    ]

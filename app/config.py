@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     human_escalation_enabled: bool = False
     human_escalation_whatsapp_number: str = ""
     human_escalation_delivery_lease_seconds: int = 120
+    human_escalation_template_name: str = "revision_humana"
+    human_escalation_template_language: str = "es_CO"
 
     voice_input_enabled: bool = False
     voice_replies_enabled: bool = False

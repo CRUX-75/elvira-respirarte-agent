@@ -90,6 +90,7 @@ def event_row(**updates):
         "escalation_action": "escalate_unknown_service",
         "reason_code": "escalate_unknown_service",
         "notification_text": "Escalamiento de prueba",
+        "template_parameters": [f"valor-{index}" for index in range(1, 11)],
         "status": "pending",
         "attempt_count": 0,
         "retryable": True,
@@ -99,7 +100,10 @@ def event_row(**updates):
         "claim_expires_at": None,
         "created_at": NOW,
         "last_attempt_at": None,
+        "accepted_at": None,
         "sent_at": None,
+        "delivered_at": None,
+        "read_at": None,
     }
     row.update(updates)
     return row
@@ -367,3 +371,94 @@ def test_repository_rejects_invalid_limits_and_lease():
 
     with pytest.raises(ValueError, match="between 1 and 200"):
         repository.list_retryable(limit=0)
+
+
+def test_mark_accepted_records_provider_id_without_claiming_delivery():
+    engine = FakeEngine(
+        [
+            FakeResult(
+                [
+                    event_row(
+                        status="accepted",
+                        retryable=False,
+                        provider_message_id="wamid.doctor",
+                        accepted_at=NOW,
+                    )
+                ]
+            )
+        ]
+    )
+    repository = HumanEscalationEventRepository(engine)
+
+    accepted = repository.mark_accepted(
+        event_id="event-1",
+        claim_token="claim-1",
+        provider_message_id="wamid.doctor",
+    )
+
+    assert accepted is not None
+    assert accepted.status == HumanEscalationStatus.ACCEPTED
+    assert accepted.provider_message_id == "wamid.doctor"
+    sql, _ = engine.connection.calls[0]
+    assert "status = 'accepted'" in sql
+    assert "accepted_at = NOW()" in sql
+
+
+def test_provider_delivered_status_updates_by_wamid():
+    engine = FakeEngine(
+        [
+            FakeResult(
+                [
+                    event_row(
+                        status="delivered",
+                        retryable=False,
+                        provider_message_id="wamid.doctor",
+                        delivered_at=NOW,
+                    )
+                ]
+            )
+        ]
+    )
+    repository = HumanEscalationEventRepository(engine)
+
+    delivered = repository.apply_provider_status(
+        provider_message_id="wamid.doctor",
+        provider_status="delivered",
+        occurred_at=NOW,
+    )
+
+    assert delivered is not None
+    assert delivered.status == HumanEscalationStatus.DELIVERED
+    sql, params = engine.connection.calls[0]
+    assert "provider_message_id = :provider_message_id" in sql
+    assert params["occurred_at"] == NOW
+
+
+def test_event_service_records_accepted_using_claim_token():
+    repository = Mock()
+    repository.mark_accepted.return_value = HumanEscalationEvent(
+        **event_row(
+            status="accepted",
+            retryable=False,
+            provider_message_id="wamid.doctor",
+            accepted_at=NOW,
+        )
+    )
+    service = HumanEscalationEventService(repository)
+    claim = HumanEscalationDeliveryClaim(
+        event=build_event(),
+        token="claim-1",
+    )
+
+    result = service.record_accepted(
+        claim=claim,
+        provider_message_id="wamid.doctor",
+    )
+
+    assert result is not None
+    assert result.status == HumanEscalationStatus.ACCEPTED
+    repository.mark_accepted.assert_called_once_with(
+        event_id="event-1",
+        claim_token="claim-1",
+        provider_message_id="wamid.doctor",
+    )

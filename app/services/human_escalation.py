@@ -270,6 +270,21 @@ def build_human_escalation_event(
     reason = SAFE_REASON_BY_ACTION[escalation_action]
     reference = event_id.split("-", 1)[0].upper()
 
+    formatted_timestamp = f"{timestamp:%d/%m/%Y %H:%M} (Colombia)"
+
+    template_parameters = [
+        name,
+        phone,
+        service,
+        reason,
+        summary,
+        order_label,
+        fact,
+        state,
+        formatted_timestamp,
+        reference,
+    ]
+
     notification_text = (
         "Escalamiento de Elvira\n\n"
         f"Paciente: {name}\n"
@@ -293,5 +308,6 @@ def build_human_escalation_event(
         escalation_action=escalation_action,
         reason_code=escalation_action,
         notification_text=notification_text,
+        template_parameters=template_parameters,
         created_at=timestamp,
     )
