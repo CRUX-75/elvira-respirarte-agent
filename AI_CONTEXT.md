@@ -1187,3 +1187,74 @@ The initial design document is:
 The new sprint must begin with one focused architecture audit before finalizing persistence and delivery details.
 
 <!-- END P6-F.9.98-P6-F.10 CONTEXT -->
+
+## P6-F.10 — Human Escalation via WhatsApp (Cerrado en producción)
+
+Estado final: cerrado y operativo en producción.
+
+### Implementación final
+
+- El disparo ocurre únicamente cuando:
+  - `result.escalation_required is True`
+  - `result.next_action` pertenece al conjunto aprobado.
+- El evento se registra en PostgreSQL antes de la entrega externa.
+- La unicidad natural es:
+  `(inbound_whatsapp_message_id, escalation_action)`.
+- El envío a revisión humana es best-effort y nunca altera ni bloquea
+  la respuesta o el estado conversacional del paciente.
+- El número del profesional se configura mediante:
+  `HUMAN_ESCALATION_WHATSAPP_NUMBER`.
+- La función se controla mediante:
+  `HUMAN_ESCALATION_ENABLED`.
+
+### Entrega mediante plantilla
+
+- Plantilla aprobada por Meta: `revision_humana`.
+- Idioma configurado para Cloud API: `es_CO`.
+- El aviso utiliza diez parámetros mínimos y ordenados:
+  paciente, teléfono, servicio, motivo, resumen, orden médica,
+  dato relevante, estado conversacional, fecha y referencia interna.
+- No se envían audios, transcripciones completas, historial completo
+  ni payloads crudos del proveedor.
+
+### Persistencia y estados
+
+Migraciones aplicadas en producción:
+
+- `006_create_human_escalation_events.sql`
+- `007_human_escalation_template_delivery_status.sql`
+
+Estados soportados:
+
+- `pending`
+- `accepted`
+- `sent`
+- `delivered`
+- `read`
+- `failed`
+
+Los webhooks de estado se correlacionan mediante
+`provider_message_id`. Las actualizaciones no retroceden un evento
+cuando Meta entrega callbacks fuera de orden.
+
+### Validación productiva
+
+- Commit desplegado: `7c8baf1`.
+- Suite completa: `497 passed`.
+- Caso controlado:
+  `escalate_dynamic_oximetry_missing_order`.
+- Secuencia persistida:
+  `accepted -> sent -> delivered`.
+- `provider_message_id` registrado.
+- Sin error de proveedor.
+- La Dra. D'Aleman confirmó directamente la recepción del mensaje
+  en WhatsApp.
+- La respuesta al paciente permaneció correcta e independiente del
+  resultado de la notificación humana.
+
+### Decisión de cierre
+
+P6-F.10 queda cerrada. No se requiere trabajo adicional para su uso
+productivo normal. Futuras mejoras de panel operativo, reintentos
+administrativos o métricas pertenecen a fases posteriores y no forman
+parte de este alcance.

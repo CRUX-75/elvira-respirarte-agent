@@ -379,3 +379,65 @@ The feature remains disabled by default. Migration 006 must be applied before
 enabling it in production.
 
 <!-- END P6-F.10.4 RUNTIME WIRING -->
+
+## Cierre productivo — P6-F.10.5
+
+### Motivo del ajuste
+
+El primer envío utilizaba texto libre. La respuesta inicial de Meta
+incluía un `wamid`, pero esto solo demostraba aceptación de la
+solicitud y no entrega al dispositivo. El evento se almacenaba
+prematuramente como `sent`.
+
+### Solución final
+
+El transporte de escalamiento utiliza la plantilla aprobada:
+
+- Nombre: `revision_humana`
+- Idioma Cloud API: `es_CO`
+- Tipo de mensaje: `template`
+- Parámetros de cuerpo: diez valores en orden determinístico
+
+La respuesta síncrona de Meta se registra como `accepted`. Los
+webhooks posteriores actualizan el evento a `sent`, `delivered`,
+`read` o `failed`.
+
+### Reglas de actualización
+
+- La correlación se realiza por `provider_message_id`.
+- Los callbacks desconocidos se ignoran de forma segura.
+- Los estados no retroceden ante callbacks tardíos o fuera de orden.
+- Los errores se reducen a categorías seguras.
+- No se persiste el payload crudo de Meta.
+- La entrega continúa siendo best-effort y no bloqueante para el
+  paciente.
+
+### Base de datos
+
+La migración 007:
+
+- amplió la restricción de estados;
+- añadió `template_parameters`;
+- añadió `accepted_at`;
+- añadió `delivered_at`;
+- añadió `read_at`;
+- creó un índice sobre `provider_message_id`.
+
+Las migraciones 006 y 007 fueron aplicadas y verificadas en la base
+de datos productiva.
+
+### Evidencia de aceptación
+
+- Suite completa: `497 passed`.
+- Commit: `7c8baf1`.
+- Plantilla activa en WhatsApp Manager.
+- Prueba real con escalamiento por oximetría dinámica sin orden.
+- Transiciones observadas:
+  `accepted -> sent -> delivered`.
+- La destinataria confirmó personalmente la recepción en WhatsApp.
+- No se observó duplicación ni error de entrega.
+
+### Resultado
+
+P6-F.10 Human Escalation via WhatsApp queda aceptada, operativa y
+cerrada en producción.
