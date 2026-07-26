@@ -1258,3 +1258,190 @@ P6-F.10 queda cerrada. No se requiere trabajo adicional para su uso
 productivo normal. Futuras mejoras de panel operativo, reintentos
 administrativos o métricas pertenecen a fases posteriores y no forman
 parte de este alcance.
+
+## P6-F.11 — Patient Reactivation via WhatsApp
+
+Estado: definido funcionalmente, todavía no implementado.
+
+### Separación de procesos
+
+Respirarte tendrá dos procesos independientes:
+
+1. Reactivación histórica:
+   - Base entregada por la Dra. Paola D'Aleman.
+   - 65 registros totales.
+   - 49 contactos marcados como atendidos.
+   - Objetivo: presentar nuevamente los servicios de Respirarte.
+   - No constituye seguimiento clínico ni posatención.
+
+2. Seguimiento posatención:
+   - Fase futura e independiente.
+   - Aplicará a pacientes atendidos desde el 1 de agosto de 2026.
+   - Utilizará una tabla separada con fecha de atención, servicio
+     recibido y datos específicos del seguimiento.
+   - Queda fuera del alcance de P6-F.11.
+
+### Objetivo de P6-F.11
+
+Realizar un contacto único por WhatsApp con los pacientes históricos
+elegibles, presentar de forma general los servicios respiratorios
+domiciliarios de Respirarte y permitir que las personas interesadas
+continúen dentro del flujo normal de Elvira.
+
+El mensaje inicial:
+
+- debe identificar a Elvira y Respirarte;
+- no debe mencionar diagnósticos;
+- no debe mencionar tratamientos o servicios anteriores;
+- no debe afirmar que el receptor es paciente;
+- no debe incluir información clínica;
+- debe permitir rechazar futuros contactos.
+
+### Elegibilidad
+
+La población inicial son los 49 registros con `ATENDIDO=SI`.
+
+Antes de enviar deben excluirse:
+
+- teléfonos inválidos;
+- números duplicados;
+- contactos con opt-out vigente;
+- pacientes con inconformidad previa conocida;
+- casos sensibles definidos por la doctora;
+- contactos que no cumplan las condiciones de autorización;
+- registros marcados con `ATENDIDO=NO`.
+
+Los teléfonos se normalizarán al formato internacional E.164.
+
+### Comportamiento de la campaña
+
+- Un solo mensaje comercial por contacto.
+- Si no responde, no se insiste.
+- Un retry técnico no puede generar un segundo mensaje comercial.
+- Si la persona muestra interés, entra al flujo normal de servicios
+  y solicitud de cita de Elvira.
+- Si presenta una queja o solicita atención humana, se aplican las
+  reglas de escalamiento existentes.
+- La campaña permanecerá desactivada durante la auditoría,
+  implementación y pruebas iniciales.
+
+### Opt-out semántico
+
+El opt-out no dependerá únicamente de una respuesta literal `NO`.
+
+Elvira debe reconocer como rechazo:
+
+- negativas directas;
+- falta de interés;
+- solicitudes de no volver a escribir;
+- solicitudes de eliminar el número;
+- objeciones de privacidad;
+- respuestas hostiles;
+- insultos o malas palabras usados como rechazo;
+- errores ortográficos y abreviaciones;
+- lenguaje coloquial colombiano;
+- mayúsculas y repeticiones;
+- emojis hostiles dentro del contexto;
+- mensajes de voz cuya transcripción exprese rechazo.
+
+Ejemplos:
+
+- `No gracias`
+- `No me interesa`
+- `No me escriban`
+- `Déjenme en paz`
+- `Bórrenme de su lista`
+- `No autorizo estos mensajes`
+- `Dejen de molestar`
+- respuestas insultantes sin otra solicitud concreta
+
+Resultado esperado:
+
+- `intent=optout`
+- `next_action=confirm_optout`
+- `nuevo_estado=ST_OPTOUT`
+- `opt_out=true`
+
+Respuesta:
+
+`Entendido. No le enviaremos más mensajes de Respirarte.
+Que tenga un buen día.`
+
+Elvira no debe discutir, responder al insulto, preguntar por qué ni
+intentar recuperar la venta.
+
+### Diferencia entre queja y opt-out
+
+Una queja no implica automáticamente opt-out.
+
+- Queja con solicitud de solución:
+  escalamiento humano, sin asumir opt-out.
+- Queja acompañada de solicitud de no contacto:
+  escalamiento humano y opt-out.
+- Hostilidad o insulto aislado como rechazo:
+  opt-out.
+
+Categorías seguras propuestas:
+
+- `explicit_refusal`
+- `stop_contact_request`
+- `hostile_rejection`
+- `privacy_objection`
+
+No debe almacenarse el insulto completo en el registro de campaña.
+
+### Persistencia e idempotencia
+
+La persistencia conceptual debe incluir:
+
+- campaña;
+- contacto de campaña;
+- referencia de origen;
+- nombre;
+- teléfono normalizado;
+- elegibilidad y motivo de exclusión;
+- estado de envío;
+- `provider_message_id`;
+- clasificación de respuesta;
+- opt-out y motivo seguro;
+- escalamiento;
+- referencia interna.
+
+Unicidad propuesta:
+
+`UNIQUE (campaign_id, phone_e164)`
+
+Un contacto no puede recibir dos mensajes de la misma campaña. Una
+nueva importación tampoco puede reactivar un opt-out existente.
+
+### Reutilización técnica prevista
+
+P6-F.11 podrá reutilizar, después de auditar el código:
+
+- transporte de templates de WhatsApp;
+- procesamiento de estados del proveedor;
+- correlación mediante `provider_message_id`;
+- flujo determinístico actual de Elvira;
+- estado `ST_OPTOUT`;
+- KB de servicios;
+- flujo de solicitud de cita;
+- voz para mensajes entrantes de audio;
+- escalamiento humano de P6-F.10.
+
+No se modificará el comportamiento clínico ni el flujo actual de citas.
+
+### Próximo sprint
+
+`P6-F.11.1 — Reactivation Architecture and Source Audit`
+
+Primeras tareas:
+
+1. verificar `main` y working tree;
+2. inspeccionar la tabla fuente;
+3. auditar el opt-out determinístico actual;
+4. auditar el transporte y tracking de templates;
+5. definir campaña y contacto de campaña;
+6. definir la plantilla de reactivación;
+7. diseñar idempotencia y exclusiones;
+8. escribir pruebas antes de implementar;
+9. mantener los envíos desactivados.
