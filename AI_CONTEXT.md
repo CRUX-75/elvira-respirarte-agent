@@ -1430,18 +1430,139 @@ P6-F.11 podrá reutilizar, después de auditar el código:
 
 No se modificará el comportamiento clínico ni el flujo actual de citas.
 
+### P6-F.11.1 — Reactivation Architecture and Source Audit
+
+Estado: **cerrada arquitectónicamente**.
+
+La campaña aún no está implementada ni habilitada.
+
+Decisiones cerradas:
+
+- se reutiliza el spreadsheet existente `Respirarte CRM`;
+- se creó la pestaña `Reactivacion_Historica`;
+- solo se incorporarán contactos realmente utilizables;
+- Google Sheets funciona como superficie de preparación y revisión;
+- PostgreSQL continúa siendo la fuente de verdad;
+- no se reutiliza `human_escalation_events`;
+- no se enviaron mensajes;
+- no se aplicaron migraciones;
+- no se modificó Easypanel ni producción.
+
+Contrato aprobado de `Reactivacion_Historica`:
+
+- `source_reference`
+- `nombre`
+- `telefono_original`
+- `atendido`
+- `autorizado_contacto`
+- `telefono_e164`
+- `revision_doctora`
+- `motivo_exclusion`
+- `estado_reactivacion`
+- `observaciones`
+
+Propiedad de columnas:
+
+- fuente histórica:
+  `source_reference`, `nombre`, `telefono_original`, `atendido`;
+- revisión humana:
+  `autorizado_contacto`, `revision_doctora`, `motivo_exclusion`,
+  `observaciones`;
+- sistema:
+  `telefono_e164`, `estado_reactivacion`.
+
+Listas configuradas:
+
+- `atendido`: `SI`, `NO`;
+- `autorizado_contacto`: `PENDIENTE`, `SI`, `NO`;
+- `revision_doctora`: `PENDIENTE`, `APROBADO`, `EXCLUIR`.
+
+Se cargaron cinco contactos únicamente para validar la estructura de la
+pestaña. Permanecen sin normalización, sin elegibilidad calculada y sin
+envío.
+
+La integración reutilizará:
+
+- `app/adapters/google_sheets_client.py`;
+- `send_whatsapp_template_message(...)`;
+- `WhatsAppPayload.extract_status_updates()`;
+- el flujo determinístico actual de Elvira;
+- `ST_OPTOUT`;
+- la KB, las citas, la voz y el escalamiento existentes.
+
+No se reutilizará el writer específico de `Solicitudes_Cita`. Se creará un
+adapter separado para `Reactivacion_Historica`.
+
+Persistencia conceptual aprobada:
+
+- `reactivation_campaigns`;
+- `reactivation_campaign_contacts`;
+- `UNIQUE (campaign_id, phone_e164)`.
+
+`patients.opt_out` debe comprobarse inmediatamente antes de cada envío.
+La consulta debe ser read-only y no puede usar
+`get_or_create_patient_by_phone(...)`.
+
+El webhook actual entrega todos los callbacks de estado al runtime de
+P6-F.10 y retorna inmediatamente. La extensión futura será un router
+best-effort que distribuya los estados entre human escalation y patient
+reactivation, manteniendo persistencia independiente por dominio.
+
+Templates activos observados en Meta:
+
+- `revision_humana`;
+- `franja_no_disponible`;
+- `cita_confirmada`;
+- `franja_atencion_prompt`;
+- `solicitud_cita_recibida`;
+- `hello_world`.
+
+Ninguno es adecuado para el primer contacto de reactivación.
+
+Template creado para P6-F.11:
+
+- nombre: `reactivacion_respirarte`;
+- categoría: `Marketing`;
+- idioma: `Spanish (COL)` / `es_CO`;
+- header de texto: `Respirarte`;
+- parámetro del body `{{1}}`: nombre del contacto;
+- footer: ninguno;
+- botones: ninguno;
+- estado: enviado a revisión de Meta.
+
+La plantilla todavía no está aprobada y no puede utilizarse hasta confirmar
+su aprobación.
+
+El opt-out determinístico actual se conserva, pero su cobertura semántica
+debe ampliarse mediante pruebas para reconocer rechazo directo, falta de
+interés, privacidad, lenguaje coloquial colombiano, errores ortográficos,
+hostilidad e insultos usados como rechazo.
+
+Una queja con solicitud de solución no implica automáticamente opt-out. Una
+queja acompañada de solicitud de no contacto produce escalamiento y
+opt-out. No debe almacenarse el insulto completo.
+
+### Protocolo de trabajo constituido
+
+- documentar `AI_CONTEXT.md` y el SDD en una sola ventana;
+- no repetir bloques ni comandos ya ejecutados;
+- avanzar paso a paso, con cada objetivo explicado;
+- documentar después de cada fase;
+- usar `grep`, `cat` y `sed` para inspección y validación.
+
 ### Próximo sprint
 
-`P6-F.11.1 — Reactivation Architecture and Source Audit`
+`P6-F.11.2 — Campaign Domain Contracts and Test-First Foundation`
 
-Primeras tareas:
+Objetivos:
 
-1. verificar `main` y working tree;
-2. inspeccionar la tabla fuente;
-3. auditar el opt-out determinístico actual;
-4. auditar el transporte y tracking de templates;
-5. definir campaña y contacto de campaña;
-6. definir la plantilla de reactivación;
-7. diseñar idempotencia y exclusiones;
-8. escribir pruebas antes de implementar;
-9. mantener los envíos desactivados.
+1. definir modelos de campaña y contacto;
+2. definir estados y transiciones válidas;
+3. definir normalización E.164;
+4. definir elegibilidad y motivos seguros de exclusión;
+5. crear una consulta read-only de pacientes por teléfono;
+6. escribir pruebas de idempotencia;
+7. escribir pruebas de opt-out semántico;
+8. escribir pruebas de callbacks fuera de orden;
+9. mantener la campaña desactivada;
+10. no aplicar migraciones ni enviar mensajes.
