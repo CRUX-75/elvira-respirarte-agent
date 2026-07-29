@@ -671,7 +671,7 @@ formalmente su aprobación en Meta.
 <!-- P6-F.11.3-SDD-CLOSURE:START -->
 ## P6-F.11.3 — Cierre de persistencia de campañas
 
-**Estado de la fase:** CLOSED  
+**Estado de la fase:** CLOSED
 **Fecha de cierre técnico:** 2026-07-29
 
 ### Resultado

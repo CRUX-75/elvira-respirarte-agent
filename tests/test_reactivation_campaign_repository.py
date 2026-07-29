@@ -610,4 +610,3 @@ def test_provider_progress_callbacks_can_recover_from_failed(
     normalized_sql = " ".join(sql.split())
 
     assert allowed_current in normalized_sql
-
