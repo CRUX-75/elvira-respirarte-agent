@@ -1261,7 +1261,7 @@ parte de este alcance.
 
 ## P6-F.11 — Patient Reactivation via WhatsApp
 
-Estado: definido funcionalmente, todavía no implementado.
+Estado: implementación parcial segura. P6-F.11.1 y P6-F.11.2 están cerradas; la campaña continúa desactivada y sin persistencia productiva.
 
 ### Separación de procesos
 
@@ -1503,10 +1503,12 @@ Persistencia conceptual aprobada:
 La consulta debe ser read-only y no puede usar
 `get_or_create_patient_by_phone(...)`.
 
-El webhook actual entrega todos los callbacks de estado al runtime de
-P6-F.10 y retorna inmediatamente. La extensión futura será un router
-best-effort que distribuya los estados entre human escalation y patient
-reactivation, manteniendo persistencia independiente por dominio.
+El webhook actual continúa entregando todos los callbacks de estado al
+runtime de P6-F.10 y retorna inmediatamente. P6-F.11.2 implementó el
+router genérico best-effort en
+`app/services/whatsapp_status_runtime.py`, pero todavía no está conectado
+a `/webhook`. Cada dominio conservará persistencia, métricas e
+idempotencia independientes.
 
 Templates activos observados en Meta:
 
@@ -1533,14 +1535,17 @@ Template creado para P6-F.11:
 La plantilla todavía no está aprobada y no puede utilizarse hasta confirmar
 su aprobación.
 
-El opt-out determinístico actual se conserva, pero su cobertura semántica
-debe ampliarse mediante pruebas para reconocer rechazo directo, falta de
-interés, privacidad, lenguaje coloquial colombiano, errores ortográficos,
-hostilidad e insultos usados como rechazo.
+El opt-out determinístico actual se conserva y P6-F.11.2 amplió su
+cobertura semántica mediante pruebas para reconocer rechazo directo,
+falta de interés en contexto de reactivación, privacidad, lenguaje
+coloquial colombiano, errores ortográficos, hostilidad e insultos usados
+como rechazo.
 
-Una queja con solicitud de solución no implica automáticamente opt-out. Una
-queja acompañada de solicitud de no contacto produce escalamiento y
-opt-out. No debe almacenarse el insulto completo.
+Los rechazos fuertes se reconocen globalmente. Los rechazos suaves como
+`No gracias` o `No me interesa` requieren contexto explícito de campaña.
+Una queja con solicitud de solución no implica automáticamente opt-out;
+una queja acompañada de solicitud de no contacto produce escalamiento y
+opt-out. La decisión semántica no almacena el mensaje hostil completo.
 
 ### Protocolo de trabajo constituido
 
@@ -1550,19 +1555,123 @@ opt-out. No debe almacenarse el insulto completo.
 - documentar después de cada fase;
 - usar `grep`, `cat` y `sed` para inspección y validación.
 
+### P6-F.11.2 — Campaign Domain Contracts and Test-First Foundation
+
+Estado: **cerrada técnicamente y validada localmente**.
+
+Rama de implementación:
+
+`feature/p6-f-11-2-campaign-domain-contracts`
+
+Implementación añadida:
+
+- `app/models/reactivation_campaign.py`
+  - modelos puros de campaña y contacto;
+  - estados explícitos de campaña;
+  - estados explícitos de contacto;
+  - autorización y revisión humana;
+  - motivos seguros de exclusión;
+  - contratos de elegibilidad.
+- `app/services/reactivation_domain.py`
+  - transiciones válidas de campaña y contacto;
+  - normalización E.164 para importación;
+  - evaluación determinística de elegibilidad;
+  - clave estable de idempotencia;
+  - bloqueo de segundo envío comercial;
+  - reducción monotónica de callbacks;
+  - clasificación semántica segura de respuestas.
+- `app/repositories/patients.py`
+  - `find_patient_by_phone_read_only(...)`;
+  - consulta mínima por teléfono;
+  - únicamente `SELECT`;
+  - no crea, actualiza ni elimina pacientes.
+- `app/services/intent.py`
+  - rechazos fuertes de no contacto y privacidad tienen prioridad global;
+  - rechazos suaves permanecen limitados al contexto explícito de campaña.
+- `app/services/whatsapp_status_runtime.py`
+  - router genérico best-effort;
+  - copias aisladas por dominio;
+  - fallo de un handler no bloquea al otro;
+  - sin SQL, repositorios ni conocimiento de tablas;
+  - todavía no conectado a `/webhook`.
+
+Estados de campaña definidos:
+
+- `draft`
+- `ready`
+- `active`
+- `paused`
+- `completed`
+- `cancelled`
+
+Estados de contacto definidos:
+
+- `staged`
+- `excluded`
+- `eligible`
+- `pending`
+- `accepted`
+- `sent`
+- `delivered`
+- `read`
+- `failed`
+- `opted_out`
+
+Contratos de seguridad cerrados:
+
+- `accepted`, `sent`, `delivered` y `read` bloquean otro envío;
+- un `provider_message_id` existente bloquea otro intento comercial;
+- solo un fallo retryable anterior a la aceptación puede reintentarse;
+- los callbacks repetidos o fuera de orden no regresan el estado;
+- el router no deduplica: cada repositorio de dominio conserva esa autoridad;
+- la elegibilidad utiliza motivos seguros, no información clínica libre;
+- el opt-out vigente se consulta sin crear pacientes;
+- no se almacena el insulto o mensaje hostil completo;
+- queja con solicitud de solución no implica opt-out automático;
+- queja con solicitud de no contacto implica escalamiento y opt-out.
+
+Evidencia de validación:
+
+- pruebas nuevas de P6-F.11.2: **147 passed**;
+- regresiones dirigidas de P6-F.10, callbacks, webhook y voz:
+  **57 passed**;
+- suite completa del repositorio: **644 passed**;
+- compilación Python: aprobada;
+- `git diff --check`: aprobado;
+- `app/main.py`: sin cambios.
+
+No implementado todavía:
+
+- tablas PostgreSQL;
+- migraciones aplicadas;
+- repositorios persistentes de campaña;
+- importación desde Google Sheets;
+- adapter de `Reactivacion_Historica`;
+- envío del template;
+- handler persistente de callbacks de reactivación;
+- conexión del router genérico a `/webhook`;
+- activación de campaña.
+
+No se modificó Easypanel, no se aplicaron migraciones y no se enviaron
+mensajes.
+
 ### Próximo sprint
 
-`P6-F.11.2 — Campaign Domain Contracts and Test-First Foundation`
+`P6-F.11.3 — Campaign Persistence Schema and Repository Foundation`
 
 Objetivos:
 
-1. definir modelos de campaña y contacto;
-2. definir estados y transiciones válidas;
-3. definir normalización E.164;
-4. definir elegibilidad y motivos seguros de exclusión;
-5. crear una consulta read-only de pacientes por teléfono;
-6. escribir pruebas de idempotencia;
-7. escribir pruebas de opt-out semántico;
-8. escribir pruebas de callbacks fuera de orden;
-9. mantener la campaña desactivada;
-10. no aplicar migraciones ni enviar mensajes.
+1. definir el esquema SQL de `reactivation_campaigns`;
+2. definir el esquema SQL de `reactivation_campaign_contacts`;
+3. proteger `UNIQUE (campaign_id, phone_e164)`;
+4. implementar contratos de repositorio para campaña y contacto;
+5. crear o reutilizar contactos de forma idempotente;
+6. implementar claim atómico para un intento de entrega;
+7. persistir `provider_message_id` y estados de entrega;
+8. proteger callbacks repetidos y fuera de orden en PostgreSQL;
+9. comprobar `patients.opt_out` inmediatamente antes del claim o envío;
+10. escribir primero las pruebas de repositorio;
+11. mantener la campaña desactivada;
+12. crear migraciones versionadas, pero no aplicarlas sin autorización;
+13. no conectar todavía el envío ni modificar `/webhook`;
+14. no modificar Easypanel ni realizar mensajes reales.

@@ -5,6 +5,9 @@ from app.services.date_resolver import contains_absolute_date_reference
 from app.services.slot_confirmation_guard import (
     is_simple_affirmative_slot_confirmation,
 )
+from app.services.reactivation_domain import (
+    classify_reactivation_response_semantics,
+)
 
 
 def normalize_text(text: str) -> str:
@@ -45,6 +48,16 @@ def classify_intent(
     current_state: str = "ST_INIT",
 ) -> Intent:
     msg = normalize_text(message)
+
+    if msg:
+        global_optout = (
+            classify_reactivation_response_semantics(
+                message,
+                reactivation_context=False,
+            )
+        )
+        if global_optout.is_opt_out:
+            return "optout"
     # P6-F.9.97 contextual slot and service procedure routing.
     # Bare numeric selections are appointment intents only while a slot is expected.
     if current_state == "ST_CITA_FRANJA" and msg in {"3", "5"}:

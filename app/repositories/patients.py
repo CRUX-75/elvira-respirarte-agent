@@ -207,3 +207,37 @@ def clear_patient_appointment_context(telefono: str) -> None:
             ),
             {"telefono": telefono},
         )
+
+
+def find_patient_by_phone_read_only(
+    telefono: str,
+) -> dict[str, Any] | None:
+    """
+    Read the minimum patient opt-out projection without creating or
+    modifying a patient record.
+
+    Intended for outbound eligibility checks immediately before sending.
+    """
+
+    telefono = (telefono or "").strip()
+
+    if not telefono:
+        raise ValueError("telefono is required")
+
+    with engine.connect() as conn:
+        patient = conn.execute(
+            text(
+                """
+                SELECT
+                    id,
+                    telefono,
+                    opt_out
+                FROM patients
+                WHERE telefono = :telefono
+                LIMIT 1
+                """
+            ),
+            {"telefono": telefono},
+        ).fetchone()
+
+    return _row_to_dict(patient)

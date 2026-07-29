@@ -407,31 +407,39 @@ reutilizable.
 El routing actual está acoplado a P6-F.10 porque `/webhook` retorna después
 de ejecutar el handler de human escalation.
 
-Se implementará posteriormente un router genérico best-effort que distribuya
-callbacks entre:
+P6-F.11.2 implementó el router genérico best-effort en
+`app/services/whatsapp_status_runtime.py`. El router distribuye copias
+aisladas del mismo lote entre:
 
 - human escalation;
 - patient reactivation.
 
-Cada dominio actualizará únicamente su propia persistencia.
+El fallo de un dominio no bloquea al otro. El router no conoce tablas,
+repositorios ni reglas de lifecycle. Cada dominio actualizará únicamente
+su propia persistencia.
+
+El router todavía no está conectado a `/webhook`; el comportamiento
+productivo de P6-F.10 permanece intacto.
 
 ### Opt-out
 
 El flujo determinístico actual se conserva.
 
-La ampliación semántica debe escribirse primero mediante pruebas y cubrir:
+P6-F.11.2 implementó la ampliación semántica mediante pruebas para cubrir:
 
 - rechazo directo;
-- falta de interés;
+- falta de interés dentro del contexto de reactivación;
 - solicitud de no contacto;
 - solicitud de eliminación del número;
 - objeciones de privacidad;
 - lenguaje coloquial colombiano;
 - errores ortográficos y abreviaciones;
 - hostilidad e insultos usados como rechazo;
-- rechazo expresado mediante nota de voz.
+- transcripciones de voz equivalentes.
 
-Una queja no implica automáticamente opt-out.
+Los rechazos fuertes se reconocen globalmente. Los rechazos suaves
+requieren contexto explícito de reactivación. Una queja no implica
+automáticamente opt-out.
 
 ### Condición de cierre
 
@@ -455,36 +463,207 @@ P6-F.11.1 queda cerrada porque se definieron:
 No se aplicaron migraciones, no se modificó Easypanel y no se enviaron
 mensajes.
 
-## 18. Próximo sprint
+## 18. Cierre de P6-F.11.2 — Campaign Domain Contracts and Test-First Foundation
 
-`P6-F.11.2 — Campaign Domain Contracts and Test-First Foundation`
+Estado: **cerrado y validado localmente**.
+
+P6-F.11.2 implementó la base de dominio de la campaña sin introducir
+persistencia productiva, migraciones aplicadas ni envíos.
+
+### 18.1 Modelos y lifecycle
+
+Archivo:
+
+`app/models/reactivation_campaign.py`
+
+Estados de campaña:
+
+- `draft`
+- `ready`
+- `active`
+- `paused`
+- `completed`
+- `cancelled`
+
+Estados de contacto:
+
+- `staged`
+- `excluded`
+- `eligible`
+- `pending`
+- `accepted`
+- `sent`
+- `delivered`
+- `read`
+- `failed`
+- `opted_out`
+
+También se definieron:
+
+- estados de autorización;
+- estados de revisión de la doctora;
+- motivos seguros de exclusión;
+- entrada y resultado de elegibilidad.
+
+Las transiciones inválidas son rechazadas de forma explícita.
+
+### 18.2 Normalización, elegibilidad e idempotencia
+
+Archivo:
+
+`app/services/reactivation_domain.py`
+
+Contratos implementados:
+
+- normalización de teléfonos a E.164 compatible con WhatsApp;
+- prefijo colombiano únicamente cuando se suministra como país por defecto;
+- rechazo de teléfonos ambiguos o inválidos;
+- clave estable por campaña y teléfono;
+- elegibilidad determinística;
+- múltiples motivos seguros de exclusión;
+- bloqueo de un nuevo envío después de `accepted`, `sent`, `delivered` o
+  `read`;
+- bloqueo cuando ya existe `provider_message_id`;
+- retry permitido únicamente para fallos retryable anteriores a la
+  aceptación;
+- reducción monotónica de callbacks;
+- callbacks repetidos sin regresión del estado.
+
+La restricción persistente futura continúa siendo:
+
+`UNIQUE (campaign_id, phone_e164)`
+
+### 18.3 Consulta read-only de pacientes
+
+Se añadió:
+
+`find_patient_by_phone_read_only(...)`
+
+La consulta:
+
+- usa únicamente `SELECT`;
+- proyecta `id`, `telefono` y `opt_out`;
+- no utiliza `get_or_create_patient_by_phone(...)`;
+- no crea pacientes;
+- no actualiza nombres;
+- no modifica estado conversacional;
+- no elimina registros.
+
+Este contrato se utilizará inmediatamente antes del claim o envío futuro.
+
+### 18.4 Opt-out semántico
+
+Se implementó una decisión semántica segura con las categorías:
+
+- `explicit_refusal`
+- `stop_contact_request`
+- `hostile_rejection`
+- `privacy_objection`
+
+Reglas:
+
+- rechazos fuertes de contacto o privacidad tienen prioridad global;
+- respuestas suaves como `No gracias` y `No me interesa` requieren contexto
+  explícito de reactivación;
+- errores ortográficos, abreviaciones, repeticiones, emojis y lenguaje
+  coloquial están cubiertos;
+- las transcripciones de voz usan el mismo contrato;
+- una queja que solicita solución requiere escalamiento y no implica
+  automáticamente opt-out;
+- una queja con solicitud de no contacto produce escalamiento y opt-out;
+- la decisión no conserva el mensaje hostil completo.
+
+La máquina de estados existente continúa produciendo:
+
+- `intent=optout`
+- `next_action=confirm_optout`
+- `nuevo_estado=ST_OPTOUT`
+- `opt_out=true`
+
+### 18.5 Router genérico de callbacks
+
+Se añadió:
+
+`app/services/whatsapp_status_runtime.py`
+
+El router:
+
+- recibe el lote ya extraído por `WhatsAppPayload`;
+- entrega una copia aislada a cada dominio;
+- no filtra ni deduplica callbacks;
+- no conoce tablas ni repositorios;
+- no altera lifecycle por sí mismo;
+- permite que un dominio falle sin bloquear al otro;
+- devuelve únicamente métricas y categorías seguras.
+
+El router todavía no está conectado a `/webhook`.
+
+P6-F.10 continúa recibiendo los callbacks productivos mediante su handler
+actual.
+
+### 18.6 Evidencia
+
+- pruebas nuevas de P6-F.11.2: **147 passed**;
+- regresiones dirigidas de P6-F.10, callbacks, webhook y voz:
+  **57 passed**;
+- suite completa: **644 passed**;
+- compilación Python: aprobada;
+- `git diff --check`: aprobado;
+- `app/main.py`: sin modificaciones.
+
+### 18.7 Límites conservados
+
+No se realizaron:
+
+- migraciones;
+- cambios de Easypanel;
+- cambios en Google Sheets;
+- importaciones de contactos;
+- escrituras en PostgreSQL de campaña;
+- conexión del router al webhook;
+- envío del template;
+- mensajes reales.
+
+La campaña permanece desactivada.
+
+## 19. Próximo sprint
+
+`P6-F.11.3 — Campaign Persistence Schema and Repository Foundation`
 
 Orden:
 
-1. definir modelos de campaña y contacto;
-2. definir estados válidos;
-3. definir normalización E.164;
-4. definir elegibilidad y exclusiones;
-5. definir consulta read-only de pacientes;
-6. escribir pruebas de idempotencia;
-7. escribir pruebas de opt-out semántico;
-8. escribir pruebas de callbacks fuera de orden;
-9. mantener la campaña desactivada;
-10. no aplicar migraciones ni enviar mensajes.
+1. definir esquemas SQL de campaña y contacto;
+2. crear migraciones versionadas sin aplicarlas;
+3. proteger `UNIQUE (campaign_id, phone_e164)`;
+4. implementar repositorios con pruebas first;
+5. crear o reutilizar campañas y contactos de forma idempotente;
+6. implementar claim atómico de entrega;
+7. persistir `provider_message_id`;
+8. aplicar estados de Meta de forma monotónica;
+9. impedir retries después de aceptación del proveedor;
+10. consultar `patients.opt_out` inmediatamente antes del claim o envío;
+11. mantener el router desconectado de `/webhook`;
+12. no implementar todavía importación, envío ni activación;
+13. no modificar Easypanel;
+14. no aplicar migraciones sin autorización expresa.
 
-## 19. Decisión vigente
+## 20. Decisión vigente
 
 P6-F.11 continúa siendo una campaña única de reactivación histórica.
 
-Solo se incorporarán contactos realmente utilizables.
+Solo se incorporarán contactos realmente utilizables y aprobados.
 
 El seguimiento posatención queda reservado para una fase independiente
 basada en pacientes atendidos desde el 1 de agosto de 2026.
 
-## 20. Protocolo de trabajo
+El template `reactivacion_respirarte` no podrá utilizarse hasta confirmar
+formalmente su aprobación en Meta.
+
+## 21. Protocolo de trabajo
 
 - `AI_CONTEXT.md` y el SDD se documentan en una sola ventana;
 - no se repiten bloques ni comandos ya ejecutados;
 - el trabajo avanza paso a paso;
 - la documentación se actualiza después de cada fase;
-- se utilizan `grep`, `cat` y `sed` para inspección y validación.
+- se utilizan `grep`, `cat` y `sed` para inspección y validación;
+- la campaña permanece desactivada hasta una decisión explícita.
