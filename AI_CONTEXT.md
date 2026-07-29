@@ -1675,3 +1675,89 @@ Objetivos:
 12. crear migraciones versionadas, pero no aplicarlas sin autorización;
 13. no conectar todavía el envío ni modificar `/webhook`;
 14. no modificar Easypanel ni realizar mensajes reales.
+
+<!-- P6-F.11.3-CLOSURE:START -->
+## P6-F.11.3 — Campaign Persistence Schema and Repository Foundation
+
+**Estado:** cerrada técnicamente el 29 de julio de 2026.
+
+### Implementación cerrada
+
+- Migración versionada:
+  `scripts/sql/008_create_reactivation_campaign_persistence.sql`.
+- La migración crea:
+  - `reactivation_campaigns`;
+  - `reactivation_campaign_contacts`.
+- La migración no fue aplicada a PostgreSQL.
+- La campaña permanece desactivada.
+- No se importaron contactos ni se enviaron mensajes reales.
+- Se mantiene la unicidad natural:
+  `UNIQUE (campaign_id, phone_e164)`.
+- Se mantiene unicidad parcial de `provider_message_id`.
+- Se añadieron claims atómicos con lease, contador de intentos y
+  recuperación controlada.
+- El claim exige que la campaña esté en estado `active`.
+- El claim vuelve a verificar `patients.opt_out` inmediatamente antes
+  de reservar el contacto.
+- No se crea ni modifica ningún paciente durante el claim.
+
+### Componentes añadidos
+
+- `app/repositories/reactivation_campaigns.py`
+  - `ReactivationCampaignRepository`;
+  - `ReactivationCampaignContactRepository`;
+  - creación o reutilización idempotente;
+  - claim atómico;
+  - persistencia de aceptación, errores y callbacks Meta;
+  - callbacks monotónicos y tolerantes a eventos fuera de orden.
+- `app/services/reactivation_campaign_service.py`
+  - coordinación de claims y persistencia sin acceso directo a SQL.
+- `app/services/reactivation_status_runtime.py`
+  - handler best-effort de callbacks;
+  - resultados y errores sanitizados;
+  - aislamiento por callback.
+
+### Invariantes de entrega
+
+- `accepted`, `sent`, `delivered` y `read` bloquean un segundo envío
+  comercial.
+- Un `provider_message_id` persistido bloquea reintentos.
+- Solo un fallo previo a aceptación, retryable y sin
+  `provider_message_id` puede volver a reclamarse.
+- Un callback `sent` no puede regresar `delivered` ni `read`.
+- Un callback posterior válido puede recuperar un registro `failed`
+  hacia `sent`, `delivered` o `read`.
+
+### Evidencia técnica
+
+- 42 pruebas de persistencia y callbacks: OK.
+- 36 regresiones dirigidas de callbacks, webhook y P6-F.10: OK.
+- Suite completa: 686 pruebas aprobadas en 558.93 segundos.
+- Compilación: OK.
+- `git diff --check`: OK.
+- `app/main.py`: intacto.
+- Router genérico de callbacks: sin conexión productiva al handler de
+  reactivación.
+- PostgreSQL, Google Sheets y Easypanel: sin modificaciones.
+
+### Template Meta
+
+El template `reactivacion_respirarte` fue observado aprobado y activo
+en Meta el 28 de julio de 2026.
+
+La aprobación del template no autoriza por sí sola la activación de la
+campaña, la importación de contactos ni el envío de mensajes.
+
+### Siguiente fase
+
+`P6-F.11.4 — Ampliación del opt-out semántico y manejo de respuestas`.
+
+Continúan fuera de alcance hasta autorización expresa:
+
+- activación de campaña;
+- aplicación de la migración `008`;
+- importación desde Google Sheets;
+- envío real;
+- wiring productivo del router;
+- piloto con pacientes.
+<!-- P6-F.11.3-CLOSURE:END -->

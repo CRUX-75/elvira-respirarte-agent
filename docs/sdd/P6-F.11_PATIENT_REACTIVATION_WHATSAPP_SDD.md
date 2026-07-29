@@ -667,3 +667,114 @@ formalmente su aprobación en Meta.
 - la documentación se actualiza después de cada fase;
 - se utilizan `grep`, `cat` y `sed` para inspección y validación;
 - la campaña permanece desactivada hasta una decisión explícita.
+
+<!-- P6-F.11.3-SDD-CLOSURE:START -->
+## P6-F.11.3 — Cierre de persistencia de campañas
+
+**Estado de la fase:** CLOSED  
+**Fecha de cierre técnico:** 2026-07-29
+
+### Resultado
+
+P6-F.11.3 establece la base persistente e idempotente para campañas
+históricas de reactivación de pacientes sin activar todavía el flujo
+productivo.
+
+Se implementaron dos agregados persistentes independientes:
+
+1. `reactivation_campaigns`
+2. `reactivation_campaign_contacts`
+
+El contacto conserva los contratos definidos en P6-F.11.2:
+
+- teléfono original y teléfono normalizado E.164;
+- asistencia;
+- autorización;
+- revisión médica;
+- exclusiones seguras;
+- estado de elegibilidad;
+- idempotencia;
+- estado de entrega Meta;
+- reintentos y claims.
+
+### Seguridad transaccional
+
+La adquisición de un contacto para entrega ocurre mediante un
+`UPDATE ... WHERE ... RETURNING` atómico.
+
+El claim solo puede prosperar cuando:
+
+- la campaña relacionada está `active`;
+- el contacto está `eligible`, o está `failed` y es retryable;
+- no existe un `provider_message_id`;
+- no existe un claim vigente;
+- el paciente no está marcado con `patients.opt_out = TRUE`.
+
+La consulta de opt-out se ejecuta dentro del claim inmediatamente
+antes de reservar el contacto.
+
+El repositorio no invoca `get_or_create_patient_by_phone(...)` ni
+realiza mutaciones de pacientes.
+
+### Idempotencia y callbacks
+
+La persistencia protege:
+
+- `UNIQUE (campaign_id, phone_e164)`;
+- unicidad de `idempotency_key`;
+- unicidad parcial de `provider_message_id`.
+
+Los callbacks Meta son repetibles y monotónicos:
+
+- `sent` no puede regresar `delivered` o `read`;
+- `delivered` no puede regresar `read`;
+- callbacks posteriores válidos pueden recuperar un registro
+  `failed`;
+- callbacks duplicados no generan un segundo contacto ni un segundo
+  envío;
+- callbacks desconocidos se ignoran de forma segura;
+- un fallo individual no interrumpe el lote completo.
+
+### Estado de integración
+
+El handler
+`process_reactivation_status_updates_best_effort(...)` está
+implementado, pero continúa desconectado de:
+
+- `app/main.py`;
+- `/webhook`;
+- `route_whatsapp_status_updates_best_effort(...)`.
+
+La migración
+`008_create_reactivation_campaign_persistence.sql` está versionada,
+pero no fue aplicada.
+
+### Validación
+
+- Persistencia y callbacks: 42 passed.
+- Regresiones dirigidas: 36 passed.
+- Suite completa: 686 passed.
+- Tiempo de suite completa: 558.93 segundos.
+- Compilación: OK.
+- Formato del diff: OK.
+- Sin cambios en producción, PostgreSQL, Sheets o Easypanel.
+
+### Dependencias externas
+
+El template `reactivacion_respirarte` fue observado aprobado y activo
+en Meta el 28 de julio de 2026.
+
+Este estado elimina la espera externa prevista, pero no constituye
+autorización para activar la campaña ni enviar mensajes.
+
+### Roadmap restante
+
+- P6-F.11.4 — opt-out semántico y respuestas.
+- P6-F.11.5 — dispatcher, transporte y tracking Meta.
+- P6-F.11.6 — Google Sheets y dry run sin envío.
+- P6-F.11.7 — piloto controlado y cierre productivo.
+
+Estimación restante: 4.5–6.5 sesiones enfocadas, aproximadamente
+8–15 horas de trabajo técnico, sujeta a los resultados del dry run y
+del piloto.
+<!-- P6-F.11.3-SDD-CLOSURE:END -->

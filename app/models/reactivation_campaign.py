@@ -87,6 +87,15 @@ class ReactivationCampaignContact(BaseModel):
     provider_message_id: str | None = None
     retryable: bool = False
     attempt_count: int = 0
+    last_error_category: str | None = None
+    claim_token: str | None = None
+    claim_expires_at: datetime | None = None
+    last_attempt_at: datetime | None = None
+    accepted_at: datetime | None = None
+    sent_at: datetime | None = None
+    delivered_at: datetime | None = None
+    read_at: datetime | None = None
+    failed_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
