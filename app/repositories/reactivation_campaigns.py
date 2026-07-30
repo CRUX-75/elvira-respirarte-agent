@@ -9,6 +9,7 @@ from sqlalchemy import text
 from app.models.reactivation_campaign import (
     ReactivationCampaign,
     ReactivationCampaignContact,
+    ReactivationCampaignResponseEvent,
 )
 
 
@@ -37,6 +38,11 @@ _CONTACT_COLUMNS = """
     exclusion_reasons,
     idempotency_key,
     provider_message_id,
+    inbound_whatsapp_message_id,
+    response_classification,
+    response_safe_reason,
+    response_requires_human_escalation,
+    responded_at,
     retryable,
     attempt_count,
     last_error_category,
@@ -50,6 +56,20 @@ _CONTACT_COLUMNS = """
     failed_at,
     created_at,
     updated_at
+"""
+
+
+_RESPONSE_EVENT_COLUMNS = """
+    id,
+    contact_id,
+    inbound_whatsapp_message_id,
+    response_classification,
+    response_safe_reason,
+    global_opt_out_requested,
+    campaign_opt_out_requested,
+    requires_human_escalation,
+    received_at,
+    created_at
 """
 
 
@@ -69,6 +89,16 @@ def _contact_from_row(
         return None
 
     return ReactivationCampaignContact(**dict(row))
+
+
+
+def _response_event_from_row(
+    row: Any | None,
+) -> ReactivationCampaignResponseEvent | None:
+    if row is None:
+        return None
+
+    return ReactivationCampaignResponseEvent(**dict(row))
 
 
 class ReactivationCampaignRepository:
@@ -383,6 +413,219 @@ class ReactivationCampaignContactRepository:
             )
 
         return _contact_from_row(row)
+
+    def find_latest_response_candidate_by_phone(
+        self,
+        *,
+        phone_e164: str,
+    ) -> ReactivationCampaignContact | None:
+        phone_e164 = str(phone_e164 or "").strip()
+
+        if not phone_e164:
+            raise ValueError("phone_e164 is required.")
+
+        statement = text(
+            f"""
+            SELECT {_CONTACT_COLUMNS}
+            FROM reactivation_campaign_contacts
+            WHERE phone_e164 = :phone_e164
+              AND provider_message_id IS NOT NULL
+              AND status IN (
+                    'accepted',
+                    'sent',
+                    'delivered',
+                    'read',
+                    'opted_out'
+              )
+            ORDER BY
+                accepted_at DESC NULLS LAST,
+                updated_at DESC,
+                created_at DESC
+            LIMIT 1
+            """
+        )
+
+        with self.engine.connect() as connection:
+            row = (
+                connection.execute(
+                    statement,
+                    {"phone_e164": phone_e164},
+                )
+                .mappings()
+                .first()
+            )
+
+        return _contact_from_row(row)
+
+    def record_response_event(
+        self,
+        *,
+        contact_id: str,
+        inbound_whatsapp_message_id: str,
+        response_classification: str,
+        response_safe_reason: str | None,
+        global_opt_out_requested: bool,
+        campaign_opt_out_requested: bool,
+        requires_human_escalation: bool,
+        received_at: datetime | None,
+    ) -> ReactivationCampaignResponseEvent:
+        contact_id = str(contact_id or "").strip()
+        inbound_whatsapp_message_id = str(
+            inbound_whatsapp_message_id or ""
+        ).strip()
+        response_classification = str(
+            response_classification or ""
+        ).strip()
+
+        if not contact_id:
+            raise ValueError("contact_id is required.")
+
+        if not inbound_whatsapp_message_id:
+            raise ValueError(
+                "inbound_whatsapp_message_id is required."
+            )
+
+        if not response_classification:
+            raise ValueError(
+                "response_classification is required."
+            )
+
+        if response_safe_reason is not None:
+            response_safe_reason = (
+                str(response_safe_reason).strip() or None
+            )
+
+        statement = text(
+            f"""
+            WITH inserted_event AS (
+                INSERT INTO reactivation_campaign_response_events (
+                    contact_id,
+                    inbound_whatsapp_message_id,
+                    response_classification,
+                    response_safe_reason,
+                    global_opt_out_requested,
+                    campaign_opt_out_requested,
+                    requires_human_escalation,
+                    received_at
+                )
+                SELECT
+                    :contact_id,
+                    :inbound_whatsapp_message_id,
+                    :response_classification,
+                    :response_safe_reason,
+                    :global_opt_out_requested,
+                    :campaign_opt_out_requested,
+                    :requires_human_escalation,
+                    COALESCE(:received_at, NOW())
+                FROM reactivation_campaign_contacts
+                WHERE id = :contact_id
+                  AND provider_message_id IS NOT NULL
+                  AND status IN (
+                        'accepted',
+                        'sent',
+                        'delivered',
+                        'read',
+                        'opted_out'
+                  )
+                ON CONFLICT (inbound_whatsapp_message_id)
+                DO NOTHING
+                RETURNING {_RESPONSE_EVENT_COLUMNS}
+            ),
+            updated_contact AS (
+                UPDATE reactivation_campaign_contacts
+                SET
+                    status = CASE
+                        WHEN :campaign_opt_out_requested
+                        THEN 'opted_out'
+                        ELSE status
+                    END,
+                    inbound_whatsapp_message_id = CASE
+                        WHEN responded_at IS NULL OR COALESCE(:received_at, NOW()) >= responded_at
+                        THEN :inbound_whatsapp_message_id
+                        ELSE inbound_whatsapp_message_id
+                    END,
+                    response_classification = CASE
+                        WHEN responded_at IS NULL OR COALESCE(:received_at, NOW()) >= responded_at
+                        THEN :response_classification
+                        ELSE response_classification
+                    END,
+                    response_safe_reason = CASE
+                        WHEN responded_at IS NULL OR COALESCE(:received_at, NOW()) >= responded_at
+                        THEN :response_safe_reason
+                        ELSE response_safe_reason
+                    END,
+                    response_requires_human_escalation = CASE
+                        WHEN responded_at IS NULL OR COALESCE(:received_at, NOW()) >= responded_at
+                        THEN :requires_human_escalation
+                        ELSE response_requires_human_escalation
+                    END,
+                    responded_at = CASE
+                        WHEN responded_at IS NULL OR COALESCE(:received_at, NOW()) >= responded_at
+                        THEN COALESCE(:received_at, NOW())
+                        ELSE responded_at
+                    END,
+                    updated_at = NOW()
+                WHERE id = :contact_id
+                  AND EXISTS (
+                        SELECT 1
+                        FROM inserted_event
+                  )
+                RETURNING id
+            )
+            SELECT {_RESPONSE_EVENT_COLUMNS}
+            FROM inserted_event
+
+            UNION ALL
+
+            SELECT {_RESPONSE_EVENT_COLUMNS}
+            FROM reactivation_campaign_response_events
+            WHERE inbound_whatsapp_message_id = (
+                :inbound_whatsapp_message_id
+            )
+              AND contact_id = :contact_id
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM inserted_event
+              )
+            LIMIT 1
+            """
+        )
+
+        params = {
+            "contact_id": contact_id,
+            "inbound_whatsapp_message_id": (
+                inbound_whatsapp_message_id
+            ),
+            "response_classification": response_classification,
+            "response_safe_reason": response_safe_reason,
+            "global_opt_out_requested": (
+                global_opt_out_requested
+            ),
+            "campaign_opt_out_requested": (
+                campaign_opt_out_requested
+            ),
+            "requires_human_escalation": (
+                requires_human_escalation
+            ),
+            "received_at": received_at,
+        }
+
+        with self.engine.begin() as connection:
+            row = (
+                connection.execute(statement, params)
+                .mappings()
+                .first()
+            )
+
+        event = _response_event_from_row(row)
+
+        if event is None:
+            raise RuntimeError(
+                "No eligible reactivation contact was found "
+                "for the inbound response."
+            )
+
+        return event
 
     def try_claim_delivery(
         self,

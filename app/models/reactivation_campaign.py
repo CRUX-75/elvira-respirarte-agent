@@ -85,6 +85,11 @@ class ReactivationCampaignContact(BaseModel):
     )
     idempotency_key: str | None = None
     provider_message_id: str | None = None
+    inbound_whatsapp_message_id: str | None = None
+    response_classification: str | None = None
+    response_safe_reason: str | None = None
+    response_requires_human_escalation: bool = False
+    responded_at: datetime | None = None
     retryable: bool = False
     attempt_count: int = 0
     last_error_category: str | None = None
@@ -98,6 +103,19 @@ class ReactivationCampaignContact(BaseModel):
     failed_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class ReactivationCampaignResponseEvent(BaseModel):
+    id: str
+    contact_id: str
+    inbound_whatsapp_message_id: str
+    response_classification: str
+    response_safe_reason: str | None = None
+    global_opt_out_requested: bool = False
+    campaign_opt_out_requested: bool = False
+    requires_human_escalation: bool = False
+    received_at: datetime | None = None
+    created_at: datetime | None = None
 
 
 class ReactivationEligibilityInput(BaseModel):

@@ -1261,7 +1261,7 @@ parte de este alcance.
 
 ## P6-F.11 — Patient Reactivation via WhatsApp
 
-Estado: implementación parcial segura. P6-F.11.1 y P6-F.11.2 están cerradas; la campaña continúa desactivada y sin persistencia productiva.
+Estado: implementación parcial segura. P6-F.11.1, P6-F.11.2, P6-F.11.3 y P6-F.11.4 están cerradas; la campaña continúa desactivada y sin wiring productivo.
 
 ### Separación de procesos
 
@@ -1761,3 +1761,172 @@ Continúan fuera de alcance hasta autorización expresa:
 - wiring productivo del router;
 - piloto con pacientes.
 <!-- P6-F.11.3-CLOSURE:END -->
+
+<!-- P6-F.11.4-CLOSURE:START -->
+## P6-F.11.4 — Semantic Opt-out and Response Handling
+
+**Estado:** cerrada técnicamente el 30 de julio de 2026.
+
+### Política determinística de respuestas
+
+Se implementó una política específica para interpretar respuestas a la
+campaña histórica sin depender de una coincidencia literal con `NO`.
+
+Clasificaciones persistentes:
+
+- `global_opt_out`
+- `campaign_refusal`
+- `positive_contact_request`
+- `complaint`
+- `ambiguous`
+
+Reglas aplicadas:
+
+- una solicitud fuerte de no contacto produce opt-out global y opt-out
+  del contacto de campaña;
+- una negativa limitada a la campaña produce únicamente opt-out de ese
+  contacto de campaña;
+- una respuesta positiva solicita revisión humana, sin opt-out;
+- una queja solicita revisión humana;
+- una queja combinada con una solicitud fuerte de no contacto conserva
+  tanto el escalamiento como el opt-out;
+- una respuesta ambigua no genera efectos laterales externos;
+- el mensaje bruto se utiliza únicamente durante la clasificación y no
+  forma parte de los contratos persistentes.
+
+### Persistencia de respuestas
+
+Se añadió la migración versionada:
+
+`scripts/sql/009_add_reactivation_response_persistence.sql`
+
+La migración amplía `reactivation_campaign_contacts` con un resumen seguro:
+
+- `inbound_whatsapp_message_id`;
+- `response_classification`;
+- `response_safe_reason`;
+- `response_requires_human_escalation`;
+- `responded_at`.
+
+También define:
+
+`reactivation_campaign_response_events`
+
+Cada evento conserva exclusivamente:
+
+- contacto correlacionado;
+- identificador del mensaje entrante;
+- clasificación y motivo seguros;
+- decisión separada de opt-out global;
+- decisión separada de opt-out de campaña;
+- necesidad de escalamiento;
+- fechas técnicas.
+
+No se persisten:
+
+- texto bruto;
+- transcripciones completas;
+- payloads Meta;
+- audio;
+- historial de conversación.
+
+La migración `009` está versionada, pero no fue aplicada a PostgreSQL.
+
+### Correlación, idempotencia y orden temporal
+
+La correlación read-only selecciona el contacto de reactivación más
+reciente para el teléfono E.164 cuando existe un
+`provider_message_id` aceptado.
+
+La persistencia de una respuesta:
+
+- inserta el evento y actualiza el resumen del contacto dentro de una
+  única transacción;
+- protege la unicidad de `inbound_whatsapp_message_id`;
+- devuelve el evento original ante una repetición idempotente;
+- exige que un mensaje repetido corresponda al mismo `contact_id`;
+- registra respuestas posteriores y fuera de orden como eventos;
+- impide que una respuesta antigua sobrescriba el resumen más reciente;
+- mantiene el estado `opted_out` de forma monotónica;
+- permite correlacionar nuevas respuestas aunque el contacto ya esté
+  `opted_out`.
+
+### Servicio, runtime y adaptadores
+
+Se añadieron:
+
+- `ReactivationCampaignResponseService`;
+- `process_reactivation_response_best_effort(...)`;
+- `persist_reactivation_global_opt_out(...)`;
+- `persist_reactivation_escalation(...)`.
+
+El servicio coordina correlación, clasificación y persistencia sin
+exponer texto bruto en su resultado.
+
+El runtime:
+
+- admite dependencias inyectadas;
+- aísla de forma best-effort el opt-out global y el escalamiento;
+- intenta cada efecto lateral de manera independiente;
+- devuelve únicamente contadores y estados seguros;
+- no propaga detalles sensibles de excepciones.
+
+El adaptador de opt-out global:
+
+- consulta únicamente un paciente ya existente;
+- no crea pacientes;
+- establece `ST_OPTOUT` y `opt_out=True` cuando encuentra el registro.
+
+El adaptador de escalamiento reutiliza la persistencia idempotente de
+P6-F.10 y añade las acciones aprobadas:
+
+- `escalate_reactivation_interest`;
+- `escalate_reactivation_complaint`.
+
+Los eventos humanos no incluyen el ID interno del contacto de campaña,
+el ID del evento de respuesta ni el texto bruto recibido.
+
+### Estado de integración
+
+El runtime y sus adaptadores continúan desconectados de:
+
+- `app/main.py`;
+- `/webhook`;
+- el envío del template;
+- cualquier campaña activa.
+
+No se modificó el flujo productivo existente de P6-F.10.
+
+### Evidencia técnica
+
+- Contratos completos de P6-F.11.4: 40 passed.
+- Regresión semántica de opt-out: 45 passed.
+- Regresión funcional amplia: 83 passed.
+- Regresión de servicios, persistencia y callbacks: 54 passed.
+- Suite completa del repositorio: aprobada con exit status 0.
+- Compilación Python: aprobada.
+- `git diff --check`: aprobado.
+- `app/main.py`: sin wiring de respuestas de reactivación.
+
+### Límites conservados
+
+No se realizaron:
+
+- aplicación de las migraciones `008` o `009`;
+- escrituras de campaña en PostgreSQL productivo;
+- cambios en Easypanel;
+- cambios en Google Sheets;
+- importación de contactos;
+- envío del template;
+- mensajes reales;
+- activación de campaña;
+- piloto con pacientes.
+
+### Siguiente fase
+
+`P6-F.11.5 — Template Dispatcher and Meta Delivery Tracking`
+
+P6-F.11.5 implementará el dispatcher y los contratos de transporte del
+template aprobado, manteniendo los envíos reales bloqueados hasta una
+autorización explícita.
+<!-- P6-F.11.4-CLOSURE:END -->

@@ -778,3 +778,175 @@ Estimación restante: 4.5–6.5 sesiones enfocadas, aproximadamente
 8–15 horas de trabajo técnico, sujeta a los resultados del dry run y
 del piloto.
 <!-- P6-F.11.3-SDD-CLOSURE:END -->
+
+<!-- P6-F.11.4-SDD-CLOSURE:START -->
+## 22. Cierre de P6-F.11.4 — Opt-out y manejo de respuestas
+
+**Estado de la fase:** CLOSED
+**Fecha de cierre técnico:** 2026-07-30
+
+### 22.1 Resultado
+
+P6-F.11.4 establece el contrato determinístico, persistente e
+idempotente para procesar respuestas a una campaña histórica de
+reactivación.
+
+La fase no conecta todavía este procesamiento al webhook productivo.
+
+### 22.2 Clasificaciones de respuesta
+
+El dominio distingue:
+
+| Clasificación | Opt-out global | Opt-out de campaña | Escalamiento |
+| --- | --- | --- | --- |
+| `global_opt_out` | sí | sí | solo cuando también existe queja |
+| `campaign_refusal` | no | sí | no |
+| `positive_contact_request` | no | no | sí |
+| `complaint` | no | no | sí |
+| `ambiguous` | no | no | no |
+
+La precedencia determinística es:
+
+1. solicitud fuerte de no contacto;
+2. rechazo limitado a la campaña;
+3. queja;
+4. interés o solicitud de contacto;
+5. respuesta ambigua.
+
+Una queja combinada con una solicitud fuerte de no contacto conserva
+ambas decisiones: escalamiento y opt-out.
+
+### 22.3 Contrato persistente
+
+La migración versionada
+`009_add_reactivation_response_persistence.sql` añade un resumen seguro
+al contacto y crea `reactivation_campaign_response_events`.
+
+El resumen del contacto conserva:
+
+- último identificador entrante aplicable;
+- última clasificación aplicable;
+- último motivo seguro;
+- necesidad de escalamiento;
+- fecha de la última respuesta aplicable.
+
+La tabla de eventos conserva todas las decisiones técnicas necesarias
+para auditoría e idempotencia.
+
+Quedan excluidos explícitamente:
+
+- texto bruto del mensaje;
+- transcripción completa;
+- audio;
+- payload Meta;
+- historial conversacional.
+
+La migración está versionada y no aplicada.
+
+### 22.4 Correlación e idempotencia
+
+La respuesta se correlaciona con el contacto de campaña más reciente
+del mismo teléfono E.164 que ya tenga entrega aceptada por Meta.
+
+La escritura utiliza una transacción atómica con:
+
+- inserción idempotente del evento;
+- resumen seguro del contacto;
+- unicidad de `inbound_whatsapp_message_id`;
+- recuperación del evento original ante duplicados;
+- validación adicional de `contact_id`.
+
+Un identificador entrante perteneciente a otro contacto no puede
+devolver un evento ajeno.
+
+### 22.5 Respuestas fuera de orden
+
+Todo mensaje nuevo válido puede registrarse como evento.
+
+El resumen del contacto únicamente avanza cuando:
+
+`received_at >= responded_at`
+
+Por tanto:
+
+- una respuesta antigua no sustituye una clasificación más reciente;
+- una respuesta antigua no elimina una necesidad de escalamiento más
+  reciente;
+- una respuesta antigua no modifica `responded_at`;
+- el opt-out de campaña permanece monotónico;
+- el contacto `opted_out` continúa disponible para correlacionar
+  respuestas repetidas o posteriores.
+
+### 22.6 Runtime best-effort
+
+`process_reactivation_response_best_effort(...)` coordina:
+
+1. correlación;
+2. clasificación;
+3. persistencia;
+4. opt-out global opcional;
+5. escalamiento opcional.
+
+Los efectos laterales se ejecutan de forma independiente.
+
+Un fallo en el opt-out global no impide intentar el escalamiento, y un
+fallo de escalamiento no expone información sensible en el resultado.
+
+El resumen del runtime no contiene el mensaje recibido.
+
+### 22.7 Adaptadores
+
+`persist_reactivation_global_opt_out(...)`:
+
+- utiliza una consulta read-only;
+- no crea pacientes;
+- actualiza únicamente un paciente existente;
+- persiste `ST_OPTOUT`;
+- persiste `opt_out=True`.
+
+`persist_reactivation_escalation(...)`:
+
+- reutiliza `HumanEscalationEventService`;
+- conserva idempotencia por mensaje entrante y acción;
+- usa eventos minimizados;
+- no conserva IDs internos de campaña;
+- no conserva texto bruto.
+
+Acciones nuevas aprobadas:
+
+- `escalate_reactivation_interest`;
+- `escalate_reactivation_complaint`.
+
+### 22.8 Estado de integración
+
+Continúan sin wiring productivo:
+
+- `app/services/reactivation_response_runtime.py`;
+- `app/services/reactivation_response_adapters.py`;
+- `app/main.py`;
+- `/webhook`.
+
+No se aplicaron migraciones, no se activó la campaña y no se enviaron
+mensajes.
+
+### 22.9 Validación
+
+- Contratos de P6-F.11.4: 40 passed.
+- Regresión semántica: 45 passed.
+- Regresión funcional amplia: 83 passed.
+- Regresión de servicios, persistencia y callbacks: 54 passed.
+- Suite completa: aprobada, exit status 0.
+- Compilación: OK.
+- Formato del diff: OK.
+- Wiring productivo: ausente.
+- PostgreSQL productivo, Sheets y Easypanel: sin cambios.
+
+### 22.10 Roadmap restante
+
+- P6-F.11.5 — dispatcher, transporte y tracking Meta.
+- P6-F.11.6 — Google Sheets y dry run sin envío.
+- P6-F.11.7 — piloto controlado y cierre productivo.
+
+La aprobación previa del template `reactivacion_respirarte` no autoriza
+su envío ni la activación de la campaña.
+<!-- P6-F.11.4-SDD-CLOSURE:END -->

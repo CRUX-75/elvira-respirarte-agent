@@ -13,6 +13,8 @@ COLOMBIA_TIMEZONE = ZoneInfo("America/Bogota")
 
 APPROVED_ESCALATION_ACTIONS = frozenset(
     {
+        "escalate_reactivation_interest",
+        "escalate_reactivation_complaint",
         "escalate_urgent_case",
         "escalate_unknown_service",
         "escalate_dynamic_oximetry_missing_order",
@@ -22,6 +24,12 @@ APPROVED_ESCALATION_ACTIONS = frozenset(
 )
 
 SAFE_REASON_BY_ACTION = {
+    "escalate_reactivation_interest": (
+        "Paciente interesado en retomar contacto"
+    ),
+    "escalate_reactivation_complaint": (
+        "Queja recibida durante reactivación"
+    ),
     "escalate_urgent_case": "Posible caso respiratorio urgente",
     "escalate_unknown_service": (
         "Información clínica o de servicio insuficiente"
@@ -38,6 +46,8 @@ SAFE_REASON_BY_ACTION = {
 }
 
 DEFAULT_SERVICE_BY_ACTION = {
+    "escalate_reactivation_interest": "Reactivación histórica",
+    "escalate_reactivation_complaint": "Reactivación histórica",
     "escalate_urgent_case": "Caso respiratorio por revisar",
     "escalate_unknown_service": "Servicio por confirmar",
     "escalate_dynamic_oximetry_missing_order": "Oximetría dinámica",
@@ -48,6 +58,14 @@ DEFAULT_SERVICE_BY_ACTION = {
 }
 
 DEFAULT_SUMMARY_BY_ACTION = {
+    "escalate_reactivation_interest": (
+        "El contacto respondió positivamente a la campaña "
+        "y solicita retomar el contacto."
+    ),
+    "escalate_reactivation_complaint": (
+        "El contacto manifestó una queja durante la "
+        "reactivación histórica."
+    ),
     "escalate_urgent_case": (
         "El núcleo determinista detectó un posible caso urgente "
         "respiratorio."
@@ -71,6 +89,12 @@ DEFAULT_SUMMARY_BY_ACTION = {
 }
 
 DEFAULT_FACT_BY_ACTION = {
+    "escalate_reactivation_interest": (
+        "Respuesta positiva clasificada de forma determinista."
+    ),
+    "escalate_reactivation_complaint": (
+        "Queja clasificada de forma determinista."
+    ),
     "escalate_urgent_case": (
         "Clasificación determinista de posible urgencia respiratoria."
     ),

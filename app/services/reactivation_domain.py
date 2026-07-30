@@ -480,6 +480,8 @@ class ReactivationResponseSafeReason(str, Enum):
     STOP_CONTACT_REQUEST = "stop_contact_request"
     HOSTILE_REJECTION = "hostile_rejection"
     PRIVACY_OBJECTION = "privacy_objection"
+    CONTACT_REQUESTED = "contact_requested"
+    COMPLAINT = "complaint"
 
 
 class ReactivationResponseSemanticDecision(BaseModel):
@@ -494,6 +496,23 @@ class ReactivationResponseSemanticDecision(BaseModel):
         value: ReactivationResponseSafeReason | None,
     ) -> str | None:
         return value.value if value is not None else None
+
+
+
+class ReactivationResponseClassification(str, Enum):
+    GLOBAL_OPT_OUT = "global_opt_out"
+    CAMPAIGN_REFUSAL = "campaign_refusal"
+    POSITIVE_CONTACT_REQUEST = "positive_contact_request"
+    COMPLAINT = "complaint"
+    AMBIGUOUS = "ambiguous"
+
+
+class ReactivationResponsePolicyDecision(BaseModel):
+    response_classification: ReactivationResponseClassification
+    response_safe_reason: ReactivationResponseSafeReason | None = None
+    global_opt_out_requested: bool = False
+    campaign_opt_out_requested: bool = False
+    requires_human_escalation: bool = False
 
 
 def _normalize_reactivation_response_text(
@@ -609,6 +628,7 @@ def classify_reactivation_response_semantics(
         r"^no gracias$",
         r"^no me interesa$",
         r"^gracias pero no$",
+        r"^gracias pero no me interesa$",
         r"^paso$",
         r"^no deseo el servicio$",
         r"\bno gracias\b.*\bno me interesa\b",
@@ -666,4 +686,119 @@ def classify_reactivation_response_semantics(
         safe_reason=safe_reason,
         complaint_detected=complaint_detected,
         requires_human_escalation=complaint_detected,
+    )
+
+
+
+def decide_reactivation_response(
+    message: str | None,
+) -> ReactivationResponsePolicyDecision:
+    """
+    Convert existing safe semantic signals into persistence actions.
+
+    The raw inbound message is intentionally excluded from the result.
+    Global and campaign opt-out decisions remain separate.
+    """
+
+    global_semantics = classify_reactivation_response_semantics(
+        message,
+        reactivation_context=False,
+    )
+    campaign_semantics = classify_reactivation_response_semantics(
+        message,
+        reactivation_context=True,
+    )
+    normalized = _normalize_reactivation_response_text(message)
+
+    positive_interest_patterns = (
+        r"\bsi me interesa\b",
+        r"\bme interesa\b",
+        r"\bestoy interesad[oa]\b",
+        r"\bquiero mas informacion\b",
+        r"\bquisiera mas informacion\b",
+    )
+    positive_contact_patterns = (
+        r"\bpor favor llamenme\b",
+        r"\bllamenme\b",
+        r"\bpueden llamarme\b",
+        r"\bme pueden llamar\b",
+        r"\bquiero que me llamen\b",
+        r"\bpor favor contactenme\b",
+        r"\bcontactenme\b",
+        r"\bme pueden contactar\b",
+        r"\bquiero que me contacten\b",
+    )
+
+    positive_contact_requested = (
+        _matches_any_pattern(
+            normalized,
+            positive_interest_patterns,
+        )
+        or _matches_any_pattern(
+            normalized,
+            positive_contact_patterns,
+        )
+    )
+
+    if global_semantics.is_opt_out:
+        return ReactivationResponsePolicyDecision(
+            response_classification=(
+                ReactivationResponseClassification.GLOBAL_OPT_OUT
+            ),
+            response_safe_reason=global_semantics.safe_reason,
+            global_opt_out_requested=True,
+            campaign_opt_out_requested=True,
+            requires_human_escalation=(
+                campaign_semantics.requires_human_escalation
+            ),
+        )
+
+    if campaign_semantics.is_opt_out:
+        return ReactivationResponsePolicyDecision(
+            response_classification=(
+                ReactivationResponseClassification.CAMPAIGN_REFUSAL
+            ),
+            response_safe_reason=campaign_semantics.safe_reason,
+            global_opt_out_requested=False,
+            campaign_opt_out_requested=True,
+            requires_human_escalation=(
+                campaign_semantics.requires_human_escalation
+            ),
+        )
+
+    if campaign_semantics.complaint_detected:
+        return ReactivationResponsePolicyDecision(
+            response_classification=(
+                ReactivationResponseClassification.COMPLAINT
+            ),
+            response_safe_reason=(
+                ReactivationResponseSafeReason.COMPLAINT
+            ),
+            global_opt_out_requested=False,
+            campaign_opt_out_requested=False,
+            requires_human_escalation=True,
+        )
+
+    if positive_contact_requested:
+        return ReactivationResponsePolicyDecision(
+            response_classification=(
+                ReactivationResponseClassification
+                .POSITIVE_CONTACT_REQUEST
+            ),
+            response_safe_reason=(
+                ReactivationResponseSafeReason.CONTACT_REQUESTED
+            ),
+            global_opt_out_requested=False,
+            campaign_opt_out_requested=False,
+            requires_human_escalation=True,
+        )
+
+    return ReactivationResponsePolicyDecision(
+        response_classification=(
+            ReactivationResponseClassification.AMBIGUOUS
+        ),
+        response_safe_reason=None,
+        global_opt_out_requested=False,
+        campaign_opt_out_requested=False,
+        requires_human_escalation=False,
     )
