@@ -950,3 +950,140 @@ mensajes.
 La aprobación previa del template `reactivacion_respirarte` no autoriza
 su envío ni la activación de la campaña.
 <!-- P6-F.11.4-SDD-CLOSURE:END -->
+
+<!-- P6-F.11.5-SDD-CLOSURE-2026-07-31 -->
+
+## P6-F.11.5 — Template Dispatcher and Meta Delivery Tracking
+
+**Status:** Closed on 2026-07-31.
+
+### Design goal
+
+Provide a production-independent dispatcher for the approved historical
+reactivation template while preserving campaign eligibility, opt-out,
+idempotency and delivery-state rules already implemented in P6-F.11.1–11.4.
+
+### Approved template contract
+
+| Field | Required value |
+|---|---|
+| Template name | `reactivacion_respirarte` |
+| Language | `es_CO` |
+| Meta category | Marketing |
+| Header | Text: `Respirarte` |
+| BODY parameters | Exactly one: contact name |
+| Footer | None |
+| Buttons | None |
+
+The contract is validated independently by the dispatcher and the transport
+adapter. Any different template, language, empty parameter or additional
+parameter is rejected before the generic WhatsApp transport is invoked.
+
+### Components
+
+#### `ReactivationTemplateDispatcher`
+
+Responsibilities:
+
+1. Remain disabled unless explicitly configured with `enabled=True`.
+2. Normalize the dispatch request and require one contact identifier.
+3. Acquire an atomic delivery claim through
+   `ReactivationCampaignContactService`.
+4. Stop when the contact is ineligible, already claimed or already committed.
+5. Require canonical persisted E.164 data and a non-empty contact name.
+6. Invoke an injected template sender using the approved immutable contract.
+7. Extract the provider WAMID from the safe transport result.
+8. Persist `accepted` with the same claim token and WAMID.
+9. Convert transport exceptions into safe retry classifications.
+10. Prevent automatic retry when Meta may already have accepted the message.
+
+The dispatcher has no direct database, HTTP, webhook or production
+configuration dependency.
+
+#### `ReactivationTemplateDispatchRequest`
+
+Immutable request object containing a normalized, non-empty contact ID.
+The dispatcher remains backward compatible with direct `contact_id` calls but
+rejects receiving both forms simultaneously.
+
+#### `ReactivationTemplateTransport`
+
+A thin adapter translates the dispatcher argument `to` into the generic
+transport argument `telefono`. It performs no contact selection, campaign
+activation, persistence or lifecycle decision.
+
+The module also provides a pure payload builder for inspection and tests. The
+builder performs no HTTP operation.
+
+#### `dispatch_reactivation_contacts_best_effort`
+
+Processes explicit contact IDs sequentially and isolates exceptions per
+contact. One runtime failure cannot stop later contacts. Returned batch data
+contains only safe outcomes and counters.
+
+### Persistence and idempotency
+
+A provider call is possible only after an atomic repository claim. Acceptance
+requires all of the following:
+
+- matching contact ID;
+- matching claim token;
+- current status `pending`;
+- no persisted `provider_message_id`.
+
+Failure persistence uses equivalent claim guards and also requires no WAMID.
+
+When Meta returns a WAMID but acceptance persistence raises an exception or
+returns a conflict, the dispatcher:
+
+1. reports `delivery_outcome_ambiguous`;
+2. marks the result non-retryable;
+3. retains the WAMID in the safe result;
+4. attempts a terminal non-retryable failure using the original claim.
+
+If `accepted` actually committed despite the ambiguous response, repository
+guards prevent the terminal failure from overwriting it.
+
+### Provider tracking
+
+The existing status runtime correlates callbacks by WAMID and supports:
+
+- `sent`;
+- `delivered`;
+- `read`;
+- `failed`.
+
+State reduction is monotonic. Duplicate, unknown, malformed and out-of-order
+callbacks are isolated and do not interrupt the callback batch. Failed
+callbacks persist only sanitized provider error categories.
+
+### Safety boundaries
+
+P6-F.11.5 does not:
+
+- activate a campaign;
+- import or select real campaign contacts;
+- send a real Meta template;
+- modify `app/main.py`;
+- modify product configuration or Easypanel variables;
+- apply migrations 008 or 009;
+- write to production PostgreSQL;
+- modify Google Sheets;
+- implement the pilot;
+- implement P6-F.11.6 or P6-F.11.7.
+
+### Verification
+
+| Verification layer | Result |
+|---|---:|
+| P6-F.11.5 contract tests | 17 passed |
+| Directed regressions | 165 passed |
+| Full suite | 743 passed |
+| Global compilation | Passed |
+| Git diff check | Passed |
+| Productive wiring | Absent |
+| Unexpected working-tree files | None |
+
+### Next phase
+
+P6-F.11.6 remains pending and must start from the closed P6-F.11.5 baseline.

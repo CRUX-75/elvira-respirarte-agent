@@ -1930,3 +1930,68 @@ P6-F.11.5 implementará el dispatcher y los contratos de transporte del
 template aprobado, manteniendo los envíos reales bloqueados hasta una
 autorización explícita.
 <!-- P6-F.11.4-CLOSURE:END -->
+
+<!-- P6-F.11.5-CLOSURE-2026-07-31 -->
+
+## P6-F.11.5 — Template Dispatcher y Meta Delivery Tracking — CERRADA
+
+**Fecha de cierre:** 31-jul-2026
+**Rama de trabajo:** `feature/p6-f-11-5-template-dispatcher-meta-tracking`
+**Base de la fase:** `7d59af9` — cierre de P6-F.11.4.
+
+### Alcance implementado
+
+- Dispatcher aislado para un único contacto de reactivación.
+- Configuración deshabilitada por defecto: `enabled=False`.
+- Contrato Meta inmutable:
+  - template: `reactivacion_respirarte`;
+  - idioma: `es_CO`;
+  - categoría Meta: Marketing;
+  - header de texto: `Respirarte`;
+  - exactamente un parámetro BODY: nombre del contacto;
+  - sin footer ni botones.
+- Claim atómico previo a cualquier intento de transporte.
+- Bloqueo de contactos no elegibles, ya reclamados o previamente procesados.
+- Validación estricta del teléfono E.164 persistido antes del envío.
+- Adaptador explícito `to -> telefono` sobre el transporte WhatsApp existente.
+- Builder puro para inspeccionar el payload Meta sin efectuar un envío.
+- Persistencia del WAMID antes de considerar el despacho como `accepted`.
+- Tracking correlacionado por WAMID:
+  `accepted -> sent -> delivered -> read / failed`.
+- Procesamiento best-effort con aislamiento por contacto y por callback.
+- Clasificación segura de errores de red, proveedor y configuración.
+- Resultados ambiguos posteriores al WAMID tratados como no reintentables.
+- Intento terminal best-effort para impedir un segundo envío cuando Meta
+  devuelve WAMID pero la persistencia de `accepted` queda ambigua.
+- Ningún detalle sensible de excepciones se incluye en resultados públicos.
+
+### Archivos añadidos
+
+- `app/services/reactivation_template_dispatcher.py`
+- `app/services/reactivation_template_runtime.py`
+- `app/services/reactivation_template_transport.py`
+- `tests/test_reactivation_template_dispatcher.py`
+- `tests/test_reactivation_template_runtime.py`
+- `tests/test_reactivation_template_transport.py`
+- `tests/test_reactivation_template_payload.py`
+
+### Validación de cierre
+
+- Contratos nuevos de P6-F.11.5: **17 passed**.
+- Regresiones dirigidas acumuladas: **165 passed**.
+- Suite completa: **743 passed**.
+- Compilación global: correcta.
+- `git diff --check`: correcto.
+- Alcance confirmado: siete archivos funcionales y de pruebas.
+- Sin wiring productivo en `app/main.py`.
+- Sin cambios en `app/config.py`.
+- Sin cambios ni aplicación de migraciones.
+- Sin modificación de PostgreSQL, Google Sheets o Easypanel.
+- Sin envíos reales, activación de campaña ni piloto.
+
+### Estado operativo
+
+La implementación permanece desconectada de producción y deshabilitada por
+defecto. La aprobación de la plantilla en Meta no autoriza envíos.
+
+**Siguiente fase:** P6-F.11.6.
