@@ -385,6 +385,52 @@ class ReactivationCampaignContactRepository:
 
         return _contact_from_row(row)
 
+    def get_by_campaign_phone_read_only(
+        self,
+        *,
+        campaign_id: str,
+        phone_e164: str,
+    ) -> ReactivationCampaignContact | None:
+        """
+        Load one campaign contact by its natural key without writes.
+
+        Intended for dry-run eligibility and idempotency checks.
+        """
+
+        campaign_id = str(campaign_id or "").strip()
+        phone_e164 = str(phone_e164 or "").strip()
+
+        if not campaign_id:
+            raise ValueError("campaign_id is required.")
+
+        if not phone_e164:
+            raise ValueError("phone_e164 is required.")
+
+        statement = text(
+            f"""
+            SELECT {_CONTACT_COLUMNS}
+            FROM reactivation_campaign_contacts
+            WHERE campaign_id = :campaign_id
+              AND phone_e164 = :phone_e164
+            LIMIT 1
+            """
+        )
+
+        with self.engine.connect() as connection:
+            row = (
+                connection.execute(
+                    statement,
+                    {
+                        "campaign_id": campaign_id,
+                        "phone_e164": phone_e164,
+                    },
+                )
+                .mappings()
+                .first()
+            )
+
+        return _contact_from_row(row)
+
     def get_by_provider_message_id(
         self,
         provider_message_id: str,

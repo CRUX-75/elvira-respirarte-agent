@@ -81,8 +81,15 @@ class FakeBegin:
 class FakeEngine:
     def __init__(self, responses):
         self.connection = FakeConnection(responses)
+        self.begin_calls = 0
+        self.connect_calls = 0
 
     def begin(self):
+        self.begin_calls += 1
+        return FakeBegin(self.connection)
+
+    def connect(self):
+        self.connect_calls += 1
         return FakeBegin(self.connection)
 
 
@@ -610,3 +617,92 @@ def test_provider_progress_callbacks_can_recover_from_failed(
     normalized_sql = " ".join(sql.split())
 
     assert allowed_current in normalized_sql
+
+
+def test_contact_read_only_lookup_returns_existing_campaign_phone():
+    engine = FakeEngine(
+        [
+            FakeResult(
+                [
+                    contact_row(
+                        source_reference="historico-read-only",
+                    )
+                ]
+            )
+        ]
+    )
+    repository = ReactivationCampaignContactRepository(engine)
+
+    contact = repository.get_by_campaign_phone_read_only(
+        campaign_id=" campaign-1 ",
+        phone_e164=" 573000000001 ",
+    )
+
+    assert contact is not None
+    assert contact.id == "contact-1"
+    assert contact.campaign_id == "campaign-1"
+    assert contact.phone_e164 == "573000000001"
+    assert contact.source_reference == "historico-read-only"
+
+    assert engine.connect_calls == 1
+    assert engine.begin_calls == 0
+    assert len(engine.connection.calls) == 1
+
+    sql, params = engine.connection.calls[0]
+    normalized_sql = " ".join(sql.upper().split())
+
+    assert normalized_sql.startswith("SELECT")
+    assert "FROM REACTIVATION_CAMPAIGN_CONTACTS" in normalized_sql
+    assert "CAMPAIGN_ID = :CAMPAIGN_ID" in normalized_sql
+    assert "PHONE_E164 = :PHONE_E164" in normalized_sql
+    assert "LIMIT 1" in normalized_sql
+
+    assert "INSERT" not in normalized_sql
+    assert " UPDATE " not in f" {normalized_sql} "
+    assert "DELETE" not in normalized_sql
+
+    assert params == {
+        "campaign_id": "campaign-1",
+        "phone_e164": "573000000001",
+    }
+
+
+def test_contact_read_only_lookup_returns_none_when_absent():
+    engine = FakeEngine([FakeResult([])])
+    repository = ReactivationCampaignContactRepository(engine)
+
+    contact = repository.get_by_campaign_phone_read_only(
+        campaign_id="campaign-1",
+        phone_e164="573000000099",
+    )
+
+    assert contact is None
+    assert engine.connect_calls == 1
+    assert engine.begin_calls == 0
+    assert len(engine.connection.calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("campaign_id", "phone_e164", "message"),
+    [
+        ("   ", "573000000001", "campaign_id is required"),
+        ("campaign-1", "   ", "phone_e164 is required"),
+    ],
+)
+def test_contact_read_only_lookup_requires_natural_key(
+    campaign_id,
+    phone_e164,
+    message,
+):
+    engine = FakeEngine([FakeResult([])])
+    repository = ReactivationCampaignContactRepository(engine)
+
+    with pytest.raises(ValueError, match=message):
+        repository.get_by_campaign_phone_read_only(
+            campaign_id=campaign_id,
+            phone_e164=phone_e164,
+        )
+
+    assert engine.connect_calls == 0
+    assert engine.begin_calls == 0
+    assert engine.connection.calls == []

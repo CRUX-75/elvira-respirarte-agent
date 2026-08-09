@@ -46,7 +46,10 @@ class Settings(BaseSettings):
     google_sheets_enabled: bool = False
     google_sheets_spreadsheet_id: str | None = None
     google_sheets_solicitudes_cita_tab: str = "Solicitudes_Cita"
+    google_sheets_reactivation_tab: str = "Reactivacion_Historica"
     google_service_account_json: str | None = None
+
+    reactivation_dry_run_enabled: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env",

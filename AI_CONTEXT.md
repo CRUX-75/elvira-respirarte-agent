@@ -1995,3 +1995,130 @@ La implementación permanece desconectada de producción y deshabilitada por
 defecto. La aprobación de la plantilla en Meta no autoriza envíos.
 
 **Siguiente fase:** P6-F.11.6.
+
+<!-- P6-F.11.6-CLOSURE-2026-08-09 -->
+
+## P6-F.11.6 — Google Sheets y dry run sin envío — CERRADA
+
+**Fecha de cierre técnico:** 09-ago-2026
+**Rama de trabajo:** `feature/p6-f-11-6`
+**Base de la fase:** `dd2b002` — cierre de P6-F.11.5.
+
+### Alcance implementado
+
+P6-F.11.6 implementa el flujo controlado de Google Sheets y dry run
+para `Reactivacion_Historica` sin habilitar envíos reales.
+
+Se incorporaron:
+
+- adapter dedicado para la pestaña `Reactivacion_Historica`;
+- contrato estricto de las 10 columnas aprobadas;
+- validación fail-closed del orden de columnas;
+- normalización E.164 durante el dry run;
+- evaluación determinística de elegibilidad sin persistencia;
+- runtime best-effort aislado por fila;
+- resolución read-only de contexto externo;
+- consulta read-only de `patients.opt_out`;
+- consulta read-only de contactos existentes por
+  `(campaign_id, phone_e164)`;
+- detección de duplicados dentro del lote y contra campaña;
+- protección de contactos ya procesados;
+- protección fail-closed de estados persistidos:
+  - `pending`;
+  - `opted_out`;
+  - `failed` no retryable;
+- conservación del retry únicamente para
+  `failed + retryable=True + sin provider_message_id`;
+- proyección a Google Sheets limitada exclusivamente a:
+  - columna F: `telefono_e164`;
+  - columna I: `estado_reactivacion`;
+- preservación de columnas de fuente y revisión humana;
+- configuración específica:
+  - `reactivation_dry_run_enabled=False`;
+  - `google_sheets_reactivation_tab="Reactivacion_Historica"`;
+- factory de composición segura que no realiza I/O durante construcción;
+- separación explícita respecto al flag genérico
+  `google_sheets_enabled` usado por `Solicitudes_Cita`.
+
+### Archivos funcionales
+
+Añadidos:
+
+- `app/adapters/google_sheets_reactivation.py`
+- `app/services/reactivation_dry_run.py`
+- `app/services/reactivation_dry_run_context.py`
+- `app/services/reactivation_dry_run_factory.py`
+- `app/services/reactivation_dry_run_runtime.py`
+
+Modificados:
+
+- `app/adapters/google_sheets_client.py`
+- `app/config.py`
+- `app/repositories/reactivation_campaigns.py`
+
+### Contratos de seguridad
+
+El dry run:
+
+- no activa campañas;
+- no persiste campañas ni contactos;
+- no reclama contactos para entrega;
+- no llama al dispatcher de P6-F.11.5;
+- no llama al transporte WhatsApp;
+- no envía templates Meta;
+- no modifica `app/main.py`;
+- no modifica `/webhook`;
+- no aplica las migraciones `008` ni `009`;
+- no modifica Easypanel;
+- no realiza escrituras en PostgreSQL productivo.
+
+La composición permanece deshabilitada por defecto.
+
+`GOOGLE_SHEETS_ENABLED=true` por sí solo no habilita el flujo de
+reactivación.
+
+### Google Sheets
+
+Google Sheets continúa siendo staging, revisión humana y proyección
+operativa resumida.
+
+PostgreSQL continúa siendo la fuente de verdad.
+
+La actualización del resultado del dry run escribe únicamente las
+celdas de sistema correspondientes a `telefono_e164` y
+`estado_reactivacion`, evitando reescribir la fila completa y evitando
+sobrescribir cambios humanos concurrentes.
+
+Durante el desarrollo y validación de P6-F.11.6 no se realizó ninguna
+lectura ni escritura contra el Google Sheet productivo.
+
+### Validación
+
+- Tests propios acumulados de P6-F.11.6: **42 passed**.
+- Regresión ampliada: **169 passed**.
+- Suite completa del repositorio: **790 passed**.
+- Tiempo de suite completa: **563.38 s (09:23)**.
+- Compilación Python: correcta.
+- `git diff --check`: correcto.
+- Integración dry-run validada únicamente con fakes.
+- Sin I/O externo real durante las pruebas.
+
+### Estado operativo
+
+Elvira permanece online y sin cambios productivos derivados de esta fase.
+
+La campaña histórica de reactivación continúa desactivada.
+
+No se enviaron mensajes reales ni se ejecutó un piloto.
+
+### Siguiente fase
+
+`P6-F.11.7 — Piloto controlado y cierre productivo`
+
+P6-F.11.7 es la única fase restante de P6-F.11.
+
+Debe partir del cierre validado de P6-F.11.6 y mantener como condición
+previa una autorización explícita antes de aplicar migraciones,
+activar campaña, utilizar contactos reales o enviar mensajes.
+
+<!-- P6-F.11.6-CLOSURE-2026-08-09:END -->

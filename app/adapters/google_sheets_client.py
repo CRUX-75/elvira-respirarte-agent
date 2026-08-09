@@ -95,6 +95,26 @@ class GoogleSheetsApiClient:
             .execute()
         )
 
+    def update_values(
+        self,
+        spreadsheet_id: str,
+        range_name: str,
+        values: list[list[str]],
+    ) -> None:
+        """Update one exact Sheets range without expanding to a full row."""
+
+        (
+            self.service.spreadsheets()
+            .values()
+            .update(
+                spreadsheetId=spreadsheet_id,
+                range=range_name,
+                valueInputOption="USER_ENTERED",
+                body={"values": values},
+            )
+            .execute()
+        )
+
     def update_row(
         self,
         spreadsheet_id: str,

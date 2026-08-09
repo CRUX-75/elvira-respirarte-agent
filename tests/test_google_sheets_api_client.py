@@ -168,3 +168,24 @@ def test_update_row_calls_google_sheets_api_chain_with_user_entered():
             "body": {"values": [["SOL-001", "2026-06-13"]]},
         }
     ]
+
+
+
+def test_update_values_calls_exact_google_sheets_range():
+    service = FakeSheetsService()
+    client = GoogleSheetsApiClient(service=service)
+
+    client.update_values(
+        "spreadsheet-control",
+        "Reactivacion_Historica!F7",
+        [["573000000007"]],
+    )
+
+    assert service.values_resource.update_calls == [
+        {
+            "spreadsheetId": "spreadsheet-control",
+            "range": "Reactivacion_Historica!F7",
+            "valueInputOption": "USER_ENTERED",
+            "body": {"values": [["573000000007"]]},
+        }
+    ]

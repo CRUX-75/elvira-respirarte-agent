@@ -1087,3 +1087,160 @@ P6-F.11.5 does not:
 ### Next phase
 
 P6-F.11.6 remains pending and must start from the closed P6-F.11.5 baseline.
+
+<!-- P6-F.11.6-SDD-CLOSURE-2026-08-09 -->
+
+## P6-F.11.6 — Google Sheets and No-Send Dry Run
+
+**Status:** Closed on 2026-08-09.
+
+### Design goal
+
+Provide a production-independent dry-run path for
+`Reactivacion_Historica` that evaluates historical contacts using the
+existing domain contracts while preserving the separation between
+Google Sheets staging, PostgreSQL authority and Meta delivery.
+
+### Google Sheets contract
+
+The dedicated adapter uses the exact approved ten-column contract:
+
+1. `source_reference`
+2. `nombre`
+3. `telefono_original`
+4. `atendido`
+5. `autorizado_contacto`
+6. `telefono_e164`
+7. `revision_doctora`
+8. `motivo_exclusion`
+9. `estado_reactivacion`
+10. `observaciones`
+
+The adapter fails closed when the header order differs from the
+canonical contract.
+
+The dry-run projection writes only:
+
+- column F — `telefono_e164`;
+- column I — `estado_reactivacion`.
+
+It does not rewrite A:J and therefore does not overwrite source-owned
+or human-review fields from a stale row snapshot.
+
+### Dry-run evaluation
+
+`evaluate_reactivation_sheet_record(...)` is a pure deterministic
+boundary.
+
+It:
+
+- recomputes E.164 from `telefono_original`;
+- validates controlled Sheet values;
+- delegates eligibility to the reactivation domain;
+- returns safe exclusion reasons;
+- performs no database, Sheets, Meta or WhatsApp I/O.
+
+### Read-only safety context
+
+`ReactivationDryRunContextResolver` combines:
+
+- canonical phone normalization;
+- duplicate detection inside the current batch;
+- read-only patient opt-out lookup;
+- read-only campaign-contact lookup;
+- committed commercial-send protection.
+
+The campaign-contact repository exposes
+`get_by_campaign_phone_read_only(...)`, which uses a SELECT through
+`engine.connect()` and performs no writes.
+
+Persisted contact states fail closed when delivery must not be
+re-attempted:
+
+- `pending`;
+- `opted_out`;
+- `failed` with `retryable=False`.
+
+A contact in:
+
+`failed + retryable=True + provider_message_id=None`
+
+remains eligible for the retry path already defined by the delivery
+claim contract.
+
+Any persisted WAMID or committed commercial send remains blocking.
+
+### Best-effort runtime
+
+`run_reactivation_dry_run_best_effort(...)`:
+
+1. reads staging rows through the dedicated adapter;
+2. resolves external safety context per row;
+3. evaluates eligibility;
+4. projects only system-owned fields;
+5. isolates row failures;
+6. returns safe aggregate counters.
+
+Raw exception text is not returned in public batch results.
+
+### Configuration boundary
+
+New configuration:
+
+- `reactivation_dry_run_enabled: bool = False`;
+- `google_sheets_reactivation_tab: str =
+  "Reactivacion_Historica"`.
+
+The reactivation dry run does not inherit enablement from the generic
+`google_sheets_enabled` flag used by appointment review.
+
+The dependency factory returns no reactivation composition while
+`reactivation_dry_run_enabled=False`.
+
+Building enabled dependencies constructs objects only. It does not
+read Google Sheets, query PostgreSQL or execute the dry run.
+
+### Safety boundaries
+
+P6-F.11.6 does not:
+
+- activate a reactivation campaign;
+- select or import production contacts;
+- persist dry-run decisions as campaign contacts;
+- acquire delivery claims;
+- invoke the P6-F.11.5 dispatcher;
+- send a Meta template;
+- modify `app/main.py`;
+- modify `/webhook`;
+- apply migrations 008 or 009;
+- modify Easypanel;
+- write production PostgreSQL;
+- execute the pilot.
+
+No real Google Sheets I/O was required to close the phase.
+
+### Verification
+
+| Verification layer | Result |
+|---|---:|
+| P6-F.11.6 tests | 42 passed |
+| Directed expanded regression | 169 passed |
+| Full repository suite | 790 passed |
+| Full-suite duration | 563.38 s |
+| Python compilation | Passed |
+| Git diff check | Passed |
+| Integrated dry run | Passed with fakes |
+| Real WhatsApp sends | None |
+| Productive wiring | Absent |
+
+### Remaining roadmap
+
+Only one P6-F.11 phase remains:
+
+`P6-F.11.7 — Controlled pilot and productive closure`
+
+P6-F.11.7 must require explicit authorization before any productive
+migration application, campaign activation, real-contact processing
+or WhatsApp delivery.
+
+<!-- P6-F.11.6-SDD-CLOSURE-2026-08-09:END -->
