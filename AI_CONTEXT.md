@@ -2122,3 +2122,97 @@ previa una autorización explícita antes de aplicar migraciones,
 activar campaña, utilizar contactos reales o enviar mensajes.
 
 <!-- P6-F.11.6-CLOSURE-2026-08-09:END -->
+
+<!-- P6-F.11.7-A-CLOSURE-2026-08-10 -->
+
+## P6-F.11.7-A — Auditoría de preproducción — CERRADA
+
+**Fecha:** 10-ago-2026
+**Rama:** `feature/p6-f-11-7-controlled-pilot-productive-closure`
+**Base:** `5acc857` — cierre de P6-F.11.6.
+
+### Estado confirmado antes de cambios productivos
+
+- Elvira productiva permanece online.
+- La campaña histórica `Reactivacion_Historica` permanece desactivada.
+- No se han enviado mensajes reales de reactivación.
+- Las migraciones `008` y `009` continúan sin aplicarse a PostgreSQL productivo.
+- No se realizaron cambios en Easypanel.
+- No se ejecutó dry run contra Google Sheets real.
+- No se modificó el wiring productivo de `app/main.py`.
+
+### Hallazgos de auditoría
+
+1. Se detectó una incompatibilidad real entre las migraciones:
+   - `reactivation_campaign_contacts.id` es `TEXT`;
+   - `reactivation_campaign_response_events.contact_id` estaba definido
+     incorrectamente como `UUID`.
+2. El contrato Python utiliza `str` para campaign/contact IDs de extremo a extremo.
+3. El router compartido de callbacks WhatsApp ya existe para aislar:
+   - human escalation;
+   - patient reactivation.
+   Actualmente `app/main.py` continúa conectado solo al handler productivo
+   de P6-F.10.
+4. El runtime de respuestas de reactivación correlaciona de forma read-only
+   por teléfono únicamente cuando existe un contacto con
+   `provider_message_id` y estado previamente comprometido.
+5. El runtime de respuestas registra clasificación, opt-out y escalamiento,
+   pero todavía no define el routing productivo final hacia el flujo normal
+   de Elvira.
+6. El dry run real dispone de factory, runtime y adapter de Google Sheets,
+   pero no existe todavía CLI, endpoint ni entrada administrativa productiva.
+7. El dry run puede escribir exclusivamente las columnas del sistema:
+   - F `telefono_e164`;
+   - I `estado_reactivacion`.
+   No persiste campañas/contactos ni llama WhatsApp.
+8. El dispatcher de template permanece desconectado de producción y requiere
+   `enabled=True` explícito.
+9. No existe todavía composición productiva del dispatcher.
+10. `find_patient_by_phone_read_only(...)` está disponible para verificar
+    opt-out inmediatamente antes del outbound sin crear ni modificar pacientes.
+
+### Corrección local del blocker SQL
+
+Se añadió un contrato RED que exige que el FK de response events tenga el
+mismo tipo que `reactivation_campaign_contacts.id`.
+
+RED confirmado:
+
+- `1 failed`;
+- fallo exacto por esperar `contact_id TEXT` mientras la migración declaraba
+  `contact_id UUID`.
+
+Corrección mínima aplicada únicamente al archivo versionado:
+
+`009_add_reactivation_response_persistence.sql`
+
+Cambio:
+
+`contact_id UUID` -> `contact_id TEXT`
+
+No se aplicó la migración a PostgreSQL.
+
+### Validación GREEN
+
+- contrato `reactivation_response_event_contract`: **5 passed**;
+- regresión persistence/response dirigida: **22 passed**;
+- suite completa `tests/test_reactivation*.py`: **276 passed**;
+- regresión real de callbacks P6-F.10/shared router: **15 passed**;
+- compilación de superficies afectadas: OK;
+- `git diff --check`: OK;
+- ninguna expectativa `contact_id UUID` permanece en migración/contrato.
+
+### Gate siguiente
+
+P6-F.11.7-B puede preparar la persistencia productiva, pero aplicar
+`008_create_reactivation_campaign_persistence.sql` y después
+`009_add_reactivation_response_persistence.sql` requiere autorización
+productiva explícita.
+
+Hasta dicha autorización:
+
+- no ejecutar migraciones productivas;
+- no activar campaña;
+- no habilitar dispatcher;
+- no enviar WhatsApp de reactivación;
+- no conectar todavía callbacks/respuestas de reactivación a `app/main.py`.

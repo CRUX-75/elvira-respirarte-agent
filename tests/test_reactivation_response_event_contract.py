@@ -23,7 +23,7 @@ def test_response_event_schema_supports_multiple_replies_per_contact():
         "reactivation_campaign_response_events"
     ) in sql
     assert (
-        "contact_id uuid not null references "
+        "contact_id text not null references "
         "reactivation_campaign_contacts(id) on delete cascade"
     ) in sql
     assert "inbound_whatsapp_message_id text not null" in sql
@@ -101,3 +101,11 @@ def test_response_event_contract_does_not_store_raw_message_text():
 
     for forbidden_column in forbidden_columns:
         assert forbidden_column not in sql
+
+def test_response_event_contact_fk_matches_text_campaign_contact_id():
+    sql = normalized_sql()
+
+    assert (
+        "contact_id text not null references "
+        "reactivation_campaign_contacts(id) on delete cascade"
+    ) in sql

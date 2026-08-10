@@ -1244,3 +1244,80 @@ migration application, campaign activation, real-contact processing
 or WhatsApp delivery.
 
 <!-- P6-F.11.6-SDD-CLOSURE-2026-08-09:END -->
+
+<!-- P6-F.11.7-A-CLOSURE-2026-08-10 -->
+
+## P6-F.11.7-A — Preproduction audit closure
+
+**Closed:** 10-Aug-2026
+**Branch:** `feature/p6-f-11-7-controlled-pilot-productive-closure`
+**Baseline:** `main@5acc857`.
+
+### Audit conclusions
+
+The productive reactivation path remains intentionally disconnected.
+
+The audit confirmed:
+
+- migrations `008` and `009` are not applied in production;
+- no historical reactivation message has been sent;
+- `app/main.py` still routes productive Meta status callbacks only through
+  the existing P6-F.10 human-escalation handler;
+- the shared WhatsApp status router is already implemented but not connected
+  productively to patient reactivation;
+- inbound reactivation response processing is correlation-based and
+  best-effort, but productive conversation-routing policy still requires
+  explicit tests before webhook wiring;
+- the real Sheets dry-run primitives exist, but there is no productive
+  administrative execution surface;
+- the template dispatcher remains disabled and has no productive composition.
+
+### Migration contract defect found and corrected locally
+
+Migration `008` defines:
+
+`reactivation_campaign_contacts.id TEXT`
+
+Migration `009` incorrectly defined:
+
+`reactivation_campaign_response_events.contact_id UUID`
+
+The Python domain/repository/service contract uses string contact IDs
+throughout, therefore the FK types were incompatible.
+
+A RED contract test reproduced the defect.
+
+Migration `009` was corrected to:
+
+`contact_id TEXT NOT NULL REFERENCES reactivation_campaign_contacts(id)`
+
+The correction is versioned source only. No production migration has been
+executed.
+
+### Validation evidence
+
+- response-event contract: **5 passed**;
+- directed persistence/response regression: **22 passed**;
+- complete reactivation test set: **276 passed**;
+- shared/P6-F.10 callback regression: **15 passed**;
+- affected Python compilation: OK;
+- `git diff --check`: OK.
+
+### Production gate
+
+Applying migrations remains a separate P6-F.11.7-B operation requiring
+explicit authorization.
+
+Required order when authorized:
+
+1. verify/backup PostgreSQL production state;
+2. apply migration `008`;
+3. validate resulting campaign/contact schema;
+4. apply corrected migration `009`;
+5. validate FK, indexes and response-event schema;
+6. perform read-only operational verification;
+7. confirm normal Elvira and P6-F.10 remain healthy.
+
+Migration authorization does not authorize campaign activation, Google Sheets
+dry-run execution, dispatcher activation, webhook wiring or any real
+reactivation send.

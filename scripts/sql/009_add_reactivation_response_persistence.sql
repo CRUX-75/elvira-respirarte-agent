@@ -21,7 +21,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS
 
 CREATE TABLE IF NOT EXISTS reactivation_campaign_response_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    contact_id UUID NOT NULL REFERENCES
+    contact_id TEXT NOT NULL REFERENCES
         reactivation_campaign_contacts(id) ON DELETE CASCADE,
     inbound_whatsapp_message_id TEXT NOT NULL,
     response_classification TEXT NOT NULL,
