@@ -1321,3 +1321,104 @@ Required order when authorized:
 Migration authorization does not authorize campaign activation, Google Sheets
 dry-run execution, dispatcher activation, webhook wiring or any real
 reactivation send.
+
+<!-- P6-F.11.7-B-CLOSURE-2026-08-10 -->
+
+## P6-F.11.7-B — Productive persistence closure
+
+**Closed:** 10-Aug-2026
+**Branch:** `feature/p6-f-11-7-controlled-pilot-productive-closure`
+
+### Production persistence installation
+
+The productive PostgreSQL schema was audited read-only before any DDL.
+
+Initial state:
+
+- `reactivation_campaigns`: absent;
+- `reactivation_campaign_contacts`: absent;
+- `reactivation_campaign_response_events`: absent;
+- no partial P6-F.11 foreign keys or indexes.
+
+A pre-migration custom-format PostgreSQL backup was successfully created and
+validated with `pg_restore -l`.
+
+Backup:
+
+`/tmp/elvira_respirarte_prod_pre_p6f117_20260810T065009Z.dump`
+
+SHA-256:
+
+`6bffba6a7514b53032928add66050bf230f2b4eb72fec58f669e5e8891ad3b6b`
+
+### Migration 008
+
+Migration 008 was applied only after explicit production authorization.
+
+SHA-256:
+
+`6d46446c74bc665f8fc983a8070a3dd95d1428c3a1548ea89ec3c7fcc49b2097`
+
+Post-008 validation confirmed:
+
+- campaigns table present;
+- contacts table present;
+- response-events table still absent;
+- campaign FK correct;
+- expected indexes present.
+
+### Migration 009
+
+The deployed application image still contained the historical defective 009
+with `contact_id UUID`.
+
+That file was not executed.
+
+A temporary corrected copy was prepared with only:
+
+`contact_id UUID` -> `contact_id TEXT`
+
+Its SHA-256 matched the corrected source validated in Git:
+
+`6ae91ac71b48fd02641185953a3beacdf62a2f5b61e1c467f70691008b2edab2`
+
+Migration 009 was applied only after a second explicit production
+authorization.
+
+Post-009 validation confirmed:
+
+- response-events table present;
+- `contact_id TEXT NOT NULL`;
+- FK to `reactivation_campaign_contacts.id`;
+- expected response-event indexes;
+- safe response metadata columns on campaign contacts;
+- `POST_009_SCHEMA=OK`.
+
+### Post-migration state
+
+Read-only counts:
+
+- campaigns: 0;
+- contacts: 0;
+- response events: 0.
+
+No campaign or contact was created as part of persistence installation.
+
+Production health after both migrations:
+
+- `/health`: HTTP 200;
+- `/ready`: HTTP 200;
+- no ready-state hard failures;
+- database and existing repositories configured;
+- existing production Elvira remains online.
+
+P6-F.11 remains operationally inert:
+
+- no reactivation campaign activation;
+- no real historical reactivation send;
+- no productive dispatcher composition;
+- no productive reactivation status routing;
+- no productive inbound reactivation response wiring.
+
+P6-F.11.7-C may now execute a controlled real Google Sheets dry run while
+preserving the no-send boundary.

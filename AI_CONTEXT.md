@@ -2216,3 +2216,170 @@ Hasta dicha autorización:
 - no habilitar dispatcher;
 - no enviar WhatsApp de reactivación;
 - no conectar todavía callbacks/respuestas de reactivación a `app/main.py`.
+
+<!-- P6-F.11.7-B-CLOSURE-2026-08-10 -->
+
+## P6-F.11.7-B — Productive persistence — CERRADA
+
+**Fecha:** 10-ago-2026
+**Rama:** `feature/p6-f-11-7-controlled-pilot-productive-closure`
+
+### Preflight productivo
+
+La auditoría read-only se ejecutó desde el contenedor productivo de Elvira
+contra:
+
+- database: `elvira_respirarte_prod`;
+- PostgreSQL 17.9;
+- usuario productivo: `elvira_user`.
+
+Antes de aplicar migraciones se confirmó:
+
+- `reactivation_campaigns`: AUSENTE;
+- `reactivation_campaign_contacts`: AUSENTE;
+- `reactivation_campaign_response_events`: AUSENTE;
+- sin columnas, foreign keys ni índices P6-F.11 parciales.
+
+La transacción de auditoría terminó con `ROLLBACK_OK`.
+
+### Backup pre-migración
+
+Se creó un backup PostgreSQL custom-format antes de cualquier DDL:
+
+`/tmp/elvira_respirarte_prod_pre_p6f117_20260810T065009Z.dump`
+
+SHA-256:
+
+`6bffba6a7514b53032928add66050bf230f2b4eb72fec58f669e5e8891ad3b6b`
+
+Validaciones:
+
+- `pg_dump`: OK;
+- archivo no vacío: OK;
+- `pg_restore -l`: OK.
+
+El backup fue creado dentro del contenedor PostgreSQL y sirvió como punto de
+restauración inmediato para esta ventana de migración.
+
+### Migración 008
+
+Aplicación autorizada explícitamente antes del DDL.
+
+Artefacto:
+
+`scripts/sql/008_create_reactivation_campaign_persistence.sql`
+
+SHA-256:
+
+`6d46446c74bc665f8fc983a8070a3dd95d1428c3a1548ea89ec3c7fcc49b2097`
+
+Resultado:
+
+- `MIGRATION_008=COMMIT_OK`;
+- `reactivation_campaigns`: PRESENTE;
+- `reactivation_campaign_contacts`: PRESENTE;
+- `reactivation_campaign_response_events`: AUSENTE;
+- FK `reactivation_campaign_contacts.campaign_id ->
+  reactivation_campaigns.id`: presente;
+- índices de campaign/contact persistence: presentes;
+- validación posterior read-only: OK.
+
+### Migración 009 corregida
+
+El contenedor productivo todavía contenía la versión histórica incorrecta:
+
+`contact_id UUID`
+
+Por seguridad ese archivo NO fue modificado ni ejecutado.
+
+Se preparó en `/tmp` una copia con la única corrección:
+
+`contact_id UUID` -> `contact_id TEXT`
+
+La copia preparada coincidió exactamente con la versión corregida y validada
+en Git:
+
+SHA-256:
+
+`6ae91ac71b48fd02641185953a3beacdf62a2f5b61e1c467f70691008b2edab2`
+
+La aplicación de 009 recibió una segunda autorización productiva explícita.
+
+Resultado:
+
+- `MIGRATION_009=COMMIT_OK`;
+- `reactivation_campaign_response_events`: PRESENTE;
+- `contact_id`: `TEXT NOT NULL`;
+- FK `contact_id -> reactivation_campaign_contacts.id`: correcta;
+- índices de response events: presentes;
+- `POST_009_SCHEMA=OK`.
+
+Contrato productivo confirmado:
+
+`reactivation_campaign_contacts` incluye:
+
+- `inbound_whatsapp_message_id`;
+- `response_classification`;
+- `response_safe_reason`;
+- `response_requires_human_escalation BOOLEAN NOT NULL DEFAULT FALSE`;
+- `responded_at`.
+
+`reactivation_campaign_response_events` incluye:
+
+- UUID propio para event id;
+- `contact_id TEXT NOT NULL`;
+- clasificación y safe reason;
+- flags de global/campaign opt-out;
+- `requires_human_escalation`;
+- timestamps.
+
+### Estado de datos tras migración
+
+Validación read-only:
+
+- campaigns = 0;
+- contacts = 0;
+- responses = 0.
+
+No se crearon campañas ni contactos durante P6-F.11.7-B.
+
+### Salud productiva
+
+Después de 008 y 009:
+
+- `/health`: HTTP 200;
+- `/ready`: HTTP 200;
+- service: `elvira-respirarte-agent`;
+- environment: production;
+- database configured;
+- repositories configured;
+- OpenAI configured;
+- WhatsApp configured;
+- hard failures: ninguno;
+- `ELVIRA_POST_MIGRATION_HEALTH=OK`.
+
+`WHATSAPP_SENDING_ENABLED=true` continúa siendo el comportamiento normal de
+Elvira productiva, pero no habilita Reactivación porque P6-F.11 continúa sin
+composición outbound productiva.
+
+### Seguridad al cierre de B
+
+Al cerrar P6-F.11.7-B:
+
+- campaña `Reactivacion_Historica`: no creada/activada productivamente;
+- contactos P6-F.11 persistidos: 0;
+- mensajes reales de reactivación enviados: 0;
+- dispatcher de reactivación: sin wiring productivo;
+- callbacks de reactivación: sin wiring productivo en `app/main.py`;
+- respuestas inbound de reactivación: sin wiring productivo;
+- Google Sheets real: no ejecutado en esta fase.
+
+P6-F.11.7-C puede avanzar al controlled real dry run.
+
+Ese dry run no autoriza:
+
+- activación de campaña;
+- dispatcher Meta;
+- envío de WhatsApp;
+- expansión automática del lote;
+- wiring productivo de callbacks o inbound responses.
