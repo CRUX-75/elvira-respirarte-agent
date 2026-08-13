@@ -2383,3 +2383,223 @@ Ese dry run no autoriza:
 - envío de WhatsApp;
 - expansión automática del lote;
 - wiring productivo de callbacks o inbound responses.
+
+
+<!-- P6-F.11.7-C-CLOSURE-2026-08-13 -->
+
+## P6-F.11.7-C — Controlled real dry run closure
+
+**Closed:** 13-Aug-2026
+**Branch:** `feature/p6-f-11-7-controlled-pilot-productive-closure`
+**Implementation checkpoint:** `28a55db` — `Prepare P6-F.11.7-C controlled real dry run`
+
+### Administrative entrypoint
+
+Se añadió:
+
+`/scripts/manual_reactivation_dry_run.py`
+
+Contrato observado:
+
+- requiere `REACTIVATION_DRY_RUN_ENABLED=1` exactamente;
+- requiere `REACTIVATION_DRY_RUN_CAMPAIGN_ID`;
+- usa `build_reactivation_dry_run_dependencies(...)`;
+- usa `run_reactivation_dry_run_best_effort(...)`;
+- imprime únicamente resumen agregado seguro;
+- no importa dispatcher Meta;
+- no importa transporte WhatsApp;
+- falla cerrado ante configuración ambigua o excepción inesperada del runtime.
+
+Durante la preparación de C se detectó una incompatibilidad real entre el
+resolver y el repositorio productivo:
+
+`get_by_campaign_phone_read_only(...)` usa argumentos keyword-only.
+
+`ReactivationDryRunContextResolver` fue corregido para invocarlo mediante:
+
+- `campaign_id=...`;
+- `phone_e164=...`.
+
+La regresión dirigida final de C antes del despliegue fue:
+
+- `51 passed`;
+- `python -m py_compile`: OK;
+- `git diff --check`: OK.
+
+### Preflight de Google Sheets
+
+El primer smoke local detectó que `GOOGLE_SERVICE_ACCOUNT_JSON` estaba
+envuelto por una capa redundante de comillas dobles.
+
+La credencial subyacente fue validada estructuralmente como service account
+JSON válido con:
+
+- `type = service_account`;
+- `project_id` presente;
+- `private_key` presente;
+- `client_email` presente.
+
+La configuración local se corrigió sin modificar código productivo.
+
+El acceso local a PostgreSQL no fue posible porque `DATABASE_URL` usa el host
+interno `elvira_elvira`, resoluble únicamente dentro del entorno de
+deployment.
+
+### Despliegue controlado para C
+
+Easypanel normalmente desplegaba desde:
+
+`main`
+
+Con autorización explícita se cambió temporalmente la rama de deployment a:
+
+`feature/p6-f-11-7-controlled-pilot-productive-closure`
+
+y se desplegó el checkpoint `28a55db`.
+
+Verificación en la imagen desplegada:
+
+- `manual_reactivation_dry_run.py`: presente;
+- fix keyword-only: presente;
+- compilación: OK;
+- guardia deshabilitada: `rc=2`;
+- `/health`: HTTP 200;
+- `/ready`: HTTP 200;
+- `elvira_elvira`: resoluble desde el contenedor productivo.
+
+### Smoke productivo read-only
+
+Se ejecutó primero un smoke sin runtime ni proyección.
+
+Ruta observada:
+
+Google Sheets `Reactivacion_Historica`
+→ lectura real
+→ PostgreSQL read-only
+→ resolución de contexto
+
+Resultados:
+
+- filas leídas: 5;
+- contextos resueltos: 5;
+- errores de resolución: 0;
+- duplicados detectados: 0;
+- opt-outs detectados: 0;
+- already processed: 0;
+- prior complaint: 0;
+- sensitive case: 0;
+- representative number: 0.
+
+PostgreSQL antes:
+
+- campaigns = 0;
+- contacts = 0;
+- response events = 0.
+
+PostgreSQL después:
+
+- campaigns = 0;
+- contacts = 0;
+- response events = 0.
+
+El smoke confirmó:
+
+- `runtime_invoked=False`;
+- `sheet_projection_invoked=False`;
+- `whatsapp_invoked=False`.
+
+### Controlled real dry run
+
+Con autorización operativa de F.11.7-C se ejecutó una sola vez el entrypoint
+real con:
+
+- `REACTIVATION_DRY_RUN_ENABLED=1`;
+- campaign id técnico no persistido;
+- default country code `57`.
+
+Resultado agregado:
+
+- total = 5;
+- eligible = 0;
+- excluded = 5;
+- invalid_input = 0;
+- runtime_error = 0;
+- entrypoint rc = 0.
+
+PostgreSQL permaneció sin cambios:
+
+- campaigns = 0;
+- contacts = 0;
+- response events = 0.
+
+No se invocó WhatsApp.
+
+### Verificación de proyección Sheets
+
+La relectura posterior, sin runtime ni escritura, confirmó:
+
+- rows = 5;
+- `telefono_e164` proyectado en las 5 filas;
+- `estado_reactivacion = excluded` en las 5 filas;
+- runtime no invocado;
+- escritura no invocada durante la verificación;
+- WhatsApp no invocado.
+
+El contrato de C quedó limitado a la proyección de sistema ya definida por el
+adapter:
+
+- columna F = `telefono_e164`;
+- columna I = `estado_reactivacion`.
+
+### Rollback operacional
+
+Después del dry run se restauró explícitamente en Easypanel:
+
+`feature/p6-f-11-7-controlled-pilot-productive-closure`
+→ `main`
+
+Se realizó deployment exitoso de `main`.
+
+Verificación posterior:
+
+- `manual_reactivation_dry_run.py` ya no está presente en la imagen de `main`;
+- `/health`: HTTP 200;
+- `/ready`: HTTP 200;
+- `elvira_elvira`: resoluble;
+- producción continúa online.
+
+El checkpoint `28a55db` permanece en la rama feature y no se integró a
+`main` durante C.
+
+### Estado al cierre de C
+
+P6-F.11.7-C queda CLOSED.
+
+Queda demostrado en entorno real:
+
+Google Sheets
+→ PostgreSQL read-only
+→ elegibilidad determinística
+→ proyección segura F/I
+
+sin:
+
+- creación de campañas;
+- creación de contactos;
+- escrituras PostgreSQL;
+- dispatcher Meta;
+- transporte WhatsApp;
+- mensajes reales;
+- wiring nuevo en `app/main.py`.
+
+Siguiente fase autorizable por roadmap:
+
+P6-F.11.7-D — Minimal pilot preparation.
+
+C no autoriza todavía:
+
+- activación de campaña;
+- selección automática masiva;
+- wiring productivo;
+- envío real;
+- piloto real.

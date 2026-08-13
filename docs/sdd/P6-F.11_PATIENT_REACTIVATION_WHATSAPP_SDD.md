@@ -1422,3 +1422,195 @@ P6-F.11 remains operationally inert:
 
 P6-F.11.7-C may now execute a controlled real Google Sheets dry run while
 preserving the no-send boundary.
+
+
+<!-- P6-F.11.7-C-CLOSURE-2026-08-13 -->
+
+## P6-F.11.7-C — Controlled real dry run closure
+
+**Closed:** 13-Aug-2026
+**Branch:** `feature/p6-f-11-7-controlled-pilot-productive-closure`
+**Implementation checkpoint:** `28a55db`
+
+### Implemented administrative boundary
+
+A minimal administrative entrypoint was added:
+
+`scripts/manual_reactivation_dry_run.py`
+
+The entrypoint:
+
+- requires exact `REACTIVATION_DRY_RUN_ENABLED=1`;
+- requires an explicit dry-run campaign id;
+- composes the existing dry-run factory;
+- executes the existing best-effort runtime;
+- emits aggregate safe output only;
+- imports neither Meta dispatcher nor WhatsApp transport;
+- fails closed on ambiguous configuration and unexpected runtime failure.
+
+During integration validation, the productive repository contract exposed a
+keyword-only boundary:
+
+`get_by_campaign_phone_read_only(*, campaign_id, phone_e164)`
+
+`ReactivationDryRunContextResolver` was aligned with that contract by using
+named arguments.
+
+Final directed regression before productive execution:
+
+- 51 tests passed;
+- compile checks passed;
+- `git diff --check` passed.
+
+### External configuration preflight
+
+The first local external smoke failed before any Sheets or PostgreSQL access
+because the local `GOOGLE_SERVICE_ACCOUNT_JSON` value contained one redundant
+outer double-quote layer.
+
+Safe structural validation confirmed that removing only that redundant layer
+yielded a valid Google service-account document with all required fields.
+
+The defect was corrected in local configuration rather than application code.
+
+Local PostgreSQL access was not possible because the configured productive
+database hostname `elvira_elvira` is internal to the deployment network.
+
+### Controlled deployment
+
+Production normally deploys from `main`.
+
+For P6-F.11.7-C only, and after explicit authorization, Easypanel was
+temporarily pointed to:
+
+`feature/p6-f-11-7-controlled-pilot-productive-closure`
+
+The deployed image contained checkpoint `28a55db` functionality.
+
+Pre-execution validation confirmed:
+
+- administrative entrypoint present;
+- keyword-only repository compatibility fix present;
+- compile check successful;
+- disabled entrypoint returns rc=2;
+- `/health`: HTTP 200;
+- `/ready`: HTTP 200;
+- productive PostgreSQL hostname resolvable from the application container.
+
+### Productive read-only smoke
+
+Before allowing any Sheets projection, a real external smoke was executed
+without invoking the dry-run runtime.
+
+Observed path:
+
+Google Sheets `Reactivacion_Historica`
+→ read A:J through the existing adapter
+→ PostgreSQL read-only safety context
+
+Observed results:
+
+- 5 sheet rows read;
+- 5 contexts resolved;
+- 0 context-resolution failures;
+- 0 duplicate-in-campaign;
+- 0 patient opt-out;
+- 0 already-processed;
+- 0 prior complaint;
+- 0 sensitive case;
+- 0 representative number.
+
+PostgreSQL counts before and after remained identical:
+
+- campaigns: 0;
+- contacts: 0;
+- response events: 0.
+
+No runtime, projection or WhatsApp operation was invoked during this smoke.
+
+### Controlled real dry run execution
+
+The real administrative entrypoint was executed once with explicit process
+enablement, a non-persisted technical campaign id and Colombian default
+country code `57`.
+
+Safe aggregate result:
+
+- total: 5;
+- eligible: 0;
+- excluded: 5;
+- invalid input: 0;
+- runtime error: 0;
+- entrypoint rc: 0.
+
+Productive PostgreSQL counts remained unchanged:
+
+- campaigns: 0;
+- contacts: 0;
+- response events: 0.
+
+No WhatsApp operation was invoked.
+
+### Sheets projection verification
+
+A subsequent read-only verification confirmed:
+
+- 5 rows present;
+- `telefono_e164` projected for all 5 rows;
+- `estado_reactivacion = excluded` for all 5 rows.
+
+The verification did not invoke the runtime or any additional Sheets write.
+
+The productive dry-run write boundary remained the existing adapter contract:
+
+- column F: `telefono_e164`;
+- column I: `estado_reactivacion`;
+- no human/source columns modified by the dry-run projection path.
+
+### Production rollback
+
+After the real dry run, Easypanel was explicitly restored from the temporary
+feature branch to:
+
+`main`
+
+A successful `main` deployment followed.
+
+Post-rollback verification confirmed:
+
+- the temporary administrative entrypoint is absent from the current `main`
+  image;
+- `/health`: HTTP 200;
+- `/ready`: HTTP 200;
+- productive PostgreSQL DNS remains resolvable;
+- normal production remains online.
+
+Checkpoint `28a55db` remains on the feature branch and was not merged into
+`main` as part of P6-F.11.7-C.
+
+### Closure decision
+
+P6-F.11.7-C is CLOSED.
+
+The real environment has demonstrated:
+
+Google Sheets
+→ PostgreSQL read-only context
+→ deterministic eligibility
+→ safe F/I projection
+
+with:
+
+- zero PostgreSQL writes;
+- zero campaign/contact creation;
+- zero Meta dispatcher invocation;
+- zero WhatsApp transport invocation;
+- zero real reactivation messages;
+- no `app/main.py` productive wiring.
+
+The next roadmap step is:
+
+P6-F.11.7-D — Minimal pilot preparation.
+
+C does not authorize campaign activation, productive wiring, real sending,
+automatic mass selection or the real pilot.
