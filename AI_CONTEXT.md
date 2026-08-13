@@ -2788,3 +2788,190 @@ D no autoriza todavía:
 - wiring `/webhook`;
 - deploy productivo;
 - operaciones masivas.
+
+<!-- P6-F.11.7-E-CLOSURE-2026-08-13 -->
+
+## P6-F.11.7-E — Minimum productive wiring — CERRADA
+
+**Closed:** 13-Aug-2026
+**Branch:** `feature/p6-f-11-7-controlled-pilot-productive-closure`
+**Base checkpoint:** `65f8a6f` — `Close P6-F.11.7-D minimal pilot preparation`
+
+### Objetivo y frontera
+
+P6-F.11.7-E añadió únicamente la composición productiva mínima necesaria para
+construir el dispatcher de reactivación usando las dependencias reales ya
+existentes.
+
+E no ejecuta el dispatcher, no selecciona contactos, no activa campañas,
+no reclama deliveries y no envía mensajes.
+
+No se modificaron:
+
+- `app/main.py`;
+- `/webhook`;
+- Easypanel;
+- configuración productiva;
+- DDL;
+- deployment productivo.
+
+### Implementación mínima
+
+Se añadió:
+
+`app/services/reactivation_template_factory.py`
+
+La factory pública:
+
+`build_reactivation_template_dispatcher(...)`
+
+compone únicamente:
+
+`ReactivationCampaignContactRepository`
+→ `ReactivationCampaignContactService`
+→ `ReactivationTemplateDispatcher`
+→ `send_reactivation_whatsapp_template`
+
+No se añadió lógica nueva de dominio, persistencia, transporte ni runtime.
+
+### Default inerte
+
+La factory construye el dispatcher con:
+
+- `enabled=False` por defecto;
+- template `reactivacion_respirarte`;
+- language `es_CO`;
+- `lease_seconds=120` por defecto.
+
+La activación requiere que el caller pase explícitamente:
+
+`enabled=True`
+
+La mera construcción de la factory no:
+
+- abre transacciones;
+- abre conexiones PostgreSQL;
+- hace claim;
+- ejecuta dispatch;
+- ejecuta batch;
+- llama al transporte WhatsApp.
+
+Verificación directa:
+
+- `enabled=False`;
+- `template=reactivacion_respirarte`;
+- `language=es_CO`;
+- `db_begin_calls=0`;
+- `db_connect_calls=0`.
+
+### Cadena productiva reutilizada
+
+E no reimplementa ninguna pieza de delivery.
+
+Se reutiliza la cadena existente:
+
+- repository con claim atómico;
+- service de lifecycle;
+- dispatcher con gate `enabled`;
+- template contract aprobado;
+- runtime batch existente;
+- transporte WhatsApp existente.
+
+El dispatcher mantiene sus guardas previas:
+
+- disabled → no claim / no send;
+- claim atómico;
+- campaign active gate en repository;
+- opt-out gate en repository;
+- validación de datos del contacto;
+- persistencia de accepted / failed;
+- protección ante outcomes ambiguos.
+
+### Frontera de E
+
+La factory no importa ni invoca:
+
+- `app.main`;
+- `reactivation_template_runtime`;
+- `dispatch_reactivation_contacts_best_effort`;
+- `prepare_reactivation_pilot_batch`;
+- `.dispatch(...)`.
+
+Por tanto E introduce composición, pero no ejecución.
+
+### RED → GREEN
+
+Se creó:
+
+`tests/test_reactivation_template_factory.py`
+
+RED inicial:
+
+- colección falló con `ModuleNotFoundError`;
+- causa esperada: ausencia de
+  `app.services.reactivation_template_factory`;
+- sin DB, Meta ni WhatsApp.
+
+GREEN mínimo:
+
+- **4 passed**.
+
+Los tests verifican:
+
+- composición de dependencias reales;
+- dispatcher deshabilitado por defecto;
+- activación únicamente explícita;
+- cero I/O durante construcción;
+- ausencia de runtime / application wiring.
+
+### Regresión dirigida
+
+Validación final de E:
+
+- factory nueva: **4 passed**;
+- regresión dirigida de cadena productiva: **45 passed**;
+- compilación: OK;
+- `git diff --check`: OK;
+- frontera prohibida: sin coincidencias.
+
+La regresión cubrió:
+
+- template dispatcher;
+- template runtime;
+- template transport;
+- template payload;
+- campaign service;
+- campaign repository.
+
+No se ejecutó suite completa.
+
+### Estado al cierre de E
+
+P6-F.11.7-E queda CLOSED.
+
+Definition of Done de E:
+
+- composición productiva repository/service/dispatcher/transport: sí;
+- default inerte: sí;
+- activación explícita requerida: sí;
+- ejecución automática: no;
+- selección automática: no;
+- campaign activation: no;
+- envío real: no;
+- wiring `app/main.py`: no;
+- deploy productivo: no.
+
+Siguiente fase del roadmap:
+
+P6-F.11.7-F — Minimal real pilot.
+
+E no autoriza todavía:
+
+- activación de campaña sin autorización explícita;
+- envío WhatsApp;
+- piloto real;
+- cambios Easypanel;
+- cambios `app/main.py`;
+- wiring `/webhook`;
+- deploy productivo;
+- operaciones masivas.

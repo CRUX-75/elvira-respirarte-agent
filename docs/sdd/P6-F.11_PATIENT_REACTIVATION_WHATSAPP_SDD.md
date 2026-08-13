@@ -1780,3 +1780,150 @@ P6-F.11.7-E — Minimum productive wiring.
 
 D does not authorize campaign activation, real sending, a real pilot,
 Easypanel changes, productive deployment or mass operations.
+
+<!-- P6-F.11.7-E-CLOSURE-2026-08-13 -->
+
+## P6-F.11.7-E — Minimum productive wiring closure
+
+**Closed:** 13-Aug-2026
+**Branch:** `feature/p6-f-11-7-controlled-pilot-productive-closure`
+**Base checkpoint:** `65f8a6f`
+
+### Scope
+
+P6-F.11.7-E adds only the minimum productive dependency composition required
+to build the historical reactivation dispatcher from the already existing
+production components.
+
+It does not execute the dispatcher and does not add application-level runtime
+wiring.
+
+### Productive composition
+
+New module:
+
+`app/services/reactivation_template_factory.py`
+
+Public factory:
+
+`build_reactivation_template_dispatcher(...)`
+
+The factory composes:
+
+`ReactivationCampaignContactRepository`
+→ `ReactivationCampaignContactService`
+→ `ReactivationTemplateDispatcher`
+→ `send_reactivation_whatsapp_template`
+
+No delivery, persistence or domain behavior was duplicated.
+
+### Inert-by-default contract
+
+The composed dispatcher uses:
+
+- `enabled=False` by default;
+- template `reactivacion_respirarte`;
+- language `es_CO`;
+- default delivery lease of 120 seconds.
+
+Productive dispatch can only become enabled when the caller explicitly passes:
+
+`enabled=True`
+
+Factory construction itself performs no:
+
+- PostgreSQL transaction;
+- PostgreSQL connection;
+- delivery claim;
+- dispatcher execution;
+- batch runtime execution;
+- WhatsApp send.
+
+Observed inert construction evidence:
+
+- enabled: false;
+- template: `reactivacion_respirarte`;
+- language: `es_CO`;
+- database begin calls: 0;
+- database connect calls: 0.
+
+### Existing delivery safeguards preserved
+
+The factory reuses the previously implemented delivery chain unchanged.
+
+Existing safeguards therefore remain responsible for:
+
+- dispatcher enable gate;
+- atomic delivery claim;
+- active campaign requirement;
+- patient opt-out exclusion;
+- contact-data validation;
+- accepted/failed persistence;
+- ambiguous provider outcome handling.
+
+E does not bypass or replace those safeguards.
+
+### No application runtime wiring
+
+The factory does not import or invoke:
+
+- `app.main`;
+- `reactivation_template_runtime`;
+- `dispatch_reactivation_contacts_best_effort`;
+- `prepare_reactivation_pilot_batch`;
+- dispatcher execution.
+
+Therefore E provides composition only, not automatic execution.
+
+### Verification
+
+New test module:
+
+`tests/test_reactivation_template_factory.py`
+
+TDD evidence:
+
+- initial RED: expected `ModuleNotFoundError` for the missing factory;
+- final factory tests: **4 passed**.
+
+Directed regression:
+
+- **45 passed** across template dispatcher, template runtime, template
+  transport, template payload, campaign service and campaign repository;
+- compile checks passed;
+- `git diff --check` passed;
+- forbidden application/runtime dependency scan returned no matches.
+
+### Production boundary
+
+No changes were made to:
+
+- `app/main.py`;
+- `/webhook`;
+- Easypanel;
+- production configuration;
+- database schema;
+- productive deployment.
+
+No campaign was activated and no real WhatsApp message was sent.
+
+### Closure decision
+
+P6-F.11.7-E is CLOSED.
+
+The minimum productive composition now exists:
+
+repository
+→ service
+→ dispatcher
+→ approved WhatsApp transport
+
+while remaining disabled and side-effect free until explicitly enabled and
+executed by a future authorized step.
+
+The next roadmap step is:
+
+P6-F.11.7-F — Minimal real pilot.
+
+E does not authorize campaign activation, real sending, the real pilot,
+Easypanel changes, productive deployment or mass operations.
