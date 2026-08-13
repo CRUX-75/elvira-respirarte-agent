@@ -92,8 +92,8 @@ class ReactivationDryRunContextResolver:
 
         patient = self.patient_lookup(phone_e164)
         existing_contact = self.campaign_contact_lookup(
-            self.campaign_id,
-            phone_e164,
+            campaign_id=self.campaign_id,
+            phone_e164=phone_e164,
         )
 
         patient_opt_out = bool(

@@ -333,3 +333,44 @@ def test_same_source_retryable_failed_without_wamid_remains_retryable():
 
     assert context.duplicate_in_campaign is False
     assert context.already_processed is False
+
+
+def test_context_resolver_supports_keyword_only_campaign_contact_lookup():
+    from types import SimpleNamespace
+
+    from app.services.reactivation_dry_run_context import (
+        ReactivationDryRunContextResolver,
+    )
+
+    calls = []
+
+    def campaign_contact_lookup(*, campaign_id, phone_e164):
+        calls.append(
+            {
+                "campaign_id": campaign_id,
+                "phone_e164": phone_e164,
+            }
+        )
+        return None
+
+    resolver = ReactivationDryRunContextResolver(
+        campaign_id="controlled-real-dry-run",
+        default_country_code="57",
+        patient_lookup=lambda phone_e164: None,
+        campaign_contact_lookup=campaign_contact_lookup,
+    )
+
+    record = SimpleNamespace(
+        phone_original="+573001234567",
+        source_reference="row-2",
+    )
+
+    context = resolver(record)
+
+    assert context.already_processed is False
+    assert calls == [
+        {
+            "campaign_id": "controlled-real-dry-run",
+            "phone_e164": "573001234567",
+        }
+    ]
