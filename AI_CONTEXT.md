@@ -2603,3 +2603,188 @@ C no autoriza todavía:
 - wiring productivo;
 - envío real;
 - piloto real.
+
+<!-- P6-F.11.7-D-CLOSURE-2026-08-13 -->
+
+## P6-F.11.7-D — Minimal pilot preparation — CERRADA
+
+**Closed:** 13-Aug-2026
+**Branch:** `feature/p6-f-11-7-controlled-pilot-productive-closure`
+**Base checkpoint:** `1bc7583` — `Close P6-F.11.7-C controlled real dry run`
+
+### Objetivo y frontera
+
+P6-F.11.7-D preparó únicamente el contrato mínimo e inerte necesario para
+un futuro piloto explícito de aproximadamente 1–3 contactos.
+
+D no activa campañas, no selecciona contactos automáticamente, no persiste
+estado, no reclama entregas y no envía mensajes.
+
+No se modificaron:
+
+- `app/main.py`;
+- `/webhook`;
+- Easypanel;
+- configuración productiva;
+- DDL;
+- runtime productivo.
+
+### Implementación mínima
+
+Se añadió:
+
+`app/services/reactivation_pilot_preparation.py`
+
+El módulo introduce:
+
+- `ReactivationPilotCandidate`;
+- `prepare_reactivation_pilot_batch(...)`.
+
+El contrato exige:
+
+- lote explícito de entre 1 y 3 contactos;
+- campaña con estado `active`;
+- template exactamente `reactivacion_respirarte`;
+- idioma exactamente `es_CO`.
+
+Por contacto, la preparación delega la decisión al evaluador existente:
+
+`evaluate_reactivation_sheet_record(...)`
+
+Por tanto se reutilizan sin duplicación:
+
+- normalización de teléfono;
+- eligibility completa;
+- autorización;
+- revisión médica;
+- duplicados;
+- opt-out;
+- already processed;
+- demás razones de exclusión existentes.
+
+### Campaign gate
+
+D no reutiliza `try_claim_delivery()` como gate porque ese método pertenece
+a la frontera de entrega y realiza un `UPDATE`.
+
+La preparación valida únicamente el estado ya cargado de la campaña y exige:
+
+`ReactivationCampaignStatus.ACTIVE`
+
+sin claim, lease, persistencia ni transición de estado.
+
+### Template gate
+
+D conserva el contrato aprobado existente:
+
+- template: `reactivacion_respirarte`;
+- language: `es_CO`.
+
+La validación ocurre antes de cualquier dispatcher y sin importar ni invocar
+el runtime de template, transporte Meta o WhatsApp.
+
+### Opt-out y eligibility
+
+El contexto existente `ReactivationDryRunContext` continúa siendo la fuente
+explícita de los facts de seguridad por contacto.
+
+`patient_opt_out=True` sigue delegándose al dominio existente y produce
+exclusión:
+
+`existing_opt_out`
+
+sin lógica paralela nueva.
+
+### RED → GREEN
+
+Se creó:
+
+`tests/test_reactivation_pilot_preparation.py`
+
+RED inicial:
+
+- colección falló con `ModuleNotFoundError`;
+- causa esperada: ausencia de
+  `app.services.reactivation_pilot_preparation`;
+- sin DB, Sheets, Meta ni WhatsApp.
+
+GREEN mínimo:
+
+- 8 tests passed.
+
+Una expectativa inicial del test asumía `+573000000001`.
+La regresión existente confirmó que el contrato actual proyecta
+`573000000001`; se corrigió únicamente el test para respetar el contrato
+existente y no modificar producción.
+
+### Regresión dirigida
+
+Validación final de D:
+
+- test nuevo: **8 passed**;
+- regresión dirigida existente: **152 passed**;
+- compilación: OK;
+- `git diff --check`: OK;
+- frontera prohibida del módulo: sin coincidencias.
+
+La regresión dirigida cubrió:
+
+- dry-run;
+- dry-run context;
+- domain contracts;
+- campaign repository;
+- template dispatcher.
+
+No se ejecutó suite completa, conforme a la regla de reservarla para cerca
+del cierre P6-F.11.7-G.
+
+### Frontera inerte verificada
+
+`reactivation_pilot_preparation.py` no depende de:
+
+- `reactivation_template_dispatcher`;
+- `reactivation_template_runtime`;
+- `reactivation_template_transport`;
+- `app.services.whatsapp`;
+- repositorios;
+- `try_claim_delivery`;
+- `send_template`.
+
+Por tanto D no puede, por sí sola:
+
+- seleccionar masivamente;
+- persistir;
+- activar campaña;
+- reclamar delivery;
+- enviar por Meta;
+- enviar WhatsApp.
+
+### Estado al cierre de D
+
+P6-F.11.7-D queda CLOSED.
+
+Definition of Done cumplida:
+
+- lote explícito 1–3: sí;
+- eligibility completa: sí;
+- opt-out comprobado: sí;
+- template gate: sí;
+- campaign gate: sí;
+- selección automática masiva: no;
+- envío real: no;
+- wiring productivo: no.
+
+Siguiente fase del roadmap:
+
+P6-F.11.7-E — Minimum productive wiring.
+
+D no autoriza todavía:
+
+- activación de campaña;
+- envío WhatsApp;
+- piloto real;
+- cambios Easypanel;
+- cambios `app/main.py`;
+- wiring `/webhook`;
+- deploy productivo;
+- operaciones masivas.

@@ -1614,3 +1614,169 @@ P6-F.11.7-D — Minimal pilot preparation.
 
 C does not authorize campaign activation, productive wiring, real sending,
 automatic mass selection or the real pilot.
+
+<!-- P6-F.11.7-D-CLOSURE-2026-08-13 -->
+
+## P6-F.11.7-D — Minimal pilot preparation closure
+
+**Closed:** 13-Aug-2026
+**Branch:** `feature/p6-f-11-7-controlled-pilot-productive-closure`
+**Base checkpoint:** `1bc7583`
+
+### Scope
+
+P6-F.11.7-D introduces only the inert preparation boundary required for a
+future minimal pilot of 1–3 explicitly supplied contacts.
+
+It does not:
+
+- activate campaigns;
+- perform automatic contact selection;
+- persist campaign/contact state;
+- claim delivery;
+- call the Meta dispatcher;
+- call WhatsApp transport;
+- send real messages;
+- add productive wiring.
+
+### Minimal preparation contract
+
+New module:
+
+`app/services/reactivation_pilot_preparation.py`
+
+New public preparation types:
+
+- `ReactivationPilotCandidate`;
+- `prepare_reactivation_pilot_batch(...)`.
+
+The batch contract requires:
+
+- at least 1 and at most 3 explicitly supplied candidates;
+- campaign status `active`;
+- template name `reactivacion_respirarte`;
+- template language `es_CO`.
+
+Per-contact safety evaluation is delegated to the existing:
+
+`evaluate_reactivation_sheet_record(...)`
+
+which in turn uses the existing reactivation eligibility domain.
+
+No parallel eligibility implementation was added.
+
+### Eligibility and opt-out reuse
+
+The existing `ReactivationDryRunContext` remains the explicit carrier of
+external safety facts.
+
+This preserves existing handling for:
+
+- duplicate-in-campaign;
+- patient opt-out;
+- prior complaint;
+- sensitive case;
+- representative number;
+- representative confirmation;
+- already processed state.
+
+Existing patient opt-out continues to produce the domain exclusion reason:
+
+`existing_opt_out`
+
+without any new write or response-processing path.
+
+### Campaign gate
+
+The preparation boundary requires:
+
+`ReactivationCampaignStatus.ACTIVE`
+
+before evaluating the explicit pilot batch.
+
+`try_claim_delivery()` is intentionally not used because it is part of the
+delivery boundary and performs a state-changing claim.
+
+D therefore checks campaign eligibility without:
+
+- claim token;
+- lease;
+- delivery attempt;
+- contact status mutation;
+- persistence.
+
+### Template gate
+
+The already approved template contract is preserved:
+
+- `reactivacion_respirarte`;
+- `es_CO`.
+
+D validates this contract before any delivery component and does not import
+or invoke the Meta dispatcher or WhatsApp transport.
+
+### Verification
+
+New test module:
+
+`tests/test_reactivation_pilot_preparation.py`
+
+TDD evidence:
+
+- initial RED: expected `ModuleNotFoundError` for the missing preparation
+  module;
+- final new-contract tests: **8 passed**.
+
+Directed regression:
+
+- **152 passed** across dry-run, dry-run context, domain contracts,
+  campaign repository and template dispatcher tests;
+- compile checks passed;
+- `git diff --check` passed;
+- forbidden delivery/persistence dependency scan returned no matches.
+
+An initial new-test expectation included a leading `+` in the normalized
+phone. Existing regression demonstrated that the established contract uses
+`573000000001`; only the test expectation was aligned with that existing
+contract.
+
+### Safety boundary
+
+The new preparation module has no dependency on:
+
+- reactivation template dispatcher;
+- reactivation template runtime;
+- reactivation template transport;
+- WhatsApp service;
+- repositories;
+- delivery claim;
+- send-template functions.
+
+No changes were made to:
+
+- `app/main.py`;
+- `/webhook`;
+- Easypanel;
+- production deployment;
+- database schema.
+
+### Closure decision
+
+P6-F.11.7-D is CLOSED.
+
+The phase demonstrates a deterministic, explicitly bounded preparation path:
+
+explicit 1–3 contacts
+→ campaign gate
+→ template gate
+→ existing eligibility / opt-out evaluation
+→ safe decisions
+
+with zero sending and zero productive wiring.
+
+The next roadmap step is:
+
+P6-F.11.7-E — Minimum productive wiring.
+
+D does not authorize campaign activation, real sending, a real pilot,
+Easypanel changes, productive deployment or mass operations.
