@@ -336,20 +336,55 @@ def test_real_webhook_routes_status_updates_before_message_processing(
 
     captured = {}
 
-    async def fake_status_processor(updates):
-        captured["updates"] = updates
+    async def fake_human_status_processor(updates):
+        raise AssertionError(
+            "human escalation handler must not be called directly"
+        )
+
+    async def fake_reactivation_status_processor(updates):
         return {
             "status": "status_updates_processed",
-            "updates_received": 1,
-            "updates_matched": 1,
+            "updates_received": len(updates),
+            "updates_matched": len(updates),
             "updates_ignored": 0,
             "updates_failed": 0,
+        }
+
+    async def fake_status_router(
+        updates,
+        *,
+        human_escalation_handler,
+        patient_reactivation_handler,
+    ):
+        captured["updates"] = updates
+        captured["human_handler"] = human_escalation_handler
+        captured["reactivation_handler"] = patient_reactivation_handler
+
+        return {
+            "status": "status_updates_routed",
+            "updates_received": len(updates),
+            "domains_attempted": 2,
+            "domains_succeeded": 2,
+            "domains_failed": 0,
+            "domain_results": {},
         }
 
     monkeypatch.setattr(
         main,
         "process_human_escalation_status_updates_best_effort",
-        fake_status_processor,
+        fake_human_status_processor,
+    )
+    monkeypatch.setattr(
+        main,
+        "process_reactivation_status_updates_best_effort",
+        fake_reactivation_status_processor,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        main,
+        "route_whatsapp_status_updates_best_effort",
+        fake_status_router,
+        raising=False,
     )
 
     payload = WhatsAppPayload(
@@ -379,7 +414,7 @@ def test_real_webhook_routes_status_updates_before_message_processing(
 
     response = asyncio.run(main.receive_webhook(payload))
 
-    assert response["status"] == "status_updates_processed"
+    assert response["status"] == "status_updates_routed"
     assert captured["updates"] == [
         {
             "provider_message_id": "wamid.status.002",
@@ -388,3 +423,11 @@ def test_real_webhook_routes_status_updates_before_message_processing(
             "error_code": None,
         }
     ]
+    assert (
+        captured["human_handler"]
+        is fake_human_status_processor
+    )
+    assert (
+        captured["reactivation_handler"]
+        is fake_reactivation_status_processor
+    )

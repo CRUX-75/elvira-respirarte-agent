@@ -67,6 +67,12 @@ from app.services.human_escalation_runtime import (
     dispatch_human_escalation_best_effort,
     process_human_escalation_status_updates_best_effort,
 )
+from app.services.reactivation_status_runtime import (
+    process_reactivation_status_updates_best_effort,
+)
+from app.services.whatsapp_status_runtime import (
+    route_whatsapp_status_updates_best_effort,
+)
 
 
 app = FastAPI(
@@ -226,10 +232,14 @@ async def receive_webhook(payload: WhatsAppPayload):
     )
 
     if status_updates:
-        return await (
-            process_human_escalation_status_updates_best_effort(
-                status_updates
-            )
+        return await route_whatsapp_status_updates_best_effort(
+            status_updates,
+            human_escalation_handler=(
+                process_human_escalation_status_updates_best_effort
+            ),
+            patient_reactivation_handler=(
+                process_reactivation_status_updates_best_effort
+            ),
         )
 
     try:

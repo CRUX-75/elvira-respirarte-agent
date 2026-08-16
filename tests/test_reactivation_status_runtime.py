@@ -283,14 +283,22 @@ def test_empty_batch_returns_safe_zero_summary():
     assert service.status_calls == []
 
 
-def test_handler_remains_disconnected_from_productive_webhook():
+def test_handler_is_connected_to_productive_webhook_through_router():
     main_source = Path("app/main.py").read_text(
         encoding="utf-8"
     )
 
     assert (
         "process_reactivation_status_updates_best_effort"
-        not in main_source
+        in main_source
+    )
+    assert (
+        "route_whatsapp_status_updates_best_effort"
+        in main_source
+    )
+    assert (
+        "patient_reactivation_handler=("
+        in main_source
     )
 
 
