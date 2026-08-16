@@ -2975,3 +2975,162 @@ E no autoriza todavía:
 - wiring `/webhook`;
 - deploy productivo;
 - operaciones masivas.
+<!-- P6-F.11.7-F-G-CLOSURE-2026-08-16 -->
+
+## P6-F.11.7-F — Minimal real pilot — CERRADA
+
+P6-F.11.7-F queda CLOSED.
+
+### Implementación técnica
+
+Checkpoints principales:
+
+- `7d61063` — `Complete P6-F.11.7-F minimal real pilot`
+- `20a37b8` — `Wire reactivation delivery callbacks into webhook`
+
+El entrypoint productivo del piloto quedó protegido por autorización
+explícita, campaña explícita y entre 1 y 3 contactos explícitos.
+
+No existe selección automática de pacientes.
+
+### Piloto real
+
+Se preparó un único contacto productivo de forma explícita.
+
+Preflight confirmado antes del envío:
+
+- campaign status: `ready`;
+- template: `reactivacion_respirarte/es_CO`;
+- contact status: `eligible`;
+- authorization: `approved`;
+- doctor review: `approved`;
+- patient opt-out: false;
+- provider message id: ausente;
+- attempt count: 0.
+
+La campaña pasó explícitamente por:
+
+`draft -> ready -> active`
+
+El piloto real se ejecutó una sola vez.
+
+Resultado:
+
+- total=1
+- accepted=1
+- failed=0
+- ignored=0
+
+Persistencia posterior:
+
+- status=`accepted`;
+- provider message id presente;
+- attempt_count=1;
+- accepted_at presente;
+- last_error_category=None.
+
+No se reenvió el piloto.
+
+### Hallazgo de callbacks
+
+Durante la observación posterior no apareció transición persistida a
+`sent`, `delivered` o `read`.
+
+La auditoría productiva encontró que `/webhook` enviaba los status
+callbacks únicamente al dominio de human escalation.
+
+El runtime genérico de routing y el handler de reactivación ya existían,
+pero no estaban conectados al webhook productivo.
+
+### Corrección RED/GREEN
+
+Se corrigió únicamente el wiring productivo de status callbacks.
+
+`/webhook` usa ahora:
+
+`route_whatsapp_status_updates_best_effort(...)`
+
+con ambos handlers:
+
+- human escalation;
+- patient reactivation.
+
+La corrección fue validada RED -> GREEN y con regresión dirigida.
+
+No se alteraron:
+
+- selección de contactos;
+- payload del template;
+- claim;
+- opt-out;
+- schema;
+- envío automático.
+
+### Verificación productiva
+
+Tras push a `main` y deploy manual en Easypanel:
+
+- `/health` = 200 / `ok`;
+- `/ready` = 200 / `ready`;
+- router productivo presente;
+- handler human escalation presente;
+- handler patient reactivation presente;
+- attempt_count del piloto sigue en 1;
+- provider message id sigue persistido.
+
+Smoke productivo sin efectos secundarios:
+
+- `status_updates_routed`;
+- domains_attempted=2;
+- domains_succeeded=2;
+- domains_failed=0;
+- human_calls=1;
+- reactivation_calls=1;
+- sin DB write;
+- sin Meta;
+- sin WhatsApp.
+
+No se afirma `sent`, `delivered` ni `read` para el mensaje original,
+porque ese callback pudo llegar antes del deploy del wiring corregido y
+no puede reconstruirse honestamente.
+
+### Cierre de campaña
+
+La campaña del piloto se cerró explícitamente:
+
+`active -> completed`
+
+sin mutar el contacto, sin claim y sin nuevo envío.
+
+---
+
+## P6-F.11.7-G — Productive closure — CERRADA
+
+Validación final completa:
+
+- **849 passed**
+- `git diff --check`: OK
+- `main` alineado con `origin/main` antes del cambio documental de cierre.
+
+Estado productivo final:
+
+- aplicación online;
+- health/ready verdes;
+- piloto real ejecutado exactamente una vez;
+- aceptación de Meta persistida;
+- attempt_count=1;
+- callback routing productivo corregido para ambos dominios;
+- campaña del piloto `completed`;
+- sin activación automática;
+- sin ejecución automática del piloto;
+- sin selección automática;
+- sin operación masiva.
+
+P6-F.11.7 queda CLOSED.
+
+Con ello, P6-F.11 — Reactivación histórica de pacientes por WhatsApp —
+queda productivamente CERRADA.
+
+Cualquier batch futuro de reactivación histórica deberá considerarse una
+nueva operación explícitamente autorizada y preservar los contratos de
+eligibilidad, opt-out, idempotencia, claim y lifecycle de delivery.

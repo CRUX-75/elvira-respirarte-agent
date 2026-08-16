@@ -1927,3 +1927,195 @@ P6-F.11.7-F — Minimal real pilot.
 
 E does not authorize campaign activation, real sending, the real pilot,
 Easypanel changes, productive deployment or mass operations.
+<!-- P6-F.11.7-F-G-CLOSURE-2026-08-16 -->
+
+## P6-F.11.7-F — Minimal real pilot closure
+
+P6-F.11.7-F is CLOSED.
+
+### Technical implementation
+
+The controlled productive pilot boundary was implemented and merged through:
+
+- `7d61063` — `Complete P6-F.11.7-F minimal real pilot`
+- `20a37b8` — `Wire reactivation delivery callbacks into webhook`
+
+The pilot runtime requires:
+
+- an explicit campaign id;
+- between 1 and 3 explicit contact ids;
+- an ACTIVE campaign;
+- approved template `reactivacion_respirarte/es_CO`;
+- eligible or explicitly retryable contacts;
+- absence of a persisted provider message id;
+- literal send authorization;
+- an explicitly enabled real-pilot entrypoint.
+
+No automatic contact selection was introduced.
+
+### Real pilot execution
+
+A single productive pilot contact was prepared explicitly.
+
+Before sending:
+
+- the campaign was persisted in DRAFT;
+- the selected contact was persisted as ELIGIBLE;
+- authorization was APPROVED;
+- doctor review was APPROVED;
+- no patient opt-out was active;
+- `provider_message_id` was absent;
+- `attempt_count` was 0.
+
+The campaign was transitioned explicitly:
+
+`draft -> ready -> active`
+
+The real pilot entrypoint was then executed exactly once.
+
+Observed dispatcher result:
+
+- total: 1
+- accepted: 1
+- failed: 0
+- ignored: 0
+
+Post-send persistence confirmed:
+
+- contact status: `accepted`;
+- provider message id persisted: yes;
+- attempt count: 1;
+- accepted timestamp persisted: yes;
+- last error category: none.
+
+The pilot was not resent.
+
+### Delivery callback finding
+
+The original productive contact remained in `accepted` and no
+`sent` / `delivered` / `read` timestamp was persisted during the
+observation window.
+
+A read-only production audit identified the cause:
+
+`POST /webhook`
+
+was routing Meta status callbacks directly only to the human escalation
+status handler.
+
+The already-existing generic WhatsApp status router and patient
+reactivation status handler were not connected to the productive webhook.
+
+### Callback wiring correction
+
+A focused RED/GREEN correction was implemented.
+
+The productive webhook now routes status callbacks through:
+
+`route_whatsapp_status_updates_best_effort(...)`
+
+with both independent domain handlers:
+
+- human escalation;
+- patient reactivation.
+
+The reactivation handler records provider lifecycle callbacks using the
+persisted provider message id and preserves the existing monotonic and
+idempotent lifecycle rules.
+
+The change did not alter:
+
+- outbound template composition;
+- campaign selection;
+- pilot selection;
+- claim semantics;
+- opt-out semantics;
+- database schema.
+
+### Production verification
+
+After merge and manual Easypanel deployment:
+
+- `/health`: HTTP 200, status `ok`;
+- `/ready`: HTTP 200, status `ready`;
+- generic status router present in the deployed webhook: yes;
+- human escalation handler present: yes;
+- patient reactivation handler present: yes;
+- productive contact attempt count remained 1;
+- productive provider message id remained persisted.
+
+A no-side-effect deployed smoke test invoked the real
+`receive_webhook()` path with synthetic status data while replacing both
+domain handlers with in-memory fakes.
+
+Observed result:
+
+- status: `status_updates_routed`;
+- domains attempted: 2;
+- domains succeeded: 2;
+- domains failed: 0;
+- human escalation calls: 1;
+- patient reactivation calls: 1.
+
+The smoke test performed:
+
+- no database write;
+- no Meta API call;
+- no WhatsApp send.
+
+The original message's `sent`, `delivered` or `read` callback cannot be
+reconstructed reliably because it may have arrived before the corrected
+webhook wiring was deployed. No such delivery state is claimed.
+
+### Pilot campaign closure
+
+After productive verification, the pilot campaign was transitioned
+explicitly:
+
+`active -> completed`
+
+No contact mutation, claim, Meta request or WhatsApp send was performed
+by that closure transition.
+
+---
+
+## P6-F.11.7-G — Productive closure
+
+P6-F.11.7-G is CLOSED subject to the documentation commit containing this
+record.
+
+### Final validation
+
+Final full-suite validation on `main`:
+
+- **849 passed**
+- `git diff --check`: passed
+- branch: `main`
+- local HEAD aligned with `origin/main` before this documentation change
+
+### Final production state
+
+At productive closure:
+
+- the application is online;
+- health and readiness checks are green;
+- the controlled pilot was executed exactly once;
+- one provider acceptance was persisted;
+- the pilot contact has exactly one recorded attempt;
+- productive status callback routing now covers both human escalation and
+  patient reactivation;
+- the pilot campaign is `completed`;
+- no automatic campaign activation exists;
+- no automatic real-pilot execution exists;
+- no automatic patient selection was introduced;
+- no mass reactivation operation was executed.
+
+### Closure decision
+
+P6-F.11.7 — Controlled pilot and productive closure is complete.
+
+Therefore P6-F.11 is productively closed.
+
+Any future historical-reactivation batch must be treated as a new,
+explicitly authorized operational action and must preserve the existing
+eligibility, opt-out, idempotency, claim and delivery-callback contracts.
