@@ -39,6 +39,7 @@ def generate_response(state: ElviraState) -> ElviraState:
             "que servicios",
             "cuáles servicios",
             "cuales servicios",
+            "todos los servicios",
             "servicios ofrecen",
             "servicios tiene",
         )

@@ -241,14 +241,47 @@ Aliases must map only when clinically and operationally approved.
 H1 is complete when:
 
 ~~~txt
-[ ] direct spirometry query resolves correctly
-[ ] pulmonary-function query remains correct
-[ ] general service-list query works
-[ ] known aliases are tested
-[ ] unknown services remain safely unknown
-[ ] no existing clinical rule is weakened
-[ ] regression tests protect the cases
+[x] direct spirometry query resolves correctly
+[x] pulmonary-function query remains correct
+[x] general service-list query works
+[x] known aliases are tested
+[x] unknown services remain safely unknown
+[x] no existing clinical rule is weakened
+[x] regression tests protect the cases
 ~~~
+
+### H1 Closure Evidence
+
+**Status:** CLOSED locally on 25-Aug-2026.
+
+Implemented change:
+
+- the natural phrase `todos los servicios` is recognized as a generic
+  portfolio request;
+- no service-specific grounding or clinical rule was changed.
+
+Protected contracts:
+
+- direct spirometry is classified as `servicios`;
+- direct spirometry resolves to approved service `SRV-03`;
+- grounding uses `kb_services` with status `exact`;
+- a natural all-services request does not escalate as unknown;
+- a truly unknown service still escalates safely.
+
+Validation:
+
+- H1 targeted contracts: **4 passed**;
+- H1 directed regression: **51 passed**;
+- `python -m py_compile app/services/response.py`: passed;
+- `git diff --check`: clean.
+
+Boundaries preserved:
+
+- no changes to `app/main.py` or `/webhook`;
+- no PostgreSQL or Google Sheets changes;
+- no Easypanel or production configuration changes;
+- no production deployment;
+- P6-F.11 remains closed.
 
 ---
 
