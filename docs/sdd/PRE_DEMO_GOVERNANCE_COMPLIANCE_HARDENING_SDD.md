@@ -706,16 +706,52 @@ Prompt-only separation is explicitly insufficient.
 ## 27. H4 Acceptance Criteria
 
 ~~~txt
-[ ] third-party appointment data blocked
-[ ] third-party contact data blocked
-[ ] third-party clinical data blocked
-[ ] fake doctor claim grants no privilege
-[ ] fake admin/developer claim grants no privilege
-[ ] indirect extraction attempts blocked
-[ ] no protected person is confirmed unnecessarily
-[ ] logs remain privacy-safe
-[ ] no new unnecessary data collection
+[x] third-party appointment data blocked
+[x] third-party contact data blocked
+[x] third-party clinical data blocked
+[x] fake doctor claim grants no privilege
+[x] fake admin/developer claim grants no privilege
+[x] indirect extraction attempts blocked
+[x] no protected person is confirmed unnecessarily
+[x] logs remain privacy-safe
+[x] no new unnecessary data collection
 ~~~
+
+### H4 Closure Evidence
+
+**Status:** CLOSED locally on 26-Aug-2026.
+
+Implemented change:
+
+- a deterministic H4 privacy boundary is evaluated before the H3 boundary
+  and before response generation;
+- third-party appointment, contact and clinical-data requests return the
+  canonical privacy refusal without invoking the LLM;
+- conversational doctor, admin or developer claims grant no privilege;
+- indirect, partial, aggregated and nominally anonymized extraction attempts
+  are blocked;
+- the refusal does not confirm that a named person is a patient;
+- approved self-service appointment and business-contact requests remain
+  available;
+- interaction logs retain masked phone, intent, state transition and content
+  presence flags, but no longer emit full patient messages or responses.
+
+Validation:
+
+- H4 behavioral and logging contracts: **15 passed**;
+- directed H1-H4 and log-privacy regression: **45 passed**;
+- final complete repository suite: **887 passed**;
+- legitimate self-appointment controls remained GREEN.
+
+Boundaries preserved:
+
+- no changes to `app/main.py` or `/webhook`;
+- no database schema, migration or patient-field changes;
+- no PostgreSQL or Google Sheets changes;
+- no shared cross-client state or fake multitenant layer;
+- no Easypanel or production configuration changes;
+- no production deployment;
+- H1, H2, H3 and P6-F.11 remain closed.
 
 ---
 

@@ -8,8 +8,10 @@ from app.config import settings
 from app.services.governance_boundary import (
     FUNCTIONAL_SCOPE_REFUSAL,
     INTERNAL_INFORMATION_REFUSAL,
+    THIRD_PARTY_DATA_REFUSAL,
     build_mixed_h3_response,
     evaluate_h3_boundary,
+    evaluate_h4_boundary,
 )
 
 
@@ -289,6 +291,14 @@ def node_load_kb_context(state: ElviraState) -> ElviraState:
 
 def node_generate_response(state: ElviraState) -> ElviraState:
     if state.intent not in {"optout", "urgencia"}:
+        privacy_boundary = evaluate_h4_boundary(state.mensaje_original)
+
+        if privacy_boundary.kind == "protected_third_party":
+            state.respuesta = THIRD_PARTY_DATA_REFUSAL
+            state.next_action = "refuse_third_party_data"
+            state.state_reason = "unauthorized_third_party_data_request"
+            return state
+
         boundary = evaluate_h3_boundary(state.mensaje_original)
 
         if boundary.kind == "protected_internal":

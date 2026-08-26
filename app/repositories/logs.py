@@ -26,13 +26,14 @@ def log_interaction(
     respuesta: str | None,
 ) -> None:
     logger.info(
-        "INTERACTION | telefono=%s | intent=%s | estado=%s->%s | msg=%r | resp=%r",
+        "INTERACTION | telefono=%s | intent=%s | estado=%s->%s "
+        "| msg_present=%s | resp_present=%s",
         mask_phone(telefono),
         intent,
         estado_anterior,
         nuevo_estado,
-        mensaje,
-        respuesta,
+        bool(mensaje),
+        bool(respuesta),
     )
 
 

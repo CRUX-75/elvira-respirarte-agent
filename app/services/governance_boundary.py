@@ -21,6 +21,11 @@ FUNCTIONAL_SCOPE_REFUSAL = (
     "habilitadas para este servicio."
 )
 
+THIRD_PARTY_DATA_REFUSAL = (
+    "No puedo proporcionar información personal o datos de otras personas."
+)
+
+
 BoundaryKind = Literal[
     "allowed",
     "protected_internal",
@@ -32,6 +37,11 @@ BoundaryKind = Literal[
 @dataclass(frozen=True)
 class H3BoundaryDecision:
     kind: BoundaryKind
+
+
+@dataclass(frozen=True)
+class H4BoundaryDecision:
+    kind: Literal["allowed", "protected_third_party"]
 
 
 _INTERNAL_PATTERNS = (
@@ -88,6 +98,31 @@ _OUT_OF_SCOPE_PATTERNS = (
     r"\bclima en\b",
 )
 
+_THIRD_PARTY_DATA_PATTERNS = (
+    r"\b(?:a que hora|que dia|cuando)\b.*\btiene cita\b",
+    r"\b(?:soy (?:la |el )?"
+    r"(?:doctor(?:a)?|administrador(?:a)?|desarrollador(?:a)?)"
+    r"|trabajo en respirarte|el paciente me dio permiso)\b"
+    r".*\bcitas? de (?:manana|hoy)\b",
+    r"\btelefonos?\b.*\bpacientes?\b",
+    r"\bpacientes?\b.*\btelefonos?\b",
+    r"\b(?:telefono|correo|email|direccion)\s+de\s+"
+    r"(?!respirarte\b|la clinica\b|la sede\b|contacto\b)",
+    r"\bdiagnosticos?\b.*\bpacientes?\b",
+    r"\b(?:diagnostico|historia clinica|condicion medica|tratamiento) "
+    r"(?:de|tiene)\b",
+    r"\bultimo paciente\b",
+    r"\bquien (?:fue|es) el ultimo paciente\b",
+    r"\bquien mas (?:pidio|solicito|tiene)\b",
+    r"\biniciales\b.*\bpacientes?\b",
+    r"\bultimos cuatro\b.*\btelefono\b",
+    r"\bcuantos pacientes?\b",
+    r"\bejemplo real\b.*\bsin identificar\b",
+    r"\b(?:resume|resumen)\b.*\bcasos?\b.*\bsin nombres?\b",
+    r"\bcasos? clinicos? reales?\b.*\bsin nombres?\b",
+)
+
+
 _DISPLAY_SERVICE_TERMS = {
     "espirometria": "espirometría",
     "oximetria": "oximetría",
@@ -110,6 +145,15 @@ def evaluate_h3_boundary(message: str) -> H3BoundaryDecision:
         return H3BoundaryDecision(kind="out_of_scope")
 
     return H3BoundaryDecision(kind="allowed")
+
+
+def evaluate_h4_boundary(message: str) -> H4BoundaryDecision:
+    normalized = normalize_text(message)
+
+    if _matches_any(normalized, _THIRD_PARTY_DATA_PATTERNS):
+        return H4BoundaryDecision(kind="protected_third_party")
+
+    return H4BoundaryDecision(kind="allowed")
 
 
 def build_mixed_h3_response(state: "ElviraState") -> str:
