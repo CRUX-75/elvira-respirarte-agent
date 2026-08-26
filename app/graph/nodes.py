@@ -5,6 +5,12 @@ from app.services.intent import normalize_text, classify_intent
 from app.graph.transitions import apply_state_transition
 from app.services.llm import generate_llm_response
 from app.config import settings
+from app.services.governance_boundary import (
+    FUNCTIONAL_SCOPE_REFUSAL,
+    INTERNAL_INFORMATION_REFUSAL,
+    build_mixed_h3_response,
+    evaluate_h3_boundary,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -282,4 +288,26 @@ def node_load_kb_context(state: ElviraState) -> ElviraState:
 
 
 def node_generate_response(state: ElviraState) -> ElviraState:
+    if state.intent not in {"optout", "urgencia"}:
+        boundary = evaluate_h3_boundary(state.mensaje_original)
+
+        if boundary.kind == "protected_internal":
+            state.respuesta = INTERNAL_INFORMATION_REFUSAL
+            state.next_action = "refuse_internal_information"
+            state.state_reason = "protected_internal_information_request"
+            return state
+
+        if boundary.kind == "out_of_scope":
+            state.respuesta = FUNCTIONAL_SCOPE_REFUSAL
+            state.next_action = "refuse_out_of_scope"
+            state.state_reason = "request_outside_functional_scope"
+            return state
+
+        if boundary.kind == "mixed":
+            state.respuesta = build_mixed_h3_response(state)
+            state.state_reason = (
+                "mixed_request_internal_information_refused"
+            )
+            return state
+
     return generate_llm_response(state)

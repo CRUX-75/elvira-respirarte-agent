@@ -515,16 +515,59 @@ The permitted and protected portions should be separated when safe.
 ## 19. H3 Acceptance Criteria
 
 ~~~txt
-[ ] approved Respirarte questions still work
-[ ] architecture request blocked
-[ ] model request blocked
-[ ] prompt request blocked
-[ ] API/internal integration request blocked
-[ ] credential/config request blocked
-[ ] prompt injection blocked
-[ ] fake developer/admin claim grants no privilege
-[ ] mixed request answers allowed part only
+[x] approved Respirarte questions still work
+[x] architecture request blocked
+[x] model request blocked
+[x] prompt request blocked
+[x] API/internal integration request blocked
+[x] credential/config request blocked
+[x] prompt injection blocked
+[x] fake developer/admin claim grants no privilege
+[x] mixed request answers allowed part only
 ~~~
+
+### H3 Closure Evidence
+
+**Status:** CLOSED locally on 26-Aug-2026.
+
+Implemented change:
+
+- a deterministic H3 boundary is evaluated before response generation;
+- protected internal requests return the canonical safe refusal without
+  invoking the LLM;
+- explicit unrelated-topic families return the functional-scope refusal
+  without invoking the LLM;
+- mixed grounded service requests answer the permitted service portion and
+  reject the protected internal portion;
+- normal approved Respirarte requests continue through the existing intent,
+  state, KB and response path.
+
+Protected contracts:
+
+- architecture, model, prompt, APIs, database, hosting, environment,
+  credentials, tokens and configuration requests are blocked;
+- documented literal variants such as `¿Qué modelo usas?` and
+  `¿Dónde está alojado el sistema?` are covered;
+- prompt injection and fake developer/admin claims grant no privilege;
+- a malicious LLM response cannot bypass protected-only or mixed-request
+  boundaries;
+- opt-out and urgency intent priority remains outside the H3 override;
+- H4 third-party-data controls remain separate and were not implemented here.
+
+Validation:
+
+- H3 behavioral contracts: **12 passed**;
+- final complete repository suite: **872 passed**;
+- approved service control remained GREEN.
+
+Boundaries preserved:
+
+- no changes to `app/main.py` or `/webhook`;
+- no database schema or migration changes;
+- no PostgreSQL or Google Sheets changes;
+- no Easypanel or production configuration changes;
+- no production deployment;
+- H1, H2 and P6-F.11 remain closed.
 
 ---
 
