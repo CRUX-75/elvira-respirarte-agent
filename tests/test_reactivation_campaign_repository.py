@@ -464,7 +464,7 @@ def test_provider_delivered_status_updates_monotonically_by_wamid():
 
     assert "provider_message_id = :provider_message_id" in sql
     assert (
-        "status IN ('accepted', 'sent', 'delivered', 'failed')"
+        "status IN ('accepted', 'sent', 'delivered')"
         in sql
     )
     assert params["occurred_at"] == NOW
@@ -485,7 +485,7 @@ def test_out_of_order_sent_callback_cannot_regress_delivered():
     sql, _ = engine.connection.calls[0]
 
     assert (
-        "status IN ('accepted', 'sent', 'failed')"
+        "status IN ('accepted', 'sent')"
         in sql
     )
 
@@ -548,75 +548,29 @@ def test_claim_requires_active_campaign_before_delivery():
 
 
 @pytest.mark.parametrize(
-    (
-        "provider_status",
-        "persisted_status",
-        "allowed_current",
-    ),
-    [
-        (
-            "sent",
-            "sent",
-            "status IN ('accepted', 'sent', 'failed')",
-        ),
-        (
-            "delivered",
-            "delivered",
-            (
-                "status IN "
-                "('accepted', 'sent', 'delivered', 'failed')"
-            ),
-        ),
-        (
-            "read",
-            "read",
-            (
-                "status IN "
-                "('accepted', 'sent', 'delivered', 'read', "
-                "'failed')"
-            ),
-        ),
-    ],
+    "provider_status",
+    ["sent", "delivered", "read"],
 )
-def test_provider_progress_callbacks_can_recover_from_failed(
-    provider_status,
-    persisted_status,
-    allowed_current,
-):
-    engine = FakeEngine(
-        [
-            FakeResult(
-                [
-                    contact_row(
-                        status=persisted_status,
-                        provider_message_id=(
-                            "wamid.reactivation.recovery"
-                        ),
-                        retryable=False,
-                    )
-                ]
-            )
-        ]
-    )
+def test_failed_provider_status_is_terminal(provider_status):
+    engine = FakeEngine([FakeResult([])])
     repository = ReactivationCampaignContactRepository(engine)
 
     result = repository.apply_provider_status(
-        provider_message_id=(
-            "wamid.reactivation.recovery"
-        ),
+        provider_message_id="wamid.reactivation.failed",
         provider_status=provider_status,
         occurred_at=NOW,
     )
 
-    assert result is not None
-    assert result.status == ReactivationContactStatus(
-        persisted_status
-    )
+    assert result is None
 
     sql, _ = engine.connection.calls[0]
     normalized_sql = " ".join(sql.split())
+    allowed_statuses = normalized_sql.split(
+        "status IN",
+        1,
+    )[1]
 
-    assert allowed_current in normalized_sql
+    assert "'failed'" not in allowed_statuses
 
 
 def test_contact_read_only_lookup_returns_existing_campaign_phone():

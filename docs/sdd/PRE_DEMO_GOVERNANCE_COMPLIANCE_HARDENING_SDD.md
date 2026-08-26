@@ -857,14 +857,80 @@ If the direct-send improvement is not necessary to close H5, document it as post
 ## 34. H5 Acceptance Criteria
 
 ~~~txt
-[ ] accepted is never represented as delivered
-[ ] campaign WAMID correlation remains protected
-[ ] sent/delivered/read/failed transitions remain monotonic
-[ ] callback logs become operationally interpretable
-[ ] real provider error code can be represented safely
-[ ] logs do not expose unnecessary PII
-[ ] local failure vs provider failure is distinguishable
+[x] accepted is never represented as delivered
+[x] campaign WAMID correlation remains protected
+[x] sent/delivered/read/failed transitions remain monotonic
+[x] callback logs become operationally interpretable
+[x] real provider error code can be represented safely
+[x] logs do not expose unnecessary PII
+[x] local failure vs provider failure is distinguishable
 ~~~
+
+### H5 closure — 26-ago-2026
+
+Implementation:
+
+- Meta acceptance remains persisted and reported as accepted; it is never
+  promoted to sent, delivered or read without a provider callback;
+- campaign callbacks continue to correlate through the existing persisted
+  provider_message_id WAMID;
+- sent -> delivered -> read remains forward-only and failed is terminal;
+  repeated failed callbacks remain idempotently admissible;
+- each valid reactivation callback emits one structured
+  event=whatsapp_status event with domain, provider status, correlation
+  outcome, safe contact reference, pseudonymized provider reference,
+  sanitized provider error code and safe error category;
+- local status-persistence failure emits only
+  status_persistence_error, without exception text;
+- recipient identifiers, raw provider payloads and unnecessary callback
+  fields are not emitted.
+
+Failure distinction preserved:
+
+~~~txt
+local validation
+    -> invalid_template_contact_data / invalid_delivery_configuration
+
+transport exception
+    -> network_timeout / network_error
+
+provider HTTP rejection
+    -> provider_rate_limited / provider_server_error
+       / provider_auth_error / provider_request_rejected
+
+provider acceptance
+    -> accepted + persisted WAMID
+
+provider lifecycle failure
+    -> failed + provider_status_failed_<sanitized code>
+~~~
+
+Validation evidence:
+
+- RED: **5 failed, 28 passed**, covering terminal failed, operational
+  callback logging and safe provider-error representation;
+- initial GREEN: **33 passed**;
+- directed outbound regression: **116 passed**;
+- complete repository suite: **889 passed** in **78.74 s**;
+- git diff check: clean before documentation;
+- only synthetic controlled data was used.
+
+Boundaries preserved:
+
+- no changes to app/main.py or /webhook;
+- no duplicate lifecycle persistence;
+- no database schema or migration changes;
+- no Easypanel, environment or production changes;
+- no real sends, callbacks or patient operations;
+- H1, H2, H3, H4 and P6-F.11 remain closed.
+
+Controlled production validation was not required because H5 changes only
+the deterministic reducer and privacy-safe callback logging. The previously
+demonstrated external accepted -> sent -> delivered baseline remains the
+protected evidence.
+
+Richer durable correlation for direct sends outside campaigns remains a
+non-blocking post-Demo backlog item.
 
 ---
 
@@ -1176,25 +1242,27 @@ At completion:
 
 ---
 
-## 50. Immediate Next Action
+## 50. Current Status
 
-After this SDD is reviewed:
+PRE-DEMO Governance & Compliance Hardening is technically complete:
 
 ~~~txt
-Do not code yet.
-
-Perform one focused architecture inspection for:
-- service grounding path;
-- conversational context path;
-- security/out-of-scope handling;
-- patient-data access surfaces;
-- outbound callback logging.
+H1 grounding hardening                 CLOSED
+H2 context continuity                  CLOSED
+H3 functional/internal boundary        CLOSED
+H4 governance/privacy/authorization    CLOSED
+H5 outbound observability              CLOSED
 ~~~
 
-That inspection will determine the exact RED tests and smallest implementation changes required.
+All five blocks are covered by targeted regression and the complete
+repository suite. Production and main remain stable, and P6-F.11 remains
+closed.
+
+Do not extend this phase with post-Demo backlog work. Return explicitly to
+Demo work after the final diff review, commit and push.
 
 ---
 
 **Parent policy:** `docs/ELVIRA_GOVERNANCE_COMPLIANCE.md`
 **Implementation phase:** PRE-DEMO Governance & Compliance Hardening
-**Next technical step:** focused architecture inspection before RED tests
+**Next technical step:** final review, commit and push; then return to Demo work

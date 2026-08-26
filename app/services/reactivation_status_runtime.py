@@ -4,6 +4,8 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
+from app.services.log_privacy import print_safe_event
+
 
 _ALLOWED_PROVIDER_STATUSES = frozenset(
     {
@@ -113,6 +115,21 @@ async def process_reactivation_status_updates_best_effort(
                 ignored += 1
                 continue
 
+            error_category = _safe_provider_error_category(
+                status=provider_status,
+                error_code=update.get("error_code"),
+            )
+            provider_error_code = None
+            error_prefix = "provider_status_failed_"
+
+            if (
+                error_category is not None
+                and error_category.startswith(error_prefix)
+            ):
+                provider_error_code = error_category[
+                    len(error_prefix):
+                ]
+
             try:
                 contact = (
                     runtime_contact_service.record_provider_status(
@@ -121,24 +138,55 @@ async def process_reactivation_status_updates_best_effort(
                         occurred_at=_safe_provider_timestamp(
                             update.get("timestamp")
                         ),
-                        error_category=(
-                            _safe_provider_error_category(
-                                status=provider_status,
-                                error_code=update.get(
-                                    "error_code"
-                                ),
-                            )
-                        ),
+                        error_category=error_category,
                     )
                 )
             except Exception:
+                print_safe_event(
+                    {
+                        "event": "whatsapp_status",
+                        "domain": "reactivation",
+                        "status": provider_status,
+                        "correlation_outcome": (
+                            "persistence_failed"
+                        ),
+                        "message_ref": None,
+                        "provider_ref": provider_message_id,
+                        "provider_error_code": (
+                            provider_error_code
+                        ),
+                        "error_category": (
+                            "status_persistence_error"
+                        ),
+                    }
+                )
                 failed += 1
                 continue
 
             if contact is None:
                 ignored += 1
+                correlation_outcome = "not_applied"
+                message_ref = None
             else:
                 matched += 1
+                correlation_outcome = "matched"
+                message_ref = (
+                    str(getattr(contact, "id", "") or "").strip()
+                    or None
+                )
+
+            print_safe_event(
+                {
+                    "event": "whatsapp_status",
+                    "domain": "reactivation",
+                    "status": provider_status,
+                    "correlation_outcome": correlation_outcome,
+                    "message_ref": message_ref,
+                    "provider_ref": provider_message_id,
+                    "provider_error_code": provider_error_code,
+                    "error_category": error_category,
+                }
+            )
 
         return {
             "status": "status_updates_processed",

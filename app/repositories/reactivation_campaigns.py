@@ -870,7 +870,7 @@ class ReactivationCampaignContactRepository:
                 updated_at = NOW()
             """
             allowed_current = (
-                "('accepted', 'sent', 'failed')"
+                "('accepted', 'sent')"
             )
 
         elif provider_status == "delivered":
@@ -886,7 +886,7 @@ class ReactivationCampaignContactRepository:
                 updated_at = NOW()
             """
             allowed_current = (
-                "('accepted', 'sent', 'delivered', 'failed')"
+                "('accepted', 'sent', 'delivered')"
             )
 
         elif provider_status == "read":
@@ -902,8 +902,7 @@ class ReactivationCampaignContactRepository:
                 updated_at = NOW()
             """
             allowed_current = (
-                "('accepted', 'sent', 'delivered', 'read', "
-                "'failed')"
+                "('accepted', 'sent', 'delivered', 'read')"
             )
 
         else:

@@ -312,3 +312,87 @@ def test_generic_router_remains_persistence_agnostic():
         router_source
     )
     assert "engine.begin" not in router_source
+
+
+
+def _captured_status_events(capsys):
+    import ast
+
+    output = capsys.readouterr().out
+    events = [
+        ast.literal_eval(line)
+        for line in output.splitlines()
+        if line.strip()
+    ]
+    return output, events
+
+
+def test_matching_callback_emits_operational_safe_event(capsys):
+    from app.services.log_privacy import pseudonymize_identifier
+
+    provider_message_id = "wamid.h5.delivered.001"
+
+    asyncio.run(
+        process_reactivation_status_updates_best_effort(
+            [
+                build_update(
+                    provider_message_id=provider_message_id,
+                    status="delivered",
+                )
+            ],
+            contact_service=FakeContactService(),
+        )
+    )
+
+    output, events = _captured_status_events(capsys)
+
+    assert len(events) == 1
+    assert events[0] == {
+        "event": "whatsapp_status",
+        "domain": "reactivation",
+        "status": "delivered",
+        "correlation_outcome": "matched",
+        "message_ref": "contact-status",
+        "provider_ref": pseudonymize_identifier(
+            provider_message_id
+        ),
+        "provider_error_code": None,
+        "error_category": None,
+    }
+    assert provider_message_id not in output
+
+
+def test_failed_callback_logs_safe_code_without_raw_payload(capsys):
+    from app.services.log_privacy import pseudonymize_identifier
+
+    provider_message_id = "wamid.h5.failed.001"
+    update = build_update(
+        provider_message_id=provider_message_id,
+        status="failed",
+        error_code="131026",
+    )
+    update["recipient_id"] = "573009999999"
+    update["raw_provider_payload"] = "sensitive provider detail"
+
+    asyncio.run(
+        process_reactivation_status_updates_best_effort(
+            [update],
+            contact_service=FakeContactService(),
+        )
+    )
+
+    output, events = _captured_status_events(capsys)
+    event = events[0]
+
+    assert event["status"] == "failed"
+    assert event["correlation_outcome"] == "matched"
+    assert event["provider_error_code"] == "131026"
+    assert event["error_category"] == (
+        "provider_status_failed_131026"
+    )
+    assert event["provider_ref"] == pseudonymize_identifier(
+        provider_message_id
+    )
+    assert provider_message_id not in output
+    assert "573009999999" not in output
+    assert "sensitive provider detail" not in output
