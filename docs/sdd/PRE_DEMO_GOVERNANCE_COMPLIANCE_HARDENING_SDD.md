@@ -359,13 +359,50 @@ The state must not become an implicit authorization mechanism.
 ## 13. H2 Acceptance Criteria
 
 ~~~txt
-[ ] relevant service context carries across turns
-[ ] new explicit service overrides previous service
-[ ] unrelated topic does not reuse stale service
-[ ] appointment state does not suppress valid service answers
-[ ] context never crosses users/conversations
-[ ] tests cover positive and negative carryover
+[x] relevant service context carries across turns
+[x] new explicit service overrides previous service
+[x] unrelated topic does not reuse stale service
+[x] appointment state does not suppress valid service answers
+[x] context never crosses users/conversations
+[x] tests cover positive and negative carryover
 ~~~
+
+### H2 Closure Evidence
+
+**Status:** CLOSED locally on 26-Aug-2026.
+
+Implemented change:
+
+- the immediately previous interaction is retrieved with a read-only,
+  phone-scoped query;
+- deterministic medical-order follow-ups may reuse the previous service;
+- previous service information is re-grounded against the current approved
+  KB and accepted only with `exact` grounding;
+- explicit new services and unrelated topics bypass previous context;
+- lookup and re-grounding failures continue safely without stale context.
+
+Protected contracts:
+
+- context is limited to the latest interaction for the exact phone number;
+- previous interactions must have `intent=servicios` and `kb_used=true`;
+- partial, unknown, empty, or non-grounded context is not reused;
+- appointment state is preserved and does not inject schedules or rules into
+  a valid service follow-up;
+- state remains informational and never acts as authorization.
+
+Validation:
+
+- H2 targeted contracts: **7 passed**;
+- H2 directed regression: **58 passed**;
+- Python compilation for changed runtime modules: passed.
+
+Boundaries preserved:
+
+- no database schema or migration changes;
+- no changes to `app/main.py` or `/webhook`;
+- no Easypanel or production configuration changes;
+- no production deployment;
+- P6-F.11 remains closed.
 
 ---
 

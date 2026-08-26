@@ -10,6 +10,75 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
+def _is_service_context_followup(state: ElviraState) -> bool:
+    if state.intent != "general":
+        return False
+
+    message = normalize_text(state.mensaje_original)
+
+    return (
+        "orden medica" in message
+        or "orden médica" in message
+    )
+
+
+def _resolve_previous_service_context(
+    state: ElviraState,
+    engine,
+    get_kb_context,
+) -> dict | None:
+    if not _is_service_context_followup(state):
+        return None
+
+    try:
+        from app.repositories.interactions import (
+            get_latest_interaction_by_phone,
+        )
+
+        previous = get_latest_interaction_by_phone(state.telefono)
+    except Exception as exc:
+        logger.warning(
+            "Previous service context unavailable: %s",
+            exc,
+        )
+        return None
+
+    if (
+        not previous
+        or previous.get("intent") != "servicios"
+        or previous.get("kb_used") is not True
+    ):
+        return None
+
+    previous_message = (previous.get("mensaje") or "").strip()
+
+    if not previous_message:
+        return None
+
+    try:
+        result = get_kb_context(
+            engine,
+            intent="servicios",
+            message=previous_message,
+            estado_actual=state.nuevo_estado or state.estado_actual,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Previous service re-grounding unavailable: %s",
+            exc,
+        )
+        return None
+
+    if (
+        not result.get("kb_used")
+        or result.get("service_grounding_status") != "exact"
+        or "kb_services" not in result.get("kb_sources", [])
+    ):
+        return None
+
+    return result
+
+
 def _load_schedule_rows_for_date_resolution() -> list[dict] | None:
     """Load KB schedule rows for deterministic appointment slot generation."""
 
@@ -151,6 +220,14 @@ def node_load_kb_context(state: ElviraState) -> ElviraState:
             message=state.mensaje_original,
             estado_actual=state.nuevo_estado or state.estado_actual,
         )
+
+        previous_service_context = _resolve_previous_service_context(
+            state,
+            engine,
+            get_kb_context,
+        )
+        if previous_service_context is not None:
+            result = previous_service_context
 
         state.kb_used = bool(result.get("kb_used", False))
         state.kb_sources = list(result.get("kb_sources", []))

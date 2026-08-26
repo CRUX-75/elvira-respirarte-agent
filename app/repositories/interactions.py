@@ -4,6 +4,34 @@ from app.db.session import engine
 from sqlalchemy import text
 
 
+def get_latest_interaction_by_phone(
+    telefono: str,
+) -> dict | None:
+    telefono = (telefono or "").strip()
+
+    if not telefono:
+        raise ValueError("telefono is required")
+
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(
+                """
+                SELECT
+                    mensaje,
+                    intent,
+                    kb_used
+                FROM interactions
+                WHERE telefono = :telefono
+                ORDER BY created_at DESC
+                LIMIT 1
+                """
+            ),
+            {"telefono": telefono},
+        ).mappings().first()
+
+    return dict(row) if row else None
+
+
 def save_interaction(
     *,
     patient_id: str | None,
