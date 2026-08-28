@@ -193,6 +193,7 @@ _GENERIC_PROCEDURE_TOKENS = {
     "procedimiento",
     "procedimientos",
     "que",
+    "queria",
     "quiero",
     "quisiera",
     "realiza",
@@ -203,6 +204,7 @@ _GENERIC_PROCEDURE_TOKENS = {
     "servicio",
     "servicios",
     "sobre",
+    "tambien",
     "tienen",
     "tiene",
     "toma",
@@ -298,6 +300,14 @@ def _technique_match_status(
     ):
         known_tokens.update(
             _significant_tokens(str(row.get(field_name) or ""))
+        )
+
+    normalized_modality = _normalize(
+        str(row.get("modality") or "")
+    )
+    if "domiciliaria" in normalized_modality:
+        known_tokens.update(
+            {"domicilio", "domiciliaria", "domiciliario"}
         )
 
     message_tokens = _significant_tokens(normalized_message)
@@ -728,12 +738,26 @@ def get_kb_context(
 
                 if matched_rows:
                     service_rows = matched_rows
-                elif explicit_service_intent:
-                    service_rows = []
-                elif has_search_terms:
-                    service_rows = []
                 else:
-                    service_rows = active_service_rows
+                    approved_service_rows = (
+                        get_active_approved_services()
+                    )
+                    approved_rows, approved_metadata = (
+                        _find_service_matches(
+                            approved_service_rows,
+                            normalized_message,
+                        )
+                    )
+
+                    if approved_rows:
+                        service_rows = approved_rows
+                        match_metadata = approved_metadata
+                    elif explicit_service_intent:
+                        service_rows = []
+                    elif has_search_terms:
+                        service_rows = []
+                    else:
+                        service_rows = active_service_rows
 
         if match_metadata:
             matched_service_id = match_metadata.get(

@@ -101,3 +101,33 @@ def test_pre_demo_truly_unknown_service_still_escalates_safely():
 
     assert result.next_action == "escalate_unknown_service"
     assert result.escalation_required is True
+
+
+def test_natural_spirometry_question_uses_approved_catalog_fallback():
+    engine = Mock()
+
+    with (
+        patch(
+            "app.services.kb.search_services",
+            return_value=[],
+        ),
+        patch(
+            "app.services.kb.get_active_services",
+            return_value=[],
+        ),
+    ):
+        result = get_kb_context(
+            engine,
+            intent="servicios",
+            message=(
+                "También quería saber si la espirometría "
+                "la realizan a domicilio."
+            ),
+            estado_actual="ST_CITA_PENDIENTE",
+        )
+
+    assert result["kb_used"] is True
+    assert result["kb_sources"] == ["kb_services"]
+    assert result["matched_service_id"] == "SRV-03"
+    assert result["matched_service_field"] == "techniques"
+    assert result["service_grounding_status"] == "exact"
