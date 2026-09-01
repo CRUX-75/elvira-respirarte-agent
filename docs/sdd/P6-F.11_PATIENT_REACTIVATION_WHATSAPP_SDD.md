@@ -2,7 +2,15 @@
 
 ## 1. Estado
 
-PLANNED / FUNCTIONALLY DEFINED / NOT IMPLEMENTED
+CLOSED / IMPLEMENTED / VALIDATED IN PRODUCTION
+
+Closure evidence:
+
+- controlled productive execution completed;
+- campaign lifecycle closed as `completed`;
+- no automatic or mass execution enabled;
+- current repository baseline: **890 passed** at
+  `f689bf339cdc6708077170183b854d5ba8bc5c18`.
 
 ## 2. Objetivo
 
@@ -2119,3 +2127,39 @@ Therefore P6-F.11 is productively closed.
 Any future historical-reactivation batch must be treated as a new,
 explicitly authorized operational action and must preserve the existing
 eligibility, opt-out, idempotency, claim and delivery-callback contracts.
+
+---
+
+## Post-closure production evidence — Commercial Demo validation
+
+**Status:** VERIFIED WITHOUT REOPENING P6-F.11
+**Recorded:** 28-Aug-2026
+
+A later controlled production execution supplied additional end-to-end
+evidence after the original P6-F.11 closure.
+
+Observed behavior:
+
+- one explicitly authorized proactive contact was executed;
+- Meta accepted the template message;
+- the recipient received and read the message;
+- the read lifecycle state was persisted;
+- the recipient replied through WhatsApp;
+- Elvira continued through the normal conversational flow;
+- no commercial resend occurred;
+- the contact retained exactly one recorded send attempt;
+- the campaign was closed explicitly as `completed`;
+- campaign closure performed no new WhatsApp send.
+
+The persisted evidence supports `read`. It does not retroactively alter the
+original pilot record or claim a separate `delivered_at` callback where none
+was persisted.
+
+Natural-language and voice opt-out had already been validated successfully
+with another controlled number and was not repeated solely for the recording.
+
+This post-closure evidence does not reopen P6-F.11, authorize another
+historical-reactivation batch or introduce automatic campaign execution.
+Every future outbound operation still requires explicit authorization and
+must preserve eligibility, opt-out, idempotency, claim and lifecycle
+contracts.

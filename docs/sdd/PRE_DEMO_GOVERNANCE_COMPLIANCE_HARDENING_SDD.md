@@ -1,10 +1,12 @@
 # PRE-DEMO Governance & Compliance Hardening SDD
 
 **Document:** `docs/sdd/PRE_DEMO_GOVERNANCE_COMPLIANCE_HARDENING_SDD.md`
-**Status:** Draft v0.1
+**Status:** CLOSED
+**Closure date:** 26-Aug-2026
+**Current validated baseline:** `main` at `f689bf339cdc6708077170183b854d5ba8bc5c18` — 890 passed
 **Branch:** `feature/pre-demo-governance-compliance-hardening`
 **Parent policy:** `docs/ELVIRA_GOVERNANCE_COMPLIANCE.md`
-**Scope:** Respirarte pre-Demo hardening before returning to commercial Demo work
+**Scope:** Respirarte pre-Demo hardening completed before commercial market validation
 
 ---
 
@@ -1258,11 +1260,17 @@ All five blocks are covered by targeted regression and the complete
 repository suite. Production and main remain stable, and P6-F.11 remains
 closed.
 
-Do not extend this phase with post-Demo backlog work. Return explicitly to
-Demo work after the final diff review, commit and push.
+The latest repository baseline after the Demo validation and the natural
+spirometry grounding regression fix is **890 passed** at
+`f689bf339cdc6708077170183b854d5ba8bc5c18`.
+
+Do not extend this phase with post-Demo backlog work. The repository has
+returned to stable `main`, and the current work direction is commercial
+market validation.
 
 ---
 
 **Parent policy:** `docs/ELVIRA_GOVERNANCE_COMPLIANCE.md`
 **Implementation phase:** PRE-DEMO Governance & Compliance Hardening
-**Next technical step:** final review, commit and push; then return to Demo work
+**Next technical step:** none; this technical phase is closed
+**Current work direction:** commercial market validation without additional development before validated demand

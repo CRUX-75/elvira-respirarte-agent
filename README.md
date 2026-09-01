@@ -4,6 +4,11 @@ Elvira is the conversational assistant for **Respirarte**, a respiratory therapy
 
 This project is a Python-based agentic system designed to support real WhatsApp patient interactions through a deterministic, testable, auditable, and production-ready architecture.
 
+This repository contains the real production implementation for Respirarte.
+It is not a separate Demo system or a multitenant SaaS. It is the current
+production foundation from which future business-specific implementations may
+be scoped after commercial validation.
+
 ---
 
 ## Current Production Status
@@ -19,10 +24,12 @@ Deployment: Easypanel on Hetzner
 Production domain: https://elvira.genflowautomation.com
 ```
 
-Latest confirmed validation baseline before the latest WhatsApp UX changes:
+Latest confirmed production baseline:
 
 ```txt
-325 passed
+HEAD: f689bf339cdc6708077170183b854d5ba8bc5c18
+Full suite: 890 passed
+Production: stable
 ```
 
 Current validated production capabilities:
@@ -30,6 +37,7 @@ Current validated production capabilities:
 * Patient-facing WhatsApp conversational core.
 * Real Meta webhook reception.
 * Real outbound WhatsApp replies.
+* Voice-note interaction through STT and TTS.
 * Message deduplication by `whatsapp_message_id`.
 * Deterministic intent and state handling.
 * Persistent patient state in PostgreSQL.
@@ -48,6 +56,10 @@ Current validated production capabilities:
 * Minimum natural typing delay before sending fast responses.
 * Deterministic opt-out from any state.
 * LangSmith tracing and production auditability.
+* Human escalation when required.
+* Controlled proactive contact through approved WhatsApp templates.
+* Normal conversational continuation after proactive contact.
+* Delivery and read lifecycle tracking.
 
 Current production configuration:
 
@@ -61,17 +73,20 @@ WHATSAPP_API_URL=https://graph.facebook.com/v25.0
 Current production block:
 
 ```txt
-P6-F.9.91 — WhatsApp Read Receipt, Typing Indicator and Natural Delay
-Status: CLOSED / GREEN IN PRODUCTION
+P6-F.11 — Patient Reactivation via WhatsApp: CLOSED
+PRE-DEMO H1-H5 Governance & Compliance Hardening: CLOSED
+Production validation: GREEN
+Controlled proactive flow: validated end-to-end
+Campaign behavior: single send, no resend, completed
 ```
 
 Current operational direction:
 
 ```txt
-Controlled patient onboarding
-→ gradual real-patient usage
-→ doctor reviews requests in Google Sheets
-→ organic social media and landing-page traffic
+Stable Respirarte production operation
+→ commercial market validation
+→ no additional development before demand validation
+→ future business-specific adaptations only after a validated customer need
 ```
 
 ---
@@ -782,18 +797,16 @@ Run all tests:
 pytest -q
 ```
 
-Latest confirmed full-suite baseline before the latest WhatsApp UX-only changes:
+Latest confirmed full-suite baseline:
 
 ```txt
-325 passed
+890 passed
+HEAD: f689bf339cdc6708077170183b854d5ba8bc5c18
 ```
 
-Latest WhatsApp UX changes were additionally checked with:
-
-```bash
-python -m py_compile app/main.py app/services/whatsapp.py app/config.py
-git diff --check
-```
+This baseline includes the P6-F.11 closure, PRE-DEMO H1-H5 hardening,
+voice interaction, proactive WhatsApp contact, callback observability and
+the natural spirometry grounding regression fix.
 
 Before future non-trivial releases, run the relevant targeted tests and full suite when appropriate.
 
@@ -958,8 +971,15 @@ Typing indicator: active
 Minimum typing delay: active
 Appointment confirmation: human-only
 Opt-out: deterministic and persistent
-Latest confirmed full suite: 325 passed
-Current production block: P6-F.9.91 CLOSED / GREEN
+Voice interaction: active
+Human escalation: active
+Controlled proactive contact: validated
+Latest confirmed full suite: 890 passed
+P6-F.11: CLOSED
+PRE-DEMO H1-H5: CLOSED
+Current phase: commercial market validation
 ```
 
-Elvira is now operating as a controlled production conversational assistant for Respirarte.
+Elvira is operating as a controlled production conversational system for
+Respirarte. No separate Demo implementation is required before validating
+demand for future business-specific implementations.

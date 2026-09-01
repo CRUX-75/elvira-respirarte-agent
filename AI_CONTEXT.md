@@ -37,24 +37,36 @@ https://elvira.genflowautomation.com
 Current production status:
 
 ```txt
-Elvira is active in production.
-Real Meta webhook is active.
-Real WhatsApp replies are active.
-KB runtime is active.
-Google Sheets human review inbox is active.
+Elvira is active and stable in production.
+Real Meta webhook and WhatsApp replies are active.
+Text and voice-note conversations are active.
+KB runtime and conversational context continuity are active.
+Appointment requests and Google Sheets human review are active.
+Human escalation is active.
+Controlled proactive contact is validated in production.
+P6-F.11 and PRE-DEMO H1-H5 are closed.
 ```
 
-Latest confirmed full-suite baseline before the latest WhatsApp UX-only changes:
+Latest confirmed source and validation baseline:
 
 ```txt
-325 passed
+Branch: main
+HEAD: f689bf339cdc6708077170183b854d5ba8bc5c18
+Full suite: 890 passed
+Production: stable
 ```
 
-Latest confirmed implementation commit shown during the current work:
+Current work direction:
 
 ```txt
-87077fd Add minimum WhatsApp typing delay
+Commercial market validation
+→ no separate Demo implementation
+→ no additional development before validated demand
+→ future adaptations scoped per customer and business rules
 ```
+
+Commercial pricing, prospects and outreach material remain outside this
+public technical repository.
 
 At the start of every new development session, verify the actual repository state:
 
@@ -140,7 +152,13 @@ Elvira currently supports:
 - LangSmith tracing and production logs;
 - WhatsApp read receipts;
 - WhatsApp typing indicator;
-- a minimum natural typing delay for very fast responses.
+- a minimum natural typing delay for very fast responses;
+- text and voice-note interaction through STT and TTS;
+- deterministic human escalation when required;
+- controlled proactive contact through approved WhatsApp templates;
+- provider delivery and read lifecycle tracking;
+- normal conversational continuation after proactive contact;
+- natural-language and voice opt-out.
 
 Elvira uses the LLM for **wording only**.
 
@@ -699,7 +717,6 @@ appointment_request
 
 4. Human-review admin-token Swagger validation is not closed.
 
-5. The latest read-receipt, typing-indicator, and delay changes were compiled and validated in production, but the last explicitly recorded full suite remains `325 passed` from before those UX-only changes.
 
 Do not open any of these without a named reason or a real regression.
 
