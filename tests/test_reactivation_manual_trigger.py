@@ -669,3 +669,157 @@ def test_refuses_adding_contacts_after_campaign_leaves_draft():
         )
 
     assert contact_repository.create_calls == 0
+
+
+from app.models.reactivation_campaign import (
+    ReactivationCampaign,
+    ReactivationCampaignStatus,
+)
+
+
+class _FakeLifecycleCampaignRepository:
+    def __init__(self, campaign):
+        self.campaign = campaign
+        self.transition_calls = []
+
+    def get_by_id(self, campaign_id):
+        if self.campaign is None:
+            return None
+        if self.campaign.id != campaign_id:
+            return None
+        return self.campaign
+
+    def transition_status(
+        self,
+        *,
+        campaign_id,
+        expected_status,
+        next_status,
+    ):
+        if self.campaign.id != campaign_id:
+            raise AssertionError("campaign mismatch")
+
+        if self.campaign.status != expected_status:
+            raise AssertionError("unexpected current status")
+
+        self.transition_calls.append(
+            (
+                expected_status,
+                next_status,
+            )
+        )
+
+        self.campaign = self.campaign.model_copy(
+            update={
+                "status": next_status,
+            }
+        )
+
+        return self.campaign
+
+
+def _lifecycle_campaign(status):
+    return ReactivationCampaign(
+        id="p6-f-12-test-001",
+        name="P6-F.12 controlled test",
+        template_name="reactivacion_respirarte",
+        template_language="es_CO",
+        status=status,
+    )
+
+
+def test_manual_campaign_activation_advances_draft_ready_active():
+    from app.services.reactivation_manual_trigger import (
+        activate_manual_reactivation_campaign,
+    )
+
+    repository = _FakeLifecycleCampaignRepository(
+        _lifecycle_campaign(
+            ReactivationCampaignStatus.DRAFT
+        )
+    )
+
+    result = activate_manual_reactivation_campaign(
+        campaign_id="p6-f-12-test-001",
+        campaign_repository=repository,
+    )
+
+    assert result.status == ReactivationCampaignStatus.ACTIVE
+    assert repository.transition_calls == [
+        (
+            ReactivationCampaignStatus.DRAFT,
+            ReactivationCampaignStatus.READY,
+        ),
+        (
+            ReactivationCampaignStatus.READY,
+            ReactivationCampaignStatus.ACTIVE,
+        ),
+    ]
+
+
+def test_manual_campaign_activation_advances_ready_to_active():
+    from app.services.reactivation_manual_trigger import (
+        activate_manual_reactivation_campaign,
+    )
+
+    repository = _FakeLifecycleCampaignRepository(
+        _lifecycle_campaign(
+            ReactivationCampaignStatus.READY
+        )
+    )
+
+    result = activate_manual_reactivation_campaign(
+        campaign_id="p6-f-12-test-001",
+        campaign_repository=repository,
+    )
+
+    assert result.status == ReactivationCampaignStatus.ACTIVE
+    assert repository.transition_calls == [
+        (
+            ReactivationCampaignStatus.READY,
+            ReactivationCampaignStatus.ACTIVE,
+        ),
+    ]
+
+
+def test_manual_campaign_activation_is_idempotent_when_active():
+    from app.services.reactivation_manual_trigger import (
+        activate_manual_reactivation_campaign,
+    )
+
+    repository = _FakeLifecycleCampaignRepository(
+        _lifecycle_campaign(
+            ReactivationCampaignStatus.ACTIVE
+        )
+    )
+
+    result = activate_manual_reactivation_campaign(
+        campaign_id="p6-f-12-test-001",
+        campaign_repository=repository,
+    )
+
+    assert result.status == ReactivationCampaignStatus.ACTIVE
+    assert repository.transition_calls == []
+
+
+def test_manual_campaign_activation_refuses_terminal_state():
+    from app.services.reactivation_manual_trigger import (
+        activate_manual_reactivation_campaign,
+    )
+
+    repository = _FakeLifecycleCampaignRepository(
+        _lifecycle_campaign(
+            ReactivationCampaignStatus.CANCELLED
+        )
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="cannot be activated",
+    ):
+        activate_manual_reactivation_campaign(
+            campaign_id="p6-f-12-test-001",
+            campaign_repository=repository,
+        )
+
+    assert repository.transition_calls == []

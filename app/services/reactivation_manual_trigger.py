@@ -21,6 +21,7 @@ from app.models.reactivation_campaign import (
 )
 from app.services.reactivation_domain import (
     build_reactivation_idempotency_key,
+    validate_campaign_transition,
 )
 from app.services.reactivation_template_dispatcher import (
     DEFAULT_REACTIVATION_TEMPLATE_LANGUAGE,
@@ -403,4 +404,66 @@ def persist_manual_reactivation_selection(
     return ManualReactivationPersistenceResult(
         campaign=persisted_campaign,
         contacts=persisted_contacts,
+    )
+
+
+
+def activate_manual_reactivation_campaign(
+    *,
+    campaign_id: str,
+    campaign_repository,
+) -> ReactivationCampaign:
+    """
+    Move one explicitly prepared manual campaign to ACTIVE.
+
+    DRAFT campaigns advance through READY first. ACTIVE is idempotent.
+    Other lifecycle states are refused.
+    """
+
+    normalized_campaign_id = str(campaign_id or "").strip()
+
+    if not normalized_campaign_id:
+        raise ValueError("campaign_id is required")
+
+    campaign = campaign_repository.get_by_id(
+        normalized_campaign_id
+    )
+
+    if campaign is None:
+        raise ValueError(
+            "Manual reactivation campaign was not found"
+        )
+
+    if campaign.status == ReactivationCampaignStatus.ACTIVE:
+        return campaign
+
+    if campaign.status == ReactivationCampaignStatus.DRAFT:
+        validate_campaign_transition(
+            ReactivationCampaignStatus.DRAFT,
+            ReactivationCampaignStatus.READY,
+        )
+
+        campaign = campaign_repository.transition_status(
+            campaign_id=normalized_campaign_id,
+            expected_status=ReactivationCampaignStatus.DRAFT,
+            next_status=ReactivationCampaignStatus.READY,
+        )
+
+    if campaign.status == ReactivationCampaignStatus.READY:
+        validate_campaign_transition(
+            ReactivationCampaignStatus.READY,
+            ReactivationCampaignStatus.ACTIVE,
+        )
+
+        campaign = campaign_repository.transition_status(
+            campaign_id=normalized_campaign_id,
+            expected_status=ReactivationCampaignStatus.READY,
+            next_status=ReactivationCampaignStatus.ACTIVE,
+        )
+
+        return campaign
+
+    raise ValueError(
+        "Manual reactivation campaign cannot be activated "
+        f"from status={campaign.status.value}"
     )

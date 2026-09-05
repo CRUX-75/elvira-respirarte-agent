@@ -208,6 +208,110 @@ class ReactivationCampaignRepository:
         return _campaign_from_row(row)
 
 
+    def transition_status(
+        self,
+        *,
+        campaign_id: str,
+        expected_status: str,
+        next_status: str,
+    ) -> ReactivationCampaign:
+        """
+        Atomically move one campaign from the expected state to the next.
+
+        Lifecycle validity is owned by the service/domain layer. This
+        repository only performs the compare-and-set persistence step.
+        """
+        normalized_campaign_id = str(campaign_id or "").strip()
+        normalized_expected = getattr(
+            expected_status,
+            "value",
+            expected_status,
+        )
+        normalized_next = getattr(
+            next_status,
+            "value",
+            next_status,
+        )
+
+        normalized_expected = str(normalized_expected or "").strip()
+        normalized_next = str(normalized_next or "").strip()
+
+        if not normalized_campaign_id:
+            raise ValueError("campaign_id is required")
+
+        if not normalized_expected:
+            raise ValueError("expected_status is required")
+
+        if not normalized_next:
+            raise ValueError("next_status is required")
+
+        update_statement = text(
+            f"""
+            UPDATE reactivation_campaigns
+            SET
+                status = :next_status,
+                updated_at = NOW()
+            WHERE id = :campaign_id
+              AND status = :expected_status
+            RETURNING {_CAMPAIGN_COLUMNS}
+            """
+        )
+
+        select_statement = text(
+            f"""
+            SELECT {_CAMPAIGN_COLUMNS}
+            FROM reactivation_campaigns
+            WHERE id = :campaign_id
+            LIMIT 1
+            """
+        )
+
+        params = {
+            "campaign_id": normalized_campaign_id,
+            "expected_status": normalized_expected,
+            "next_status": normalized_next,
+        }
+
+        with self.engine.begin() as connection:
+            updated = (
+                connection.execute(
+                    update_statement,
+                    params,
+                )
+                .mappings()
+                .first()
+            )
+
+            if updated is not None:
+                persisted = _campaign_from_row(updated)
+                assert persisted is not None
+                return persisted
+
+            existing = (
+                connection.execute(
+                    select_statement,
+                    {
+                        "campaign_id": normalized_campaign_id,
+                    },
+                )
+                .mappings()
+                .first()
+            )
+
+        current = _campaign_from_row(existing)
+
+        if current is None:
+            raise ValueError(
+                "Reactivation campaign was not found"
+            )
+
+        raise RuntimeError(
+            "Reactivation campaign state changed unexpectedly: "
+            f"expected={normalized_expected} "
+            f"current={current.status.value}"
+        )
+
+
 class ReactivationCampaignContactRepository:
     """PostgreSQL repository for idempotent campaign delivery."""
 

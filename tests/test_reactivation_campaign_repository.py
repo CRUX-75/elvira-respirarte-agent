@@ -660,3 +660,79 @@ def test_contact_read_only_lookup_requires_natural_key(
     assert engine.connect_calls == 0
     assert engine.begin_calls == 0
     assert engine.connection.calls == []
+
+
+def test_campaign_transition_status_updates_expected_state_atomically():
+    engine = FakeEngine(
+        [
+            FakeResult(
+                [
+                    campaign_row(
+                        status="ready",
+                    )
+                ]
+            ),
+        ]
+    )
+    repository = ReactivationCampaignRepository(engine)
+
+    persisted = repository.transition_status(
+        campaign_id="campaign-1",
+        expected_status=ReactivationCampaignStatus.DRAFT,
+        next_status=ReactivationCampaignStatus.READY,
+    )
+
+    assert persisted.status == ReactivationCampaignStatus.READY
+
+    sql, params = engine.connection.calls[0]
+
+    assert "UPDATE reactivation_campaigns" in sql
+    assert "AND status = :expected_status" in sql
+    assert params["expected_status"] == "draft"
+    assert params["next_status"] == "ready"
+
+
+def test_campaign_transition_status_refuses_stale_expected_state():
+    engine = FakeEngine(
+        [
+            FakeResult([]),
+            FakeResult(
+                [
+                    campaign_row(
+                        status="active",
+                    )
+                ]
+            ),
+        ]
+    )
+    repository = ReactivationCampaignRepository(engine)
+
+    with pytest.raises(
+        RuntimeError,
+        match="state changed unexpectedly",
+    ):
+        repository.transition_status(
+            campaign_id="campaign-1",
+            expected_status=ReactivationCampaignStatus.DRAFT,
+            next_status=ReactivationCampaignStatus.READY,
+        )
+
+
+def test_campaign_transition_status_refuses_missing_campaign():
+    engine = FakeEngine(
+        [
+            FakeResult([]),
+            FakeResult([]),
+        ]
+    )
+    repository = ReactivationCampaignRepository(engine)
+
+    with pytest.raises(
+        ValueError,
+        match="was not found",
+    ):
+        repository.transition_status(
+            campaign_id="missing-campaign",
+            expected_status=ReactivationCampaignStatus.DRAFT,
+            next_status=ReactivationCampaignStatus.READY,
+        )
