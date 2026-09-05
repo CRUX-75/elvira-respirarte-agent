@@ -355,3 +355,141 @@ def test_manual_preflight_isolates_context_resolution_failure():
     assert result.invalid_input == 0
     assert result.runtime_error == 1
     assert result.prepared_items == ()
+
+
+def _preflight_result_for_selection(*items):
+    from app.services.reactivation_manual_trigger import (
+        ManualReactivationPreflightResult,
+    )
+
+    return ManualReactivationPreflightResult(
+        total=len(items),
+        eligible=sum(
+            decision.status == ReactivationContactStatus.ELIGIBLE
+            for _, decision in items
+        ),
+        excluded=sum(
+            decision.status == ReactivationContactStatus.EXCLUDED
+            for _, decision in items
+        ),
+        invalid_input=0,
+        runtime_error=0,
+        prepared_items=tuple(items),
+    )
+
+
+def test_manual_selection_does_not_auto_select_other_eligible_rows():
+    from app.services.reactivation_manual_trigger import (
+        select_manual_reactivation_items,
+    )
+
+    first_record = _record()
+    first_decision = _eligible_decision()
+
+    second_record = ReactivationSheetRecord(
+        row_number=3,
+        source_reference="TEST-MANUAL-001",
+        name="Contacto Controlado",
+        phone_original="004915166800000",
+        attended="SI",
+        authorization_status="SI",
+        phone_e164="",
+        doctor_review_status="APROBADO",
+        exclusion_reason="",
+        reactivation_status="",
+        observations="Prueba controlada P6-F.12",
+    )
+
+    second_decision = _eligible_decision(
+        row_number=3,
+        source_reference="TEST-MANUAL-001",
+        phone_e164="4915166800000",
+    )
+
+    preflight = _preflight_result_for_selection(
+        (first_record, first_decision),
+        (second_record, second_decision),
+    )
+
+    selection = select_manual_reactivation_items(
+        preflight=preflight,
+        source_references=("TEST-MANUAL-001",),
+    )
+
+    assert selection.source_references == ("TEST-MANUAL-001",)
+    assert selection.eligible == 1
+    assert selection.excluded == 0
+    assert len(selection.prepared_items) == 1
+    assert (
+        selection.prepared_items[0][0].source_reference
+        == "TEST-MANUAL-001"
+    )
+
+
+def test_manual_selection_refuses_duplicate_requested_references():
+    from app.services.reactivation_manual_trigger import (
+        select_manual_reactivation_items,
+    )
+
+    preflight = _preflight_result_for_selection(
+        (_record(), _eligible_decision()),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="must be unique",
+    ):
+        select_manual_reactivation_items(
+            preflight=preflight,
+            source_references=("HIST-001", "HIST-001"),
+        )
+
+
+def test_manual_selection_refuses_unknown_or_failed_reference():
+    from app.services.reactivation_manual_trigger import (
+        select_manual_reactivation_items,
+    )
+
+    preflight = _preflight_result_for_selection(
+        (_record(), _eligible_decision()),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="not successfully evaluated",
+    ):
+        select_manual_reactivation_items(
+            preflight=preflight,
+            source_references=("TEST-NOT-FOUND",),
+        )
+
+
+def test_manual_selection_can_report_explicit_excluded_record():
+    from app.services.reactivation_manual_trigger import (
+        select_manual_reactivation_items,
+    )
+
+    record = _record()
+
+    decision = ReactivationDryRunDecision(
+        row_number=2,
+        source_reference="HIST-001",
+        phone_e164="573204454568",
+        status=ReactivationContactStatus.EXCLUDED,
+        exclusion_reasons=(
+            ReactivationExclusionReason.AUTHORIZATION_PENDING,
+        ),
+    )
+
+    preflight = _preflight_result_for_selection(
+        (record, decision),
+    )
+
+    selection = select_manual_reactivation_items(
+        preflight=preflight,
+        source_references=("HIST-001",),
+    )
+
+    assert selection.eligible == 0
+    assert selection.excluded == 1
+    assert len(selection.prepared_items) == 1

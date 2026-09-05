@@ -7,6 +7,7 @@ existing persistent reactivation contact contract.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from app.adapters.google_sheets_reactivation import ReactivationSheetRecord
@@ -193,5 +194,102 @@ def preflight_manual_reactivation(
         ),
         invalid_input=invalid_input,
         runtime_error=runtime_error,
+        prepared_items=prepared,
+    )
+
+
+
+@dataclass(frozen=True)
+class ManualReactivationSelection:
+    """Explicit operator-selected subset of a manual preflight."""
+
+    source_references: tuple[str, ...]
+    eligible: int
+    excluded: int
+    prepared_items: tuple[
+        tuple[ReactivationSheetRecord, ReactivationDryRunDecision],
+        ...,
+    ]
+
+
+def select_manual_reactivation_items(
+    *,
+    preflight: ManualReactivationPreflightResult,
+    source_references: Iterable[str],
+    max_contacts: int = 3,
+) -> ManualReactivationSelection:
+    """
+    Select only explicitly named staging rows.
+
+    No eligible row is selected implicitly. Invalid, failed or ambiguous
+    source references are refused rather than inferred.
+    """
+
+    selected_refs = tuple(
+        str(value or "").strip()
+        for value in source_references
+    )
+
+    if not 1 <= len(selected_refs) <= max_contacts:
+        raise ValueError(
+            f"Manual selection requires between 1 and {max_contacts} "
+            "explicit source references"
+        )
+
+    if any(not value for value in selected_refs):
+        raise ValueError(
+            "Manual source references must be explicit and non-empty"
+        )
+
+    if len(set(selected_refs)) != len(selected_refs):
+        raise ValueError(
+            "Manual source references must be unique"
+        )
+
+    by_source = {}
+    ambiguous_sources = set()
+
+    for item in preflight.prepared_items:
+        record, _ = item
+        source_reference = str(
+            record.source_reference or ""
+        ).strip()
+
+        if source_reference in by_source:
+            ambiguous_sources.add(source_reference)
+            continue
+
+        by_source[source_reference] = item
+
+    selected_items = []
+
+    for source_reference in selected_refs:
+        if source_reference in ambiguous_sources:
+            raise ValueError(
+                "Selected source reference is ambiguous in staging"
+            )
+
+        item = by_source.get(source_reference)
+
+        if item is None:
+            raise ValueError(
+                "Selected source reference was not successfully "
+                "evaluated in preflight"
+            )
+
+        selected_items.append(item)
+
+    prepared = tuple(selected_items)
+
+    return ManualReactivationSelection(
+        source_references=selected_refs,
+        eligible=sum(
+            decision.status == ReactivationContactStatus.ELIGIBLE
+            for _, decision in prepared
+        ),
+        excluded=sum(
+            decision.status == ReactivationContactStatus.EXCLUDED
+            for _, decision in prepared
+        ),
         prepared_items=prepared,
     )
