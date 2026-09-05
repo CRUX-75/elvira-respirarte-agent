@@ -7,6 +7,8 @@ existing persistent reactivation contact contract.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from app.adapters.google_sheets_reactivation import ReactivationSheetRecord
 from app.models.reactivation_campaign import (
     ReactivationAuthorizationStatus,
@@ -19,6 +21,8 @@ from app.services.reactivation_domain import (
 )
 from app.services.reactivation_dry_run import (
     ReactivationDryRunDecision,
+    ReactivationDryRunInputError,
+    evaluate_reactivation_sheet_record,
 )
 
 
@@ -113,3 +117,81 @@ def persist_manual_reactivation_contacts(
         persisted.append(persisted_contact)
 
     return tuple(persisted)
+
+
+
+@dataclass(frozen=True)
+class ManualReactivationPreflightResult:
+    """Read-only preflight summary for the manual trigger."""
+
+    total: int
+    eligible: int
+    excluded: int
+    invalid_input: int
+    runtime_error: int
+    prepared_items: tuple[
+        tuple[ReactivationSheetRecord, ReactivationDryRunDecision],
+        ...,
+    ]
+
+
+def preflight_manual_reactivation(
+    *,
+    adapter,
+    context_resolver,
+    default_country_code: str | None,
+) -> ManualReactivationPreflightResult:
+    """
+    Read and evaluate Reactivacion_Historica without persistence or sending.
+
+    Row failures are isolated. Only successfully evaluated rows are returned
+    in prepared_items for a later explicit persistence step.
+    """
+
+    records = adapter.read_records()
+
+    prepared_items: list[
+        tuple[ReactivationSheetRecord, ReactivationDryRunDecision]
+    ] = []
+
+    invalid_input = 0
+    runtime_error = 0
+
+    for record in records:
+        try:
+            context = context_resolver(record)
+        except Exception:
+            runtime_error += 1
+            continue
+
+        try:
+            decision = evaluate_reactivation_sheet_record(
+                record,
+                context=context,
+                default_country_code=default_country_code,
+            )
+        except ReactivationDryRunInputError:
+            invalid_input += 1
+            continue
+        except Exception:
+            runtime_error += 1
+            continue
+
+        prepared_items.append((record, decision))
+
+    prepared = tuple(prepared_items)
+
+    return ManualReactivationPreflightResult(
+        total=len(records),
+        eligible=sum(
+            decision.status == ReactivationContactStatus.ELIGIBLE
+            for _, decision in prepared
+        ),
+        excluded=sum(
+            decision.status == ReactivationContactStatus.EXCLUDED
+            for _, decision in prepared
+        ),
+        invalid_input=invalid_input,
+        runtime_error=runtime_error,
+        prepared_items=prepared,
+    )

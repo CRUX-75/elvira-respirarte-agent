@@ -253,3 +253,105 @@ def test_empty_campaign_id_is_refused_before_persistence():
         )
 
     assert repository.create_calls == 0
+
+
+class _FakeSheetAdapter:
+    def __init__(self, records):
+        self.records = tuple(records)
+
+    def read_records(self):
+        return self.records
+
+
+def test_manual_preflight_counts_eligible_and_excluded():
+    from app.services.reactivation_dry_run import ReactivationDryRunContext
+    from app.services.reactivation_manual_trigger import (
+        preflight_manual_reactivation,
+    )
+
+    eligible_record = _record()
+
+    excluded_record = ReactivationSheetRecord(
+        row_number=3,
+        source_reference="HIST-002",
+        name="Paciente Excluido",
+        phone_original="3204459999",
+        attended="SI",
+        authorization_status="PENDIENTE",
+        phone_e164="",
+        doctor_review_status="APROBADO",
+        exclusion_reason="",
+        reactivation_status="",
+        observations="",
+    )
+
+    result = preflight_manual_reactivation(
+        adapter=_FakeSheetAdapter(
+            (eligible_record, excluded_record)
+        ),
+        context_resolver=lambda record: ReactivationDryRunContext(),
+        default_country_code="57",
+    )
+
+    assert result.total == 2
+    assert result.eligible == 1
+    assert result.excluded == 1
+    assert result.invalid_input == 0
+    assert result.runtime_error == 0
+    assert len(result.prepared_items) == 2
+
+
+def test_manual_preflight_isolates_invalid_sheet_value():
+    from app.services.reactivation_dry_run import ReactivationDryRunContext
+    from app.services.reactivation_manual_trigger import (
+        preflight_manual_reactivation,
+    )
+
+    invalid_record = ReactivationSheetRecord(
+        row_number=2,
+        source_reference="HIST-INVALID",
+        name="Paciente Prueba",
+        phone_original="3204454568",
+        attended="TALVEZ",
+        authorization_status="SI",
+        phone_e164="",
+        doctor_review_status="APROBADO",
+        exclusion_reason="",
+        reactivation_status="",
+        observations="",
+    )
+
+    result = preflight_manual_reactivation(
+        adapter=_FakeSheetAdapter((invalid_record,)),
+        context_resolver=lambda record: ReactivationDryRunContext(),
+        default_country_code="57",
+    )
+
+    assert result.total == 1
+    assert result.eligible == 0
+    assert result.excluded == 0
+    assert result.invalid_input == 1
+    assert result.runtime_error == 0
+    assert result.prepared_items == ()
+
+
+def test_manual_preflight_isolates_context_resolution_failure():
+    from app.services.reactivation_manual_trigger import (
+        preflight_manual_reactivation,
+    )
+
+    def failing_context_resolver(record):
+        raise RuntimeError("simulated context failure")
+
+    result = preflight_manual_reactivation(
+        adapter=_FakeSheetAdapter((_record(),)),
+        context_resolver=failing_context_resolver,
+        default_country_code="57",
+    )
+
+    assert result.total == 1
+    assert result.eligible == 0
+    assert result.excluded == 0
+    assert result.invalid_input == 0
+    assert result.runtime_error == 1
+    assert result.prepared_items == ()
