@@ -493,3 +493,179 @@ def test_manual_selection_can_report_explicit_excluded_record():
     assert selection.eligible == 0
     assert selection.excluded == 1
     assert len(selection.prepared_items) == 1
+
+
+class _FakeCampaignRepository:
+    def __init__(self):
+        self.by_id = {}
+        self.create_calls = 0
+
+    def create_or_get(self, campaign):
+        self.create_calls += 1
+
+        existing = self.by_id.get(campaign.id)
+
+        if existing is not None:
+            return existing
+
+        self.by_id[campaign.id] = campaign
+        return campaign
+
+
+def _eligible_selection():
+    from app.services.reactivation_manual_trigger import (
+        ManualReactivationSelection,
+    )
+
+    return ManualReactivationSelection(
+        source_references=("HIST-001",),
+        eligible=1,
+        excluded=0,
+        prepared_items=(
+            (
+                _record(),
+                _eligible_decision(),
+            ),
+        ),
+    )
+
+
+def test_persists_draft_campaign_and_explicit_eligible_contact():
+    from app.models.reactivation_campaign import (
+        ReactivationCampaignStatus,
+    )
+    from app.services.reactivation_manual_trigger import (
+        persist_manual_reactivation_selection,
+    )
+
+    campaign_repository = _FakeCampaignRepository()
+    contact_repository = _FakeContactRepository()
+
+    result = persist_manual_reactivation_selection(
+        campaign_id="p6-f-12-test-001",
+        campaign_name="P6-F.12 controlled test",
+        selection=_eligible_selection(),
+        campaign_repository=campaign_repository,
+        contact_repository=contact_repository,
+    )
+
+    assert result.campaign.id == "p6-f-12-test-001"
+    assert (
+        result.campaign.status
+        == ReactivationCampaignStatus.DRAFT
+    )
+    assert result.campaign.template_name == "reactivacion_respirarte"
+    assert result.campaign.template_language == "es_CO"
+
+    assert len(result.contacts) == 1
+    assert result.contacts[0].source_reference == "HIST-001"
+    assert result.contacts[0].campaign_id == "p6-f-12-test-001"
+
+
+def test_manual_campaign_persistence_is_idempotent():
+    from app.services.reactivation_manual_trigger import (
+        persist_manual_reactivation_selection,
+    )
+
+    campaign_repository = _FakeCampaignRepository()
+    contact_repository = _FakeContactRepository()
+
+    first = persist_manual_reactivation_selection(
+        campaign_id="p6-f-12-test-001",
+        campaign_name="P6-F.12 controlled test",
+        selection=_eligible_selection(),
+        campaign_repository=campaign_repository,
+        contact_repository=contact_repository,
+    )
+
+    second = persist_manual_reactivation_selection(
+        campaign_id="p6-f-12-test-001",
+        campaign_name="P6-F.12 controlled test",
+        selection=_eligible_selection(),
+        campaign_repository=campaign_repository,
+        contact_repository=contact_repository,
+    )
+
+    assert first.campaign.id == second.campaign.id
+    assert first.contacts[0].id == second.contacts[0].id
+    assert len(campaign_repository.by_id) == 1
+    assert len(contact_repository.by_natural_key) == 1
+
+
+def test_refuses_excluded_selection_before_campaign_persistence():
+    from app.services.reactivation_manual_trigger import (
+        ManualReactivationSelection,
+        persist_manual_reactivation_selection,
+    )
+
+    excluded_decision = ReactivationDryRunDecision(
+        row_number=2,
+        source_reference="HIST-001",
+        phone_e164="573204454568",
+        status=ReactivationContactStatus.EXCLUDED,
+        exclusion_reasons=(
+            ReactivationExclusionReason.AUTHORIZATION_PENDING,
+        ),
+    )
+
+    selection = ManualReactivationSelection(
+        source_references=("HIST-001",),
+        eligible=0,
+        excluded=1,
+        prepared_items=((_record(), excluded_decision),),
+    )
+
+    campaign_repository = _FakeCampaignRepository()
+    contact_repository = _FakeContactRepository()
+
+    with pytest.raises(
+        ValueError,
+        match="must be eligible",
+    ):
+        persist_manual_reactivation_selection(
+            campaign_id="p6-f-12-test-001",
+            campaign_name="P6-F.12 controlled test",
+            selection=selection,
+            campaign_repository=campaign_repository,
+            contact_repository=contact_repository,
+        )
+
+    assert campaign_repository.create_calls == 0
+    assert contact_repository.create_calls == 0
+
+
+def test_refuses_adding_contacts_after_campaign_leaves_draft():
+    from app.models.reactivation_campaign import (
+        ReactivationCampaign,
+        ReactivationCampaignStatus,
+    )
+    from app.services.reactivation_manual_trigger import (
+        persist_manual_reactivation_selection,
+    )
+
+    campaign_repository = _FakeCampaignRepository()
+    contact_repository = _FakeContactRepository()
+
+    campaign_repository.by_id["p6-f-12-test-001"] = (
+        ReactivationCampaign(
+            id="p6-f-12-test-001",
+            name="P6-F.12 controlled test",
+            template_name="reactivacion_respirarte",
+            template_language="es_CO",
+            status=ReactivationCampaignStatus.ACTIVE,
+        )
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="only while campaign is draft",
+    ):
+        persist_manual_reactivation_selection(
+            campaign_id="p6-f-12-test-001",
+            campaign_name="P6-F.12 controlled test",
+            selection=_eligible_selection(),
+            campaign_repository=campaign_repository,
+            contact_repository=contact_repository,
+        )
+
+    assert contact_repository.create_calls == 0

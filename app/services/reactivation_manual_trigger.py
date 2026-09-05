@@ -13,12 +13,18 @@ from dataclasses import dataclass
 from app.adapters.google_sheets_reactivation import ReactivationSheetRecord
 from app.models.reactivation_campaign import (
     ReactivationAuthorizationStatus,
+    ReactivationCampaign,
     ReactivationCampaignContact,
+    ReactivationCampaignStatus,
     ReactivationContactStatus,
     ReactivationDoctorReviewStatus,
 )
 from app.services.reactivation_domain import (
     build_reactivation_idempotency_key,
+)
+from app.services.reactivation_template_dispatcher import (
+    DEFAULT_REACTIVATION_TEMPLATE_LANGUAGE,
+    DEFAULT_REACTIVATION_TEMPLATE_NAME,
 )
 from app.services.reactivation_dry_run import (
     ReactivationDryRunDecision,
@@ -292,4 +298,109 @@ def select_manual_reactivation_items(
             for _, decision in prepared
         ),
         prepared_items=prepared,
+    )
+
+
+
+@dataclass(frozen=True)
+class ManualReactivationPersistenceResult:
+    """Persisted draft campaign and its explicitly selected contacts."""
+
+    campaign: ReactivationCampaign
+    contacts: tuple[ReactivationCampaignContact, ...]
+
+
+def persist_manual_reactivation_selection(
+    *,
+    campaign_id: str,
+    campaign_name: str,
+    selection: ManualReactivationSelection,
+    campaign_repository,
+    contact_repository,
+) -> ManualReactivationPersistenceResult:
+    """
+    Persist one explicit eligible selection into a draft campaign.
+
+    This function does not activate campaigns and does not dispatch
+    WhatsApp messages.
+    """
+
+    normalized_campaign_id = str(campaign_id or "").strip()
+    normalized_campaign_name = str(campaign_name or "").strip()
+
+    if not normalized_campaign_id:
+        raise ValueError("campaign_id is required")
+
+    if not normalized_campaign_name:
+        raise ValueError("campaign_name is required")
+
+    selected_count = len(selection.prepared_items)
+
+    if selected_count == 0:
+        raise ValueError(
+            "Manual reactivation persistence requires an explicit selection"
+        )
+
+    if (
+        selection.excluded != 0
+        or selection.eligible != selected_count
+    ):
+        raise ValueError(
+            "All manually selected contacts must be eligible"
+        )
+
+    campaign = ReactivationCampaign(
+        id=normalized_campaign_id,
+        name=normalized_campaign_name,
+        template_name=DEFAULT_REACTIVATION_TEMPLATE_NAME,
+        template_language=DEFAULT_REACTIVATION_TEMPLATE_LANGUAGE,
+        status=ReactivationCampaignStatus.DRAFT,
+    )
+
+    persisted_campaign = campaign_repository.create_or_get(
+        campaign
+    )
+
+    if persisted_campaign.id != normalized_campaign_id:
+        raise ValueError(
+            "Persisted reactivation campaign ID does not match request"
+        )
+
+    if persisted_campaign.name != normalized_campaign_name:
+        raise ValueError(
+            "Existing reactivation campaign name does not match request"
+        )
+
+    if (
+        persisted_campaign.template_name
+        != DEFAULT_REACTIVATION_TEMPLATE_NAME
+        or persisted_campaign.template_language
+        != DEFAULT_REACTIVATION_TEMPLATE_LANGUAGE
+    ):
+        raise ValueError(
+            "Existing reactivation campaign template contract is invalid"
+        )
+
+    if (
+        persisted_campaign.status
+        != ReactivationCampaignStatus.DRAFT
+    ):
+        raise ValueError(
+            "Contacts may be prepared only while campaign is draft"
+        )
+
+    persisted_contacts = persist_manual_reactivation_contacts(
+        campaign_id=normalized_campaign_id,
+        prepared_items=selection.prepared_items,
+        contact_repository=contact_repository,
+    )
+
+    if len(persisted_contacts) != selected_count:
+        raise RuntimeError(
+            "Not all manually selected contacts were persisted"
+        )
+
+    return ManualReactivationPersistenceResult(
+        campaign=persisted_campaign,
+        contacts=persisted_contacts,
     )
