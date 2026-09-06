@@ -67,6 +67,15 @@ from app.services.human_escalation_runtime import (
     dispatch_human_escalation_best_effort,
     process_human_escalation_status_updates_best_effort,
 )
+from app.repositories.reactivation_campaigns import (
+    ReactivationCampaignContactRepository,
+)
+from app.services.reactivation_campaign_service import (
+    ReactivationCampaignResponseService,
+)
+from app.services.reactivation_response_runtime import (
+    process_reactivation_response_best_effort,
+)
 from app.services.reactivation_status_runtime import (
     process_reactivation_status_updates_best_effort,
 )
@@ -501,6 +510,44 @@ async def receive_webhook(payload: WhatsAppPayload):
                     "telefono": telefono,
                     "whatsapp_message_id": whatsapp_message_id,
                     "stt_latency_ms": voice_result.latency_ms,
+                }
+            )
+
+        reactivation_response_repository = (
+            ReactivationCampaignContactRepository(engine)
+        )
+        reactivation_response_service = (
+            ReactivationCampaignResponseService(
+                reactivation_response_repository
+            )
+        )
+
+        reactivation_response_summary = (
+            await process_reactivation_response_best_effort(
+                response_service=reactivation_response_service,
+                phone_e164=telefono,
+                inbound_whatsapp_message_id=whatsapp_message_id,
+                message=mensaje,
+                received_at=None,
+            )
+        )
+
+        if reactivation_response_summary.get(
+            "response_matched"
+        ):
+            print_safe_event(
+                {
+                    "event": (
+                        "reactivation_inbound_response_correlated"
+                    ),
+                    "whatsapp_message_id": (
+                        whatsapp_message_id
+                    ),
+                    "response_classification": (
+                        reactivation_response_summary.get(
+                            "response_classification"
+                        )
+                    ),
                 }
             )
 

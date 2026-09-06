@@ -229,7 +229,7 @@ def test_escalation_idempotency_depends_on_wamid_and_action():
     )
 
 
-def test_adapters_remain_disconnected_from_productive_webhook():
+def test_adapters_remain_disconnected_while_response_runtime_is_wired():
     module = adapter_module()
 
     assert hasattr(
@@ -246,8 +246,19 @@ def test_adapters_remain_disconnected_from_productive_webhook():
         encoding="utf-8",
     ).read()
 
-    assert "reactivation_response_adapters" not in main_source
+    # The productive webhook now wires only response correlation.
     assert (
         "process_reactivation_response_best_effort"
+        in main_source
+    )
+
+    # Additional adapter side effects remain intentionally disconnected.
+    assert "reactivation_response_adapters" not in main_source
+    assert (
+        "persist_reactivation_global_opt_out"
+        not in main_source
+    )
+    assert (
+        "persist_reactivation_escalation"
         not in main_source
     )
