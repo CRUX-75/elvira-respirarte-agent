@@ -103,3 +103,15 @@ def test_policy_decision_does_not_expose_raw_message():
     assert "raw_message" not in serialized
     assert "message_text" not in serialized
     assert "response_text" not in serialized
+
+
+def test_service_question_is_classified_as_service_inquiry():
+    decision = decide(
+        "Gracias. ¿La espirometría también la hacen a domicilio?"
+    )
+
+    assert classification_value(decision) == "service_inquiry"
+    assert decision.global_opt_out_requested is False
+    assert decision.campaign_opt_out_requested is False
+    assert decision.requires_human_escalation is False
+    assert safe_reason_value(decision) is None

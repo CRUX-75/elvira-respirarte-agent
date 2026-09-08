@@ -278,6 +278,72 @@ def _significant_tokens(text: str) -> set[str]:
     }
 
 
+_PROCEDURE_PREFIX_BOUNDARIES = ".!?¡¿;,:"
+
+_SAFE_PROCEDURE_DISCOURSE_PREFIX_TOKENS = {
+    "acuerdo",
+    "bien",
+    "buena",
+    "bueno",
+    "cierto",
+    "entendido",
+    "entendida",
+    "entonces",
+    "gracias",
+    "hola",
+    "lista",
+    "listo",
+    "muchas",
+    "muy",
+    "perfecta",
+    "perfecto",
+    "por",
+}
+
+
+def _procedure_relevant_message_fragment(
+    term: str,
+    normalized_message: str,
+) -> str:
+    """
+    Ignore only a safe leading conversational fragment separated
+    from the matched procedure by punctuation.
+
+    Clinical or otherwise unknown modifiers remain part of the
+    grounding decision even when they appear before the procedure.
+    """
+    term_index = normalized_message.find(term)
+
+    if term_index <= 0:
+        return normalized_message
+
+    prefix = normalized_message[:term_index]
+
+    boundary_index = max(
+        (
+            prefix.rfind(boundary)
+            for boundary in _PROCEDURE_PREFIX_BOUNDARIES
+        ),
+        default=-1,
+    )
+
+    if boundary_index < 0:
+        return normalized_message
+
+    discarded_prefix = prefix[: boundary_index + 1]
+    discarded_tokens = _significant_tokens(discarded_prefix)
+
+    if not discarded_tokens:
+        return normalized_message
+
+    if not discarded_tokens.issubset(
+        _SAFE_PROCEDURE_DISCOURSE_PREFIX_TOKENS
+    ):
+        return normalized_message
+
+    return normalized_message[boundary_index + 1 :].strip()
+
+
 def _technique_match_status(
     row: dict[str, Any],
     term: str,
@@ -310,7 +376,11 @@ def _technique_match_status(
             {"domicilio", "domiciliaria", "domiciliario"}
         )
 
-    message_tokens = _significant_tokens(normalized_message)
+    relevant_message = _procedure_relevant_message_fragment(
+        term,
+        normalized_message,
+    )
+    message_tokens = _significant_tokens(relevant_message)
 
     unknown_tokens = (
         message_tokens

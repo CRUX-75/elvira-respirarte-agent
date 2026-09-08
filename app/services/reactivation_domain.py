@@ -503,6 +503,7 @@ class ReactivationResponseClassification(str, Enum):
     GLOBAL_OPT_OUT = "global_opt_out"
     CAMPAIGN_REFUSAL = "campaign_refusal"
     POSITIVE_CONTACT_REQUEST = "positive_contact_request"
+    SERVICE_INQUIRY = "service_inquiry"
     COMPLAINT = "complaint"
     AMBIGUOUS = "ambiguous"
 
@@ -740,6 +741,32 @@ def decide_reactivation_response(
         )
     )
 
+    service_terms_pattern = (
+        r"(?:servicios?|terapia respiratoria|"
+        r"rehabilitacion pulmonar|"
+        r"pruebas? de funcion pulmonar|"
+        r"funcion pulmonar|"
+        r"espirometria|"
+        r"oximetria(?: dinamica)?|"
+        r"caminata de seis minutos|"
+        r"test de cooper|"
+        r"oxigenoterapia)"
+    )
+
+    service_inquiry_patterns = (
+        rf"\b{service_terms_pattern}\b.*\b"
+        rf"(?:domicilio|domiciliaria|orden medica|"
+        rf"precio|costo|cuanto|como|donde|requiere|hacen|realizan)\b",
+        rf"\b(?:hacen|realizan|ofrecen|tienen)\b.*"
+        rf"\b{service_terms_pattern}\b",
+        r"\b(?:que|cuales)\b.*\b(?:servicios?|pruebas?)\b",
+    )
+
+    service_inquiry_detected = _matches_any_pattern(
+        normalized,
+        service_inquiry_patterns,
+    )
+
     if global_semantics.is_opt_out:
         return ReactivationResponsePolicyDecision(
             response_classification=(
@@ -791,6 +818,17 @@ def decide_reactivation_response(
             global_opt_out_requested=False,
             campaign_opt_out_requested=False,
             requires_human_escalation=True,
+        )
+
+    if service_inquiry_detected:
+        return ReactivationResponsePolicyDecision(
+            response_classification=(
+                ReactivationResponseClassification.SERVICE_INQUIRY
+            ),
+            response_safe_reason=None,
+            global_opt_out_requested=False,
+            campaign_opt_out_requested=False,
+            requires_human_escalation=False,
         )
 
     return ReactivationResponsePolicyDecision(

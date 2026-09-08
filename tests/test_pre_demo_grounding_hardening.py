@@ -131,3 +131,94 @@ def test_natural_spirometry_question_uses_approved_catalog_fallback():
     assert result["matched_service_id"] == "SRV-03"
     assert result["matched_service_field"] == "techniques"
     assert result["service_grounding_status"] == "exact"
+
+
+def test_spirometry_polite_prefixes_do_not_create_partial_grounding():
+    engine = Mock()
+
+    messages = (
+        "Gracias. ¿La espirometría también la hacen a domicilio?",
+        "Perfecto, ¿la espirometría también la hacen a domicilio?",
+    )
+
+    for message in messages:
+        with (
+            patch(
+                "app.services.kb.search_services",
+                return_value=[],
+            ),
+            patch(
+                "app.services.kb.get_active_services",
+                return_value=[],
+            ),
+        ):
+            result = get_kb_context(
+                engine,
+                intent="servicios",
+                message=message,
+                estado_actual="ST_GENERAL",
+            )
+
+        assert result["kb_used"] is True
+        assert result["kb_sources"] == ["kb_services"]
+        assert result["matched_service_id"] == "SRV-03"
+        assert result["matched_service_field"] == "techniques"
+        assert result["service_grounding_status"] == "exact"
+
+
+def test_spirometry_unapproved_modifier_remains_partial():
+    engine = Mock()
+
+    with (
+        patch(
+            "app.services.kb.search_services",
+            return_value=[],
+        ),
+        patch(
+            "app.services.kb.get_active_services",
+            return_value=[],
+        ),
+    ):
+        result = get_kb_context(
+            engine,
+            intent="servicios",
+            message=(
+                "¿La espirometría con broncodilatador "
+                "la hacen a domicilio?"
+            ),
+            estado_actual="ST_GENERAL",
+        )
+
+    assert result["kb_used"] is True
+    assert result["matched_service_id"] == "SRV-03"
+    assert result["matched_service_field"] == "techniques"
+    assert result["service_grounding_status"] == "partial"
+
+
+def test_spirometry_modifier_before_procedure_remains_partial():
+    engine = Mock()
+
+    with (
+        patch(
+            "app.services.kb.search_services",
+            return_value=[],
+        ),
+        patch(
+            "app.services.kb.get_active_services",
+            return_value=[],
+        ),
+    ):
+        result = get_kb_context(
+            engine,
+            intent="servicios",
+            message=(
+                "Con broncodilatador, ¿la espirometría "
+                "la hacen a domicilio?"
+            ),
+            estado_actual="ST_GENERAL",
+        )
+
+    assert result["kb_used"] is True
+    assert result["matched_service_id"] == "SRV-03"
+    assert result["matched_service_field"] == "techniques"
+    assert result["service_grounding_status"] == "partial"
