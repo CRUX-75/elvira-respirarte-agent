@@ -2,12 +2,14 @@
 
 ## Status
 
-- Date: 2026-07-21
-- Status: Implementation validated locally — pending merge and production validation
-- Branch: `feature/p6-f-9-97-conversational-continuity-kb-services`
-- Production service: Elvira remains online
-- Database changes: None authorized
-- Google Sheets changes: None authorized
+- Initial date: 2026-07-21
+- Status: CLOSED / VALIDATED IN PRODUCTION
+- Initial implementation branch: `feature/p6-f-9-97-conversational-continuity-kb-services`
+- Production closure addendum: 2026-09-08
+- Validated production application code at closure: `0a2a4066dec09403f5e2f6d0f47eb715833cefda`
+- Full suite: 926 passed in 19.00s
+- Database changes for September regression hardening: None
+- Google Sheets changes for September regression hardening: None
 
 ## Objective
 
@@ -620,43 +622,46 @@ git diff --check: passed
 forbidden availability-language search: no matches
 ```
 
-### Clinical grounding result
+### Historical clinical grounding result
 
-Confirmed from the current KB:
+At the time of the original P6-F.9.97 implementation, plain `oximetría`
+was confirmed as an exact technique match in `SRV-01`.
 
-```text
-oximetría
-→ matched_service_id=SRV-01
-→ matched_service_field=techniques
-→ service_grounding_status=exact
-```
+At that historical point, `oximetría dinámica` had not yet been approved as
+a separate active service and therefore followed the partial-match safety
+path.
 
-Not yet clinically confirmed:
+That condition is no longer current production truth.
 
-```text
-oximetría dinámica
-→ matched_service_id=SRV-01
-→ matched_service_field=techniques
-→ service_grounding_status=partial
-→ escalation_required=true
-```
+The approved service catalog now contains:
 
-Elvira must continue using the safe escalation response until the Dra. D’Aleman confirms whether `oximetría dinámica` is an approved procedure or alias.
+~~~text
+SRV-07 — Oximetría Dinámica
+is_active=true
+modality=Domiciliaria
+medical_order_required=true
+prior_validation_required=true
+~~~
 
-### Remaining closure work
+Therefore `oximetría dinámica` must no longer be used as the canonical
+unsupported-procedure regression example.
 
-P6-F.9.97 is locally validated but is not yet production-closed.
+### Historical remaining closure work — completed
 
-Remaining steps:
+The original pre-production checklist required:
 
-1. Review the final branch diff.
-2. Merge the feature branch into `main`.
-3. Push the merge.
-4. Redeploy production.
-5. Verify `/health` and `/ready`.
-6. Run controlled text and voice conversations.
-7. Record production evidence.
-8. Mark the sprint closed.
+1. final diff review;
+2. merge to `main`;
+3. push;
+4. production redeploy;
+5. productive runtime verification;
+6. controlled text and voice validation;
+7. production evidence;
+8. final closure.
+
+Those steps were subsequently completed.
+
+The authoritative September production-closure evidence is recorded below.
 
 ### Separate P6-F.9.96 work
 
@@ -667,3 +672,124 @@ stash@{0}: WIP P6-F.9.96 global voice wildcard before P6-F.9.97
 ```
 
 They were not included in the P6-F.9.97 implementation.
+
+---
+
+## Production Closure Addendum — 2026-09-08
+
+### Final status
+
+**CLOSED / VALIDATED IN PRODUCTION**
+
+~~~text
+validated_application_code=0a2a4066dec09403f5e2f6d0f47eb715833cefda
+full_suite=926 passed in 19.00s
+production=GREEN
+~~~
+
+### Spirometry regression history
+
+The earlier natural-spirometry fix remained present in `main`:
+
+~~~text
+f689bf339cdc6708077170183b854d5ba8bc5c18
+Fix natural spirometry grounding regression
+~~~
+
+That fix protected the case:
+
+~~~text
+También quería saber si la espirometría la realizan a domicilio.
+→ SRV-03
+→ techniques
+→ exact
+~~~
+
+The September production case exposed a different weakness:
+
+~~~text
+Gracias. ¿La espirometría también la hacen a domicilio?
+~~~
+
+The KB correctly matched `SRV-03`, its domiciliary modality and the
+`espirometría` technique, but the technique matcher treated the harmless
+conversation prefix `gracias` as an unsupported modifier.
+
+The defect was therefore not a rollback of the August fix.
+
+### September hardening
+
+Final implementation:
+
+~~~text
+0a2a4066dec09403f5e2f6d0f47eb715833cefda
+Fix service grounding and classify reactivation inquiries
+~~~
+
+The matcher now ignores a punctuation-separated leading fragment only when
+the discarded tokens belong to the explicit safe conversational-prefix set.
+
+Validated behavior:
+
+~~~text
+Gracias. ¿La espirometría también la hacen a domicilio?
+→ exact
+
+Perfecto, ¿la espirometría también la hacen a domicilio?
+→ exact
+
+¿La espirometría con broncodilatador la hacen a domicilio?
+→ partial
+
+Con broncodilatador, ¿la espirometría la hacen a domicilio?
+→ partial
+~~~
+
+The existing safe partial/not-found grounding guard was not weakened.
+
+### Production voice validation
+
+A real controlled WhatsApp voice interaction produced:
+
+~~~text
+intent=servicios
+kb_used=true
+kb_sources=["kb_services"]
+matched_service_id=SRV-03
+matched_service_field=techniques
+matched_service_term=espirometria
+service_grounding_status=exact
+next_action=answer_services
+escalation_required=false
+~~~
+
+Elvira correctly answered that Respirarte performs pulmonary-function tests
+at home, including spirometry.
+
+### Current dynamic-oximetry contract
+
+The current approved catalog contains:
+
+~~~text
+SRV-07 — Oximetría Dinámica
+is_active=true
+modality=Domiciliaria
+~~~
+
+Its approved public contract requires a medical order and prior validation.
+
+Historical P6-F.9.97 examples that treated `oximetría dinámica` as an
+unsupported variant must therefore be interpreted only as historical evidence.
+
+### Closure decision
+
+P6-F.9.97 is production-closed.
+
+The enduring grounding contract remains:
+
+- patient-facing service claims come from active approved KB data;
+- grounding exposes deterministic `exact`, `partial` or `not_found`;
+- harmless conversational prefixes must not create false partial matches;
+- genuinely unsupported clinical modifiers remain visible;
+- partial and unknown cases retain the safe escalation/review path;
+- voice and text use the same deterministic grounding core.

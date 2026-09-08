@@ -44,25 +44,28 @@ KB runtime and conversational context continuity are active.
 Appointment requests and Google Sheets human review are active.
 Human escalation is active.
 Controlled proactive contact is validated in production.
+P6-F.9.97 service-grounding hardening is validated in production.
 P6-F.11 and PRE-DEMO H1-H5 are closed.
+P6-F.12 manual reactivation and inbound-response correlation are closed and validated in production.
+Concrete correlated service questions persist as `service_inquiry` without automatic human escalation.
 ```
 
-Latest confirmed source and validation baseline:
+Latest confirmed deployed application baseline:
 
 ```txt
 Branch: main
-HEAD: f689bf339cdc6708077170183b854d5ba8bc5c18
-Full suite: 890 passed
-Production: stable
+Deployed application code: 0a2a4066dec09403f5e2f6d0f47eb715833cefda
+Full suite on deployed code: 926 passed in 19.00s
+Production validation: GREEN
 ```
 
 Current work direction:
 
 ```txt
-Commercial market validation
-→ no separate Demo implementation
-→ no additional development before validated demand
-→ future adaptations scoped per customer and business rules
+Commercial Demo / RRSS recording and market validation
+→ use the real production implementation; no fake Demo runtime or fake CRM
+→ patch only real production or Demo-blocking regressions
+→ future adaptations scoped per customer and validated business need
 ```
 
 Commercial pricing, prospects and outreach material remain outside this
@@ -158,9 +161,37 @@ Elvira currently supports:
 - controlled proactive contact through approved WhatsApp templates;
 - provider delivery and read lifecycle tracking;
 - normal conversational continuation after proactive contact;
+- controlled manual reactivation preparation for explicitly selected prior-contact records;
+- inbound reactivation-response correlation and safe persistence;
+- deterministic reactivation response classification including `service_inquiry`;
 - natural-language and voice opt-out.
 
 Elvira uses the LLM for **wording only**.
+
+### Current P6-F.12 reactivation boundary
+
+P6-F.12 is closed and validated in production.
+
+Operational constraints:
+
+- reactivation applies to historical or otherwise known prior-contact records;
+- manual preparation requires one to three explicit `source_reference` values;
+- preflight and eligibility checks run before persistence;
+- campaign-specific operator confirmation is required;
+- manual campaign activation does not itself send a WhatsApp message;
+- no automatic contact selection, scheduler, recurring job or mass-send path exists;
+- no cold prospecting is authorized;
+- outbound delivery remains a separate explicitly authorized operation using the existing P6-F.11 transport contracts;
+- text and completed voice transcription may be correlated to the latest valid reactivation contact;
+- correlated response metadata is persisted without storing the raw response text in the reactivation response event;
+- concrete service questions may persist as `service_inquiry`;
+- `service_inquiry` alone does not require human escalation.
+
+Detailed closure evidence:
+
+`docs/sdd/P6-F.12_MANUAL_REACTIVATION_TRIGGER_SDD.md`
+
+P6-F.11 remains closed.
 
 ---
 
@@ -1136,9 +1167,9 @@ Final validation:
 - Python compilation passed.
 - `git diff --check` passed.
 
-### Next sprint — P6-F.10 Human Escalation via WhatsApp
+### Historical planning record — P6-F.10 Human Escalation via WhatsApp
 
-Status: **planned; implementation not started**.
+Status: **superseded by the closed production implementation documented below**.
 
 Confirmed business decision:
 
@@ -1151,7 +1182,7 @@ Elvira can already detect escalation conditions through:
 - a clinical or operational reason
 - a safe conversational state
 
-The actual outbound WhatsApp notification to the doctor has not yet been implemented.
+This sentence belonged to the pre-implementation planning state; the production implementation is documented in the closed P6-F.10 section below.
 
 Target flow:
 
@@ -1178,7 +1209,7 @@ The doctor's WhatsApp number must:
 - not be confused with `VOICE_ALLOWED_PHONE_NUMBERS`;
 - not be exposed in logs, tests or documentation.
 
-### Active restrictions
+### Historical restrictions at that planning point
 
 - Keep Elvira online in production.
 - Do not implement multitenant.
@@ -1201,7 +1232,7 @@ The initial design document is:
 
 `docs/sdd/P6-F.10_HUMAN_ESCALATION_WHATSAPP_SDD.md`
 
-The new sprint must begin with one focused architecture audit before finalizing persistence and delivery details.
+This subsection is retained only as the original pre-implementation planning record; the authoritative status is the closed production section immediately below.
 
 <!-- END P6-F.9.98-P6-F.10 CONTEXT -->
 
