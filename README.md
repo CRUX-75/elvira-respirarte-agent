@@ -24,12 +24,12 @@ Deployment: Easypanel on Hetzner
 Production domain: https://elvira.genflowautomation.com
 ```
 
-Latest confirmed production baseline:
+Latest confirmed deployed application baseline:
 
 ```txt
-HEAD: f689bf339cdc6708077170183b854d5ba8bc5c18
-Full suite: 890 passed
-Production: stable
+Deployed application code: 0a2a4066dec09403f5e2f6d0f47eb715833cefda
+Full suite on deployed code: 926 passed in 19.00s
+Production validation: GREEN
 ```
 
 Current validated production capabilities:
@@ -60,6 +60,9 @@ Current validated production capabilities:
 * Controlled proactive contact through approved WhatsApp templates.
 * Normal conversational continuation after proactive contact.
 * Delivery and read lifecycle tracking.
+* Controlled manual reactivation preparation for explicitly selected prior-contact records.
+* Inbound reactivation-response correlation and persistence.
+* Deterministic reactivation response classification including `service_inquiry`.
 
 Current production configuration:
 
@@ -73,7 +76,9 @@ WHATSAPP_API_URL=https://graph.facebook.com/v25.0
 Current production block:
 
 ```txt
+P6-F.9.97 — KB-grounded services: CLOSED / production hardening GREEN
 P6-F.11 — Patient Reactivation via WhatsApp: CLOSED
+P6-F.12 — Manual reactivation trigger and inbound correlation: CLOSED
 PRE-DEMO H1-H5 Governance & Compliance Hardening: CLOSED
 Production validation: GREEN
 Controlled proactive flow: validated end-to-end
@@ -84,8 +89,9 @@ Current operational direction:
 
 ```txt
 Stable Respirarte production operation
-→ commercial market validation
-→ no additional development before demand validation
+→ commercial Demo / RRSS recording and market validation
+→ use the real production implementation; no fake Demo runtime or fake CRM
+→ patch only real production or Demo-blocking regressions
 → future business-specific adaptations only after a validated customer need
 ```
 
@@ -576,6 +582,12 @@ Included:
 * production logging
 * LangSmith tracing
 * opt-out persistence
+* voice-note interaction through STT and TTS
+* deterministic human escalation
+* controlled proactive WhatsApp contact
+* provider delivery and read lifecycle tracking
+* controlled manual prior-contact reactivation preparation
+* inbound reactivation-response correlation and persistence
 
 Not currently implemented or intentionally out of scope:
 
@@ -756,6 +768,7 @@ The webhook currently handles:
 * no-message status callbacks
 * required-field validation
 * deduplication
+* inbound reactivation-response correlation
 * patient loading
 * stateful processing
 * read receipt
@@ -800,13 +813,14 @@ pytest -q
 Latest confirmed full-suite baseline:
 
 ```txt
-890 passed
-HEAD: f689bf339cdc6708077170183b854d5ba8bc5c18
+926 passed in 19.00s
+Deployed application code: 0a2a4066dec09403f5e2f6d0f47eb715833cefda
 ```
 
-This baseline includes the P6-F.11 closure, PRE-DEMO H1-H5 hardening,
+This baseline includes the P6-F.11 closure, P6-F.12 controlled manual
+reactivation and inbound-response correlation, PRE-DEMO H1-H5 hardening,
 voice interaction, proactive WhatsApp contact, callback observability and
-the natural spirometry grounding regression fix.
+the September 2026 spirometry-grounding hardening.
 
 Before future non-trivial releases, run the relevant targeted tests and full suite when appropriate.
 
@@ -974,12 +988,18 @@ Opt-out: deterministic and persistent
 Voice interaction: active
 Human escalation: active
 Controlled proactive contact: validated
-Latest confirmed full suite: 890 passed
+Manual prior-contact reactivation trigger: validated
+Inbound reactivation-response correlation: validated
+Reactivation service_inquiry classification: validated
+Latest confirmed full suite: 926 passed in 19.00s
+Deployed application code: 0a2a4066dec09403f5e2f6d0f47eb715833cefda
+P6-F.9.97: CLOSED / production hardening GREEN
 P6-F.11: CLOSED
+P6-F.12: CLOSED
 PRE-DEMO H1-H5: CLOSED
-Current phase: commercial market validation
+Current phase: commercial Demo / RRSS recording and market validation
 ```
 
 Elvira is operating as a controlled production conversational system for
-Respirarte. No separate Demo implementation is required before validating
-demand for future business-specific implementations.
+Respirarte. Commercial Demo validation uses this real production foundation;
+no separate Demo runtime or fake CRM is required.
