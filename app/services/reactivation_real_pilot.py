@@ -36,6 +36,7 @@ def preflight_reactivation_real_pilot(
     contact_ids: Iterable[str],
     campaign_repository: Any,
     contact_repository: Any,
+    max_contacts: int = 3,
 ) -> tuple[Any, ...]:
     """
     Validate one explicit persisted pilot batch without side effects.
@@ -51,9 +52,13 @@ def preflight_reactivation_real_pilot(
         for contact_id in contact_ids
     )
 
-    if not 1 <= len(normalized_contact_ids) <= 3:
+    if max_contacts < 1:
+        raise ValueError("max_contacts must be greater than zero.")
+
+    if not 1 <= len(normalized_contact_ids) <= max_contacts:
         raise ValueError(
-            "Real pilot requires between 1 and 3 explicit contacts."
+            "Reactivation execution requires between 1 and "
+            f"{max_contacts} explicit contacts."
         )
 
     if any(not contact_id for contact_id in normalized_contact_ids):
