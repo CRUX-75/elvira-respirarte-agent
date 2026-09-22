@@ -535,6 +535,53 @@ class ReactivationCampaignContactRepository:
 
         return _contact_from_row(row)
 
+    def list_by_campaign_id(
+        self,
+        *,
+        campaign_id: str,
+    ) -> tuple[ReactivationCampaignContact, ...]:
+        """Load campaign contacts without locks or writes."""
+
+        normalized_campaign_id = str(
+            campaign_id or ""
+        ).strip()
+
+        if not normalized_campaign_id:
+            raise ValueError("campaign_id is required.")
+
+        statement = text(
+            f"""
+            SELECT {_CONTACT_COLUMNS}
+            FROM reactivation_campaign_contacts
+            WHERE campaign_id = :campaign_id
+            ORDER BY created_at, id
+            """
+        )
+
+        with self.engine.connect() as connection:
+            rows = (
+                connection.execute(
+                    statement,
+                    {
+                        "campaign_id": (
+                            normalized_campaign_id
+                        )
+                    },
+                )
+                .mappings()
+                .all()
+            )
+
+        contacts = []
+
+        for row in rows:
+            contact = _contact_from_row(row)
+            assert contact is not None
+            contacts.append(contact)
+
+        return tuple(contacts)
+
+
     def get_by_provider_message_id(
         self,
         provider_message_id: str,

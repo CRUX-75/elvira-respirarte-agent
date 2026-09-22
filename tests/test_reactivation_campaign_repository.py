@@ -736,3 +736,37 @@ def test_campaign_transition_status_refuses_missing_campaign():
             expected_status=ReactivationCampaignStatus.DRAFT,
             next_status=ReactivationCampaignStatus.READY,
         )
+
+
+
+def test_list_contacts_by_campaign_is_read_only_and_ordered():
+    engine = FakeEngine(
+        [
+            FakeResult(
+                [
+                    contact_row(id="contact-1"),
+                    contact_row(
+                        id="contact-2",
+                        phone_e164="573000000002",
+                    ),
+                ]
+            )
+        ]
+    )
+    repository = ReactivationCampaignContactRepository(engine)
+
+    contacts = repository.list_by_campaign_id(
+        campaign_id="campaign-1",
+    )
+
+    assert tuple(contact.id for contact in contacts) == (
+        "contact-1",
+        "contact-2",
+    )
+    assert engine.connect_calls == 1
+    assert engine.begin_calls == 0
+
+    sql, params = engine.connection.calls[0]
+    assert "campaign_id = :campaign_id" in sql
+    assert "ORDER BY created_at, id" in " ".join(sql.split())
+    assert params == {"campaign_id": "campaign-1"}
