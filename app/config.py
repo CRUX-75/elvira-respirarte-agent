@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     voice_input_enabled: bool = False
     voice_replies_enabled: bool = False
     voice_reply_to_audio_only: bool = True
-    voice_stt_model: str = "gpt-4o-transcribe"
+    voice_stt_model: str = "gpt-transcribe"
     voice_stt_language: str = "es"
     voice_tts_model: str = "gpt-4o-mini-tts"
     voice_tts_voice: str = "marin"

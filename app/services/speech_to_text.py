@@ -85,12 +85,16 @@ async def transcribe_spanish_voice_note(
 
     try:
         with audio_path.open("rb") as audio_file:
+            transcription_options = (
+                {"extra_body": {"languages": [language]}}
+                if model == "gpt-transcribe"
+                else {"language": language, "response_format": "text"}
+            )
             response = await client.audio.transcriptions.create(
                 model=model,
                 file=audio_file,
-                language=language,
-                response_format="text",
                 prompt=STT_CONTEXT_PROMPT,
+                **transcription_options,
             )
 
         transcript = (
