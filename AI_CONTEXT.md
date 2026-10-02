@@ -915,94 +915,50 @@ Detailed closure evidence belongs in Git history and `docs/`, not in this file.
 
 ---
 
-## Current Active Sprint — P6-F.9.97
+## Current Active Sprint — P6-F.14
 
-P6-F.9.97 — Conversational Continuity and KB-Grounded Services has completed
-local implementation and automated validation.
+P6-F.14 — STT migration to `gpt-transcribe`.
 
-Implementation commit:
+Status: IMPLEMENTED LOCALLY / PRODUCTION VALIDATION PENDING.
 
-84c1ac0 — Implement conversational continuity and KB grounding
+Scope:
+- migrate completed WhatsApp voice-note transcription;
+- default `voice_stt_model` is now `gpt-transcribe`;
+- send `extra_body={"languages": [settings.voice_stt_language]}`;
+- omit singular `language` and `response_format` for the new model;
+- preserve `STT_CONTEXT_PROMPT`, `.text` extraction, trimming and safe errors;
+- retain previous request arguments for models other than `gpt-transcribe`;
+- keep `openai==2.33.0`, conversational model and TTS unchanged.
 
-Validated behavior:
+Validation on 2026-10-02:
+- RED confirmed for new request arguments and model default;
+- STT tests: 12 cases covered by the passing targeted regression;
+- voice/inbound regression: GREEN;
+- complete suite: 947 passed in 22.21s;
+- final diff review: completed; `git diff --check`: passed.
 
-greetings occur only in ST_INIT;
-active conversations do not restart after a general fallback;
-3 and 5 select the actual candidate appointment franjas only in
-ST_CITA_FRANJA;
-service questions take priority over stale appointment routing while preserving
-the existing appointment state;
-service matching includes approved KB_Servicios fields such as
-techniques;
-service grounding records the matched service, term, field and status;
-grounding statuses are exact, partial and not_found;
-oximetría is an exact SRV-01 technique match;
-oximetría dinámica is a partial match and triggers safe escalation;
-unknown services do not claim availability, schedulability or clinical
-equivalence;
-candidate slots are described only as preferences or options to review;
-existing WhatsApp message-id idempotency remains unchanged;
-no PostgreSQL or Google Sheets changes were made.
+Production still uses `VOICE_STT_MODEL=gpt-4o-transcribe` according to the
+phase-opening checkpoint. The new code default does not override an explicit
+environment setting.
 
-Validation evidence:
-
-P6-F.9.97 regression tests: 14 passed
-KB and propagation tests: 27 passed
-complete suite: 410 passed
-Python compilation: passed
-git diff --check: passed
-forbidden availability-language scan: no matches
-
-Specification and evidence:
-
-docs/P6-F.9.97_CONVERSATIONAL_CONTINUITY_KB_GROUNDED_SERVICES_SDD.md
-
-Current status:
-
-Implementation validated locally. Pending branch review, merge, deployment and
-controlled production validation by text and voice.
-
-P6-F.9.96 global voice wildcard changes remain preserved separately in the
-named Git stash and are not part of this sprint.
+Specification:
+`docs/sdd/P6-F.14_STT_GPT_TRANSCRIBE_MIGRATION_SDD.md`
 
 ## Current Next Direction
 
-Elvira remains online in production. Existing text conversations continue operating normally.
+Complete P6-F.14 documentation and diff review, then commit, push and PR.
+Merge reviewed code before deploying or changing the production STT setting.
+After deployment, set `VOICE_STT_MODEL=gpt-transcribe` and validate one
+operator-controlled voice note from a permitted sender.
 
-Voice phases P6-F.9.92 through P6-F.9.95 are closed.
+Confirm the effective STT model, transcription outcome, observability and
+WhatsApp reply before closing the phase. Do not store patient audio or raw
+transcripts in technical closure evidence.
 
-Current controlled production state:
+Inbound orchestration, TTS and batch reactivation remain outside P6-F.14.
+No historical-contact retry is authorized by this phase.
 
-```env
-VOICE_INPUT_ENABLED=true
-VOICE_REPLIES_ENABLED=true
-VOICE_REPLY_TO_AUDIO_ONLY=true
-VOICE_ALLOWED_PHONE_NUMBERS=<one controlled test number>
-```
-
-Voice is active only for one allowlisted operator-controlled number. Global voice activation is not authorized.
-
-Production validation completed:
-
-PostgreSQL backup and Git rollback tag created;
-additive voice_processing_claims migration applied;
-/health and /ready returned 200;
-production text regression passed;
-inbound audio-to-text passed;
-outbound audio-to-audio passed;
-configuration rollback was validated;
-privacy stop condition was detected and corrected;
-production privacy fix was merged in 571b19e;
-voice logs now redact content as msg=None | resp=None;
-full suite passed with 377 tests.
-
-The production voice is functional and understandable. Natural intonation and consistently clear pronunciation of “Elvira” remain future quality improvements, not functional blockers. Post-closure stabilization fixed repeated AI disclosure in `393d659`, merged in `277fd05`; `ST_INIT` retains disclosure while later states omit it. The full suite passed with 385 tests, health and readiness returned 200, and controlled WhatsApp validation passed.
-
-Duplicate-work, non-allowlisted sender, and delivery-fallback contracts remain covered by automated regression tests. Global rollout requires a separate explicit decision.
-
-Still out of scope: multitenancy, patient follow-up, campaigns, Realtime, voice cloning, and new conversational or appointment logic.
-
-Patient follow-up remains the next major roadmap candidate after voice stabilization, but it is not yet authorized.
+---
 
 ## Current Independent Debugging Status
 
