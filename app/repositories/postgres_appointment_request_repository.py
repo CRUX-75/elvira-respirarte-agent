@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from typing import Any
 
 from sqlalchemy import bindparam, text
@@ -33,13 +34,19 @@ class PostgresAppointmentRequestRepository:
     This repository only persists and retrieves AppointmentRequest rows.
     """
 
-    def __init__(self, engine: Engine):
+    def __init__(self, engine: Engine, *, connection=None):
         self.engine = engine
+        self.connection = connection
+
+    def _transaction(self):
+        if self.connection is not None:
+            return nullcontext(self.connection)
+        return self.engine.begin()
 
     def save(self, request: AppointmentRequest) -> AppointmentRequest:
         params = request.model_dump()
 
-        with self.engine.begin() as conn:
+        with self._transaction() as conn:
             row = conn.execute(
                 text(
                     """
@@ -114,7 +121,7 @@ class PostgresAppointmentRequestRepository:
     def update(self, request: AppointmentRequest) -> AppointmentRequest:
         params = request.model_dump()
 
-        with self.engine.begin() as conn:
+        with self._transaction() as conn:
             row = conn.execute(
                 text(
                     """
@@ -160,8 +167,23 @@ class PostgresAppointmentRequestRepository:
 
         return self._row_to_model(row)
 
+    def list_all(self) -> list[AppointmentRequest]:
+        """Return every request in stable order for reconciliation."""
+        with self._transaction() as conn:
+            rows = conn.execute(
+                text(
+                    """
+                    SELECT *
+                    FROM appointment_requests
+                    ORDER BY created_at ASC, id_solicitud ASC
+                    """
+                )
+            ).fetchall()
+
+        return [self._row_to_model(row) for row in rows]
+
     def get_by_id(self, id_solicitud: str) -> AppointmentRequest | None:
-        with self.engine.begin() as conn:
+        with self._transaction() as conn:
             row = conn.execute(
                 text(
                     """
@@ -180,7 +202,7 @@ class PostgresAppointmentRequestRepository:
         return self._row_to_model(row)
 
     def find_active_by_telefono(self, telefono: str) -> AppointmentRequest | None:
-        with self.engine.begin() as conn:
+        with self._transaction() as conn:
             row = conn.execute(
                 text(
                     """
