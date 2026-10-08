@@ -12,8 +12,9 @@ PostgreSQL es la fuente de verdad. Esta fase no envía WhatsApp.
 3. Aplicar la migración revisada scripts/sql/010_create_human_review_decisions.sql
    antes de usar el nuevo circuito de decisiones o reconciliación con auditoría.
 4. Coordinar el despliegue y la ampliación de encabezados:
-   el contrato anterior tiene 26 columnas y el nuevo tiene 37.
-   Pausar la proyección de Sheets durante esa transición.
+   producción puede usar el contrato legado de 24 columnas o el intermedio
+   de 26; el contrato nuevo tiene 37. Pausar la proyección de Sheets durante
+   esa transición. Cualquier otro orden de encabezados se rechaza.
 5. Conservar solicitud_updated_at como texto sin formato, con el ISO completo.
    Mantener las columnas y sus posiciones; no ordenar filas durante escrituras.
 6. Ejecutar primero la vista previa del script de reconciliación.
@@ -21,8 +22,11 @@ PostgreSQL es la fuente de verdad. Esta fase no envía WhatsApp.
    proceso del script mediante GOOGLE_SHEETS_ENABLED=true.
 7. Revisar total, present, missing, duplicate_request_ids y contract.
    La vista previa no amplía encabezados ni escribe filas.
-8. Ejecutar con --apply para ampliar únicamente AA1:AK1 y reconciliar las filas.
-   Revisar failed y errors; repetir para comprobar ausencia de duplicados.
+8. Ejecutar con --apply. El contrato de 26 columnas amplía AA1:AK1.
+   El contrato legado exacto de 24 columnas se remapea a 37 en una sola
+   operación, preservando por nombre los campos humanos, y después se
+   reconcilian las filas. Revisar failed y errors; repetir para comprobar
+   ausencia de duplicados.
 9. Usar --test-request-id únicamente para IDs verificados como pruebas.
    Un teléfono extranjero permanece sin_clasificar si no existe evidencia.
 10. Restaurar la proyección del servicio cuando el contrato esté preparado.
