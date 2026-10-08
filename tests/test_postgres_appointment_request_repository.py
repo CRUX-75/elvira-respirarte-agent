@@ -341,3 +341,26 @@ def test_save_load_and_update_human_review_operational_fields(repository):
     assert updated.barrio == "Suba"
     assert updated.edad_paciente == 12
     assert updated.notas_clinicas_breves == "Control respiratorio domiciliario."
+
+
+def test_list_all_includes_every_request_without_modifying_records(repository):
+    for index in range(16):
+        request = make_request(
+            id_solicitud=f"sol-reconcile-{index:02d}",
+            telefono="+493001112233" if index < 4 else "+573001112233",
+            estado_solicitud="cerrada" if index == 15 else "pendiente_confirmacion",
+        )
+        repository.save(request)
+
+    requests = repository.list_all()
+
+    assert len(requests) == 16
+    assert {request.id_solicitud for request in requests} == {
+        f"sol-reconcile-{index:02d}" for index in range(16)
+    }
+    assert sum(request.telefono.startswith("+49") for request in requests) == 4
+    assert repository.get_by_id("sol-reconcile-15").estado_solicitud == "cerrada"
+    assert all(request.updated_by is None for request in requests)
+    assert [request.model_dump() for request in repository.list_all()] == [
+        request.model_dump() for request in requests
+    ]

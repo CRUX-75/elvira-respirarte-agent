@@ -35,12 +35,31 @@ class FakeSheetsClient:
         self.existing_rows = existing_rows or []
         self.appended_rows = []
         self.updated_rows = []
+        self.range_updates = []
 
     def get_values(self, spreadsheet_id, range_name):
         return self.existing_rows
 
     def append_row(self, spreadsheet_id, range_name, row):
         self.appended_rows.append((spreadsheet_id, range_name, row))
+
+    def update_values(self, spreadsheet_id, range_name, values):
+        self.range_updates.append((spreadsheet_id, range_name, values))
+        cell_range = range_name.split("!", 1)[1]
+        first, last = cell_range.split(":")
+        start = "".join(char for char in first if char.isalpha())
+        end = "".join(char for char in last if char.isalpha())
+        row_number = int("".join(char for char in first if char.isdigit()))
+
+        def column_index(label):
+            result = 0
+            for char in label:
+                result = result * 26 + ord(char) - ord("A") + 1
+            return result - 1
+
+        row = self.existing_rows[row_number - 1]
+        row.extend([""] * max(0, len(GOOGLE_SHEETS_HUMAN_REVIEW_COLUMNS) - len(row)))
+        row[column_index(start):column_index(end) + 1] = values[0]
 
     def update_row(self, spreadsheet_id, range_name, row_number, row):
         self.updated_rows.append((spreadsheet_id, range_name, row_number, row))
@@ -74,6 +93,17 @@ def test_sheet_columns_match_contract():
         "sync_status",
         "last_sync_at",
         "sync_error",
+        "fecha_decision",
+        "franja_decision",
+        "datos_faltantes",
+        "decision_id",
+        "solicitud_updated_at",
+        "decision_id_resultado",
+        "resultado_decision",
+        "error_decision",
+        "procesado_por",
+        "fecha_procesamiento",
+        "tipo_registro",
     ]
 
 
@@ -152,8 +182,14 @@ def test_updates_existing_request_row_by_id_solicitud():
 
     assert result == "updated"
     assert client.appended_rows == []
-    assert len(client.updated_rows) == 1
-    assert client.updated_rows[0][2] == 2
+    assert client.updated_rows == []
+    assert [item[1] for item in client.range_updates] == [
+        "Solicitudes_Cita!A2:S2",
+        "Solicitudes_Cita!X2:Z2",
+        "Solicitudes_Cita!AE2:AE2",
+        "Solicitudes_Cita!AK2:AK2",
+    ]
+    assert client.existing_rows[1][0] == "SOL-SHEETS-001"
 
 
 def test_preserves_existing_doctor_owned_values_on_update():
@@ -180,7 +216,8 @@ def test_preserves_existing_doctor_owned_values_on_update():
 
     writer.upsert_request(make_request())
 
-    updated_row = client.updated_rows[0][3]
+    assert client.updated_rows == []
+    updated_row = client.existing_rows[1]
     updated = dict(zip(GOOGLE_SHEETS_HUMAN_REVIEW_COLUMNS, updated_row))
 
     assert updated["accion_doctora"] == "aprobar"
@@ -229,3 +266,87 @@ def test_maps_doctor_requested_operational_fields_to_sheet_row():
     assert row["barrio"] == "Suba"
     assert row["edad_paciente"] == "12"
     assert row["notas_clinicas_breves"] == "Control respiratorio domiciliario."
+
+
+def test_update_never_rewrites_doctor_columns_during_concurrent_edit():
+    headers = GOOGLE_SHEETS_HUMAN_REVIEW_COLUMNS
+    existing = dict.fromkeys(headers, "")
+    existing["id_solicitud"] = "SOL-SHEETS-001"
+    existing["accion_doctora"] = "confirm"
+
+    class ConcurrentEditClient(FakeSheetsClient):
+        def __init__(self):
+            super().__init__([headers, [existing[column] for column in headers]])
+            self.range_updates = []
+
+        def get_values(self, spreadsheet_id, range_name):
+            snapshot = [list(row) for row in self.existing_rows]
+            self.existing_rows[1][headers.index("accion_doctora")] = "cancel"
+            return snapshot
+
+        def update_values(self, spreadsheet_id, range_name, values):
+            self.range_updates.append((range_name, values))
+
+    client = ConcurrentEditClient()
+    writer = GoogleSheetsHumanReviewWriter(
+        client=client,
+        spreadsheet_id="spreadsheet-control",
+        tab_name="Solicitudes_Cita",
+        enabled=True,
+    )
+
+    assert writer.upsert_request(make_request()) == "updated"
+    assert client.updated_rows == []
+    assert client.existing_rows[1][headers.index("accion_doctora")] == "cancel"
+    updates = dict(client.range_updates)
+    assert set(updates) == {
+        "Solicitudes_Cita!A2:S2", "Solicitudes_Cita!X2:Z2",
+        "Solicitudes_Cita!AE2:AE2", "Solicitudes_Cita!AK2:AK2",
+    }
+    expected = map_appointment_request_to_sheet_row(make_request())
+    assert updates["Solicitudes_Cita!A2:S2"] == [
+        [expected[column] for column in headers[:19]]
+    ]
+    assert updates["Solicitudes_Cita!X2:Z2"][0][0] == "pendiente"
+    assert updates["Solicitudes_Cita!X2:Z2"][0][1]
+    assert updates["Solicitudes_Cita!X2:Z2"][0][2] == ""
+    assert updates["Solicitudes_Cita!AE2:AE2"] == [[make_request().updated_at]]
+    assert updates["Solicitudes_Cita!AK2:AK2"] == [["sin_clasificar"]]
+
+
+def test_reordered_headers_are_rejected_before_any_write():
+    headers = list(GOOGLE_SHEETS_HUMAN_REVIEW_COLUMNS)
+    headers[0], headers[19] = headers[19], headers[0]
+    client = FakeSheetsClient(existing_rows=[headers])
+    writer = GoogleSheetsHumanReviewWriter(
+        client=client,
+        spreadsheet_id="spreadsheet-control",
+        tab_name="Solicitudes_Cita",
+        enabled=True,
+    )
+
+    with pytest.raises(ValueError, match="invalid_sheet_headers"):
+        writer.upsert_request(make_request())
+
+    assert client.appended_rows == []
+    assert client.updated_rows == []
+    assert client.range_updates == []
+
+
+def test_duplicate_request_id_is_rejected_before_any_write():
+    headers = GOOGLE_SHEETS_HUMAN_REVIEW_COLUMNS
+    row = ["SOL-SHEETS-001"] + [""] * (len(headers) - 1)
+    client = FakeSheetsClient(existing_rows=[headers, list(row), list(row)])
+    writer = GoogleSheetsHumanReviewWriter(
+        client=client,
+        spreadsheet_id="spreadsheet-control",
+        tab_name="Solicitudes_Cita",
+        enabled=True,
+    )
+
+    with pytest.raises(ValueError, match="duplicate_request_id"):
+        writer.upsert_request(make_request())
+
+    assert client.appended_rows == []
+    assert client.updated_rows == []
+    assert client.range_updates == []

@@ -58,7 +58,9 @@ from app.services.appointment_request_runtime import (
 )
 from app.services.appointment_request_service import AppointmentRequestService
 from app.adapters.google_sheets_human_review_writer_factory import build_google_sheets_human_review_writer
-from app.models.human_review import HumanReviewAction
+from app.models.human_review import HumanReviewAction, HumanReviewCommand
+from app.services.human_review_decision_processor import HumanReviewDecisionProcessor
+from app.services.human_review_sheet_projector import HumanReviewSheetProjector
 from app.services.human_review_service import HumanReviewService
 from app.db.session import engine
 from app.config import settings
@@ -143,15 +145,82 @@ def _validate_internal_admin_token(token: str | None) -> None:
         )
 
 
+def create_human_review_decision_processor():
+    return HumanReviewDecisionProcessor(engine=engine)
+
+
+def _project_human_review_decision(outcome):
+    writer = build_google_sheets_human_review_writer(settings=settings)
+    if writer is None:
+        return {"status": "skipped_disabled"}
+
+    projector = HumanReviewSheetProjector(engine=engine, writer=writer)
+    return {
+        "status": projector.project_request(outcome["result"]["id_solicitud"]),
+    }
+
+
+def _apply_idempotent_human_review_command(command):
+    action = HumanReviewAction(**command.model_dump(
+        exclude={"decision_id", "expected_updated_at"},
+    ))
+    try:
+        outcome = create_human_review_decision_processor().apply(
+            action=action,
+            decision_id=str(command.decision_id),
+            expected_updated_at=command.expected_updated_at.isoformat(),
+        )
+    except Exception as exc:
+        print_safe_event({
+            "event": "human_review_decision_processing_error",
+            "decision_id": str(command.decision_id),
+            "error_type": type(exc).__name__,
+        })
+        raise HTTPException(
+            status_code=500,
+            detail="Human review processing unavailable",
+        ) from None
+
+    outcome = {**outcome, "actor": action.actor}
+
+    if outcome["result"].get("error_code") == "idempotency_conflict":
+        projection = {"status": "skipped_conflict"}
+    else:
+        try:
+            projection = _project_human_review_decision(outcome)
+        except Exception:
+            projection = {"status": "failed"}
+
+    print_safe_event({
+        "event": "human_review_decision_processed",
+        "decision_id": outcome["decision_id"],
+        "id_solicitud": action.id_solicitud,
+        "actor": action.actor,
+        "processed_at": outcome["processed_at"],
+        "success": outcome["result"]["success"],
+        "error_code": outcome["result"].get("error_code"),
+        "replayed": outcome["replayed"],
+        "projection_status": projection["status"],
+    })
+    return {
+        **outcome,
+        "projection": projection,
+        "patient_notified": False,
+    }
+
+
 @app.post("/internal/human-review/actions")
 def apply_human_review_action(
-    action: HumanReviewAction,
+    action: HumanReviewCommand,
     x_internal_admin_token: str | None = Header(
         default=None,
         alias="X-Internal-Admin-Token",
     ),
 ):
     _validate_internal_admin_token(x_internal_admin_token)
+
+    if action.decision_id is not None:
+        return _apply_idempotent_human_review_command(action)
 
     print_safe_event(
         {

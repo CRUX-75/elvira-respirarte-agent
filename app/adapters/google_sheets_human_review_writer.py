@@ -43,6 +43,17 @@ GOOGLE_SHEETS_HUMAN_REVIEW_COLUMNS = [
     "sync_status",
     "last_sync_at",
     "sync_error",
+    "fecha_decision",
+    "franja_decision",
+    "datos_faltantes",
+    "decision_id",
+    "solicitud_updated_at",
+    "decision_id_resultado",
+    "resultado_decision",
+    "error_decision",
+    "procesado_por",
+    "fecha_procesamiento",
+    "tipo_registro",
 ]
 
 DOCTOR_OWNED_COLUMNS = {
@@ -58,6 +69,14 @@ class SheetsClient(Protocol):
 
     def get_values(self, spreadsheet_id: str, range_name: str) -> list[list[str]]:
         """Return sheet values including header row."""
+
+    def update_values(
+        self,
+        spreadsheet_id: str,
+        range_name: str,
+        values: list[list[str]],
+    ) -> None:
+        """Update an exact range of system-owned cells."""
 
     def append_row(self, spreadsheet_id: str, range_name: str, row: list[str]) -> None:
         """Append one row to the sheet."""
@@ -122,6 +141,17 @@ def map_appointment_request_to_sheet_row(
         "sync_status": sync_status,
         "last_sync_at": last_sync_at or _now_iso(),
         "sync_error": sync_error,
+        "fecha_decision": "",
+        "franja_decision": "",
+        "datos_faltantes": "",
+        "decision_id": "",
+        "solicitud_updated_at": _string(request.updated_at),
+        "decision_id_resultado": "",
+        "resultado_decision": "",
+        "error_decision": "",
+        "procesado_por": "",
+        "fecha_procesamiento": "",
+        "tipo_registro": "sin_clasificar",
     }
 
 
@@ -144,50 +174,94 @@ class GoogleSheetsHumanReviewWriter:
         spreadsheet_id: str,
         tab_name: str,
         enabled: bool,
+        test_request_ids: frozenset[str] = frozenset(),
     ) -> None:
         self.client = client
         self.spreadsheet_id = spreadsheet_id
         self.tab_name = tab_name
         self.enabled = enabled
+        self.test_request_ids = frozenset(test_request_ids)
 
     def upsert_request(self, request: AppointmentRequest) -> str:
-        """Append or update one AppointmentRequest by id_solicitud."""
+        """Project request fields without writing human inputs or decision results."""
+        return self._upsert(request)
 
+    def project_decision(self, request: AppointmentRequest, outcome: dict) -> str:
+        """Project a safe decision outcome without overwriting a newer result."""
+        if outcome["result"]["id_solicitud"] != request.id_solicitud:
+            raise ValueError("decision_request_mismatch")
+        return self._upsert(request, outcome=outcome)
+
+    def _upsert(self, request: AppointmentRequest, *, outcome=None) -> str:
         if not self.enabled:
             return "skipped_disabled"
 
-        range_name = f"{self.tab_name}!A:Z"
+        range_name = f"{self.tab_name}!A:AK"
         values = self.client.get_values(self.spreadsheet_id, range_name)
+        if not values or values[0] != GOOGLE_SHEETS_HUMAN_REVIEW_COLUMNS:
+            raise ValueError("invalid_sheet_headers")
 
-        if not values:
-            values = [GOOGLE_SHEETS_HUMAN_REVIEW_COLUMNS]
-
-        headers = values[0]
         incoming = map_appointment_request_to_sheet_row(request)
+        index = self._find_existing_row_index(values, request.id_solicitud)
+        existing = (
+            _row_dict_from_list(values[0], values[index])
+            if index is not None else {}
+        )
 
-        existing_row_index = self._find_existing_row_index(values, request.id_solicitud)
+        if existing.get("tipo_registro") in {"operativo", "prueba_confirmada"}:
+            incoming["tipo_registro"] = existing["tipo_registro"]
+        if request.id_solicitud in self.test_request_ids:
+            incoming["tipo_registro"] = "prueba_confirmada"
 
-        if existing_row_index is None:
-            self.client.append_row(
-                self.spreadsheet_id,
-                range_name,
-                _row_list_from_dict(incoming),
-            )
+        if outcome is not None:
+            previous_time = existing.get("fecha_procesamiento")
+            if previous_time:
+                previous = datetime.fromisoformat(previous_time.replace("Z", "+00:00"))
+                current = datetime.fromisoformat(
+                    outcome["processed_at"].replace("Z", "+00:00")
+                )
+                if previous.tzinfo is None:
+                    previous = previous.replace(tzinfo=timezone.utc)
+                if current.tzinfo is None:
+                    current = current.replace(tzinfo=timezone.utc)
+                if previous > current:
+                    return "skipped_stale_result"
+
+            incoming.update({
+                "decision_id_resultado": outcome["decision_id"],
+                "resultado_decision": (
+                    "aplicada" if outcome["result"]["success"] else "rechazada"
+                ),
+                "error_decision": outcome["result"].get("error_code") or "",
+                "procesado_por": outcome["actor"],
+                "fecha_procesamiento": outcome["processed_at"],
+                "sync_status": "sincronizada",
+            })
+
+        row = _row_list_from_dict(incoming)
+        if index is None:
+            self.client.append_row(self.spreadsheet_id, range_name, row)
             return "appended"
 
-        existing_row = _row_dict_from_list(headers, values[existing_row_index])
-        merged = self._merge_preserving_doctor_owned_values(
-            incoming=incoming,
-            existing=existing_row,
-        )
+        row_number = index + 1
+        ranges = [
+            ("A", "S", row[:19]),
+            ("X", "Z", row[23:26]),
+        ]
+        if outcome is None:
+            ranges.extend([
+                ("AE", "AE", row[30:31]),
+                ("AK", "AK", row[36:37]),
+            ])
+        else:
+            ranges.append(("AE", "AK", row[30:37]))
 
-        sheet_row_number = existing_row_index + 1
-        self.client.update_row(
-            self.spreadsheet_id,
-            range_name,
-            sheet_row_number,
-            _row_list_from_dict(merged),
-        )
+        for first, last, cells in ranges:
+            self.client.update_values(
+                self.spreadsheet_id,
+                f"{self.tab_name}!{first}{row_number}:{last}{row_number}",
+                [cells],
+            )
         return "updated"
 
     def _find_existing_row_index(
@@ -195,10 +269,14 @@ class GoogleSheetsHumanReviewWriter:
         values: list[list[str]],
         id_solicitud: str,
     ) -> int | None:
-        for index, row in enumerate(values[1:], start=1):
-            if row and row[0] == id_solicitud:
-                return index
-        return None
+        matches = [
+            index
+            for index, row in enumerate(values[1:], start=1)
+            if row and row[0] == id_solicitud
+        ]
+        if len(matches) > 1:
+            raise ValueError("duplicate_request_id")
+        return matches[0] if matches else None
 
     def _merge_preserving_doctor_owned_values(
         self,
