@@ -361,3 +361,23 @@ Comprobaciones: repetición concurrente del UUID, versiones concurrentes
 y bloqueo compartido entre proyección y procesamiento.
 Activación explícita mediante P6_F16_POSTGRES_TESTS=1.
 Resultados todavía pendientes.
+
+## Cierre técnico y hallazgo productivo — 2026-10-08
+
+Las secciones de avance anteriores son checkpoints históricos. Estado vigente:
+
+- Bloques 1–5 implementados y fusionados mediante PR #5.
+- Concurrencia real validada en PostgreSQL: 3 escenarios GREEN.
+- Suite funcional P6-F.16: 64 tests GREEN.
+- Regresión completa: 971 passed, 3 skipped.
+- Apps Script: 3 tests JavaScript GREEN.
+- Backup productivo y copia de Solicitudes_Cita realizados.
+- Migración 010 aplicada y human_review_decisions validada vacía.
+- Proyección de Sheets pausada durante la transición.
+- El preflight productivo detectó de forma segura un contrato legado de
+  24 columnas; no escribió ni modificó filas.
+- El hotfix admite exclusivamente los contratos conocidos de 24, 26 y
+  37 columnas. El paso 24 → 37 remapea encabezados y filas en una sola
+  operación de Sheets y conserva por nombre los campos humanos.
+- La reconciliación productiva y la instalación real del menú permanecen
+  pendientes hasta desplegar y validar el hotfix.

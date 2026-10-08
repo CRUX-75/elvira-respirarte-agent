@@ -55,9 +55,13 @@ class StatefulSheetsClient:
 
         last = cells.split(":")[1]
         start, end = column_index(first), column_index(last) + 1
-        row = self.rows[row_number - 1]
-        row.extend([""] * max(0, end - len(row)))
-        row[start:end] = values[0]
+        for offset, cells_values in enumerate(values):
+            index = row_number - 1 + offset
+            while len(self.rows) <= index:
+                self.rows.append([])
+            row = self.rows[index]
+            row.extend([""] * max(0, end - len(row)))
+            row[start:end] = cells_values
 
 
 def test_reconciliation_expands_four_to_sixteen_and_is_repeatable():
@@ -136,6 +140,79 @@ def test_contract_upgrade_is_explicit_and_preserves_existing_rows():
     assert client.rows[0] == GOOGLE_SHEETS_HUMAN_REVIEW_COLUMNS
     assert client.rows[1:] == original[1:]
     assert prepare_human_review_sheet_contract(writer=writer, apply=True) == "current"
+
+
+def test_contract_upgrade_migrates_production_legacy_24_columns():
+    from app.services.appointment_request_reconciliation import (
+        prepare_human_review_sheet_contract,
+    )
+
+    legacy_columns = [
+        "id_solicitud",
+        "fecha_registro",
+        "telefono",
+        "nombre_paciente",
+        "fecha_solicitada",
+        "fecha_solicitada_texto",
+        "preferencia_original",
+        "franja_solicitada",
+        "modalidad",
+        "estado_solicitud",
+        "observaciones_elvira",
+        "estado_origen",
+        "interaction_id_origen",
+        "direccion_domicilio",
+        "servicio_solicitado",
+        "fecha_confirmada",
+        "franja_confirmada",
+        "accion_doctora",
+        "motivo_decision",
+        "revisado_por",
+        "fecha_revision",
+        "sync_status",
+        "last_sync_at",
+        "sync_error",
+    ]
+    legacy_values = {column: "" for column in legacy_columns}
+    legacy_values.update({
+        "id_solicitud": "SOL-LEGACY-001",
+        "fecha_solicitada_texto": "jueves 8 de octubre",
+        "accion_doctora": "confirm",
+        "motivo_decision": "Validado por la doctora",
+        "revisado_por": "Dra. D'Aleman",
+        "fecha_revision": "2026-10-08",
+    })
+
+    client = StatefulSheetsClient([])
+    client.rows = [
+        legacy_columns,
+        [legacy_values[column] for column in legacy_columns],
+    ]
+    original = deepcopy(client.rows)
+    writer = GoogleSheetsHumanReviewWriter(
+        client=client,
+        spreadsheet_id="test-sheet",
+        tab_name="Solicitudes_Cita",
+        enabled=True,
+    )
+
+    assert prepare_human_review_sheet_contract(writer=writer) == (
+        "legacy_upgrade_required"
+    )
+    assert client.rows == original
+    assert prepare_human_review_sheet_contract(
+        writer=writer,
+        apply=True,
+    ) == "legacy_upgraded"
+
+    assert client.rows[0] == GOOGLE_SHEETS_HUMAN_REVIEW_COLUMNS
+    migrated = dict(zip(GOOGLE_SHEETS_HUMAN_REVIEW_COLUMNS, client.rows[1]))
+    assert migrated["id_solicitud"] == "SOL-LEGACY-001"
+    assert migrated["fecha_solicitada_texto"] == "jueves 8 de octubre"
+    assert migrated["accion_doctora"] == "confirm"
+    assert migrated["motivo_decision"] == "Validado por la doctora"
+    assert migrated["revisado_por"] == "Dra. D'Aleman"
+    assert migrated["fecha_revision"] == "2026-10-08"
 
 
 def test_test_classification_requires_explicit_request_id():
