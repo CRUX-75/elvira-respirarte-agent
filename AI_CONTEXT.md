@@ -50,14 +50,17 @@ P6-F.12 manual reactivation and inbound-response correlation are closed and vali
 Concrete correlated service questions persist as `service_inquiry` without automatic human escalation.
 ```
 
-Latest confirmed deployed application baseline:
+Latest confirmed repository application baseline:
 
 ```txt
 Branch: main
-Deployed application code: 0a2a4066dec09403f5e2f6d0f47eb715833cefda
-Full suite on deployed code: 926 passed in 19.00s
-Production validation: GREEN
+Validated application code: 02dc212f92c77fbd708e95d1b2964c81eb4778e9
+Full suite: 971 passed, 3 skipped
 ```
+
+This baseline is recorded in PR #6 and the P6-F.16 SDD.
+It does not establish the current Easypanel deployment SHA or effective
+production settings. The `/health` version alone does not identify a commit.
 
 Current work direction:
 
@@ -74,6 +77,7 @@ public technical repository.
 At the start of every new development session, verify the actual repository state:
 
 ```bash
+git branch --show-current
 git status --short
 git log --oneline --decorate -n 6
 ```
@@ -108,6 +112,18 @@ GOOGLE_SHEETS_SPREADSHEET_ID=...
 GOOGLE_SHEETS_SOLICITUDES_CITA_TAB=Solicitudes_Cita
 GOOGLE_SERVICE_ACCOUNT_JSON=...
 ```
+
+Repository STT configuration:
+
+```env
+VOICE_STT_MODEL=gpt-transcribe
+VOICE_STT_LANGUAGE=es
+```
+
+Explicit environment settings override the default in `app/config.py`.
+The Apps Script decision workflow requires `INTERNAL_ADMIN_TOKEN` in the
+backend and the matching `ELVIRA_INTERNAL_ADMIN_TOKEN` script property.
+Configure credentials directly in their respective settings.
 
 Never commit secrets or real environment values.
 
@@ -516,60 +532,46 @@ pendiente_confirmacion
 
 ## Human Review and Google Sheets
 
-Current patient flow:
+Current decision workflow:
 
 ```txt
-Patient writes to Elvira
-→ Elvira handles the conversation
-→ AppointmentRequest is persisted in PostgreSQL
-→ request appears in Solicitudes_Cita
-→ Dra. D'Aleman reviews it
-→ Dra. D'Aleman confirms or contacts the patient manually
+PostgreSQL → Solicitudes_Cita → explicit doctor decision
+→ Elvira · Citas → backend validation and audit
+→ PostgreSQL → decision result projected to Sheets
+→ doctor contacts the patient manually
 ```
 
-Elvira registers requests.
+PostgreSQL owns lifecycle state. Editing a row alone does not process a
+decision; Sheets cannot bypass backend validation or send patient messages.
 
-Dra. D'Aleman confirms appointments.
-
-Google Sheets must not:
-
-- own lifecycle state;
-- confirm appointments;
-- trigger patient messages directly;
-- bypass backend validation;
-- replace PostgreSQL.
-
-Doctor-facing review columns may include:
+Doctor input fields:
 
 ```txt
-fecha_confirmada
-franja_confirmada
 accion_doctora
 motivo_decision
 revisado_por
 fecha_revision
+fecha_decision
+franja_decision
+datos_faltantes
 ```
 
-Supported internal human-review actions:
+`fecha_confirmada` and `franja_confirmada` are system projections.
+The six actions are `confirm`, `request_missing_data`, `propose_alternative`,
+`reschedule`, `cancel` and `close`.
 
-```txt
-confirm
-request_missing_data
-propose_alternative
-reschedule
-cancel
-close
-```
+The bound Apps Script calls `POST /internal/human-review/actions` with the
+configured admin token. Review `resultado_decision`, `error_decision`,
+`procesado_por` and `fecha_procesamiento` after an explicit submission.
+Retry an uncertain outcome with the same `decision_id` and stored payload.
+Patient notification remains manual.
 
-The internal human-review endpoint exists and is protected by an admin token. A Swagger call returned:
+The current sheet contract has 37 columns. Reconciliation supports only the
+known 24-, 26- and 37-column contracts, preserves human fields and does not
+execute decisions or send WhatsApp.
 
-```json
-{"detail": "Invalid or missing internal admin token"}
-```
-
-This was rejected before `HumanReviewService` ran.
-
-Do not debug this now unless automated doctor actions become an active requirement. Manual Google Sheets review is not blocked.
+Operational procedure:
+`docs/P6-F.16_APPOINTMENT_OPERATIONAL_CLOSURE_RUNBOOK.md`
 
 ### Google Sheets ownership handoff
 
@@ -915,48 +917,64 @@ Detailed closure evidence belongs in Git history and `docs/`, not in this file.
 
 ---
 
-## Current Active Sprint — P6-F.14
+## Latest Merged Runtime Milestones
 
-P6-F.14 — STT migration to `gpt-transcribe`.
+### P6-F.13 — Controlled operational reactivation batches
 
-Status: IMPLEMENTED LOCALLY / PRODUCTION VALIDATION PENDING.
+Merged through PR #3. Batch preparation and execution require preflight,
+explicit record selection, eligibility checks and operator authorization.
+Campaign execution and closure evidence remain separate from code merge.
 
-Scope:
-- migrate completed WhatsApp voice-note transcription;
-- default `voice_stt_model` is now `gpt-transcribe`;
-- send `extra_body={"languages": [settings.voice_stt_language]}`;
-- omit singular `language` and `response_format` for the new model;
-- preserve `STT_CONTEXT_PROMPT`, `.text` extraction, trimming and safe errors;
-- retain previous request arguments for models other than `gpt-transcribe`;
-- keep `openai==2.33.0`, conversational model and TTS unchanged.
+Specification:
+`docs/sdd/P6-F.13_OPERATIONAL_BATCH_REACTIVATION_SDD.md`
 
-Validation on 2026-10-02:
-- RED confirmed for new request arguments and model default;
-- STT tests: 12 cases covered by the passing targeted regression;
-- voice/inbound regression: GREEN;
-- complete suite: 947 passed in 22.21s;
-- final diff review: completed; `git diff --check`: passed.
+### P6-F.14 — STT migration to gpt-transcribe
 
-Production still uses `VOICE_STT_MODEL=gpt-4o-transcribe` according to the
-phase-opening checkpoint. The new code default does not override an explicit
-environment setting.
+Merged through PR #4 as `868275b`.
+The configuration default and synchronized environment example use
+`gpt-transcribe`; explicit environment settings take precedence.
+
+Contract: plural `languages` through `extra_body`, no singular `language`
+or `response_format` for the new model, preserved context prompt and
+`.text` extraction. Other models retain the compatibility path.
+Conversation and TTS models remain unchanged.
+
+Phase validation on 2026-10-02: RED → GREEN, voice/inbound regression GREEN,
+947 passed in 22.21s, and clean `git diff --check`.
+This is historical phase evidence; the current full-suite baseline is
+971 passed, 3 skipped. A phase-opening production setting does not establish
+the current effective STT model.
 
 Specification:
 `docs/sdd/P6-F.14_STT_GPT_TRANSCRIBE_MIGRATION_SDD.md`
 
+### P6-F.16 — Operational appointment closure and legacy sheet migration
+
+Merged through PR #5 as `5be79bc`, followed by PR #6 as `02dc212`.
+Implements persistent human decisions, idempotency, concurrency controls,
+audit, recoverable Sheets projection, reconciliation and the bound menu.
+The hotfix supports the exact legacy 24-column contract, the intermediate
+26-column contract and the current 37-column contract.
+
+Recorded validation: 64 P6-F.16 tests GREEN, 3 JavaScript tests GREEN,
+3 real PostgreSQL concurrency scenarios GREEN, and full regression
+971 passed, 3 skipped.
+
+Production deployment and operational outcomes must be recorded separately
+from merged-code and automated-test evidence in the SDD and runbook.
+
+Specification:
+`docs/sdd/P6-F.16_APPOINTMENT_OPERATIONAL_CLOSURE_SDD.md`
+
 ## Current Next Direction
 
-Complete P6-F.14 documentation and diff review, then commit, push and PR.
-Merge reviewed code before deploying or changing the production STT setting.
-After deployment, set `VOICE_STT_MODEL=gpt-transcribe` and validate one
-operator-controlled voice note from a permitted sender.
-
-Confirm the effective STT model, transcription outcome, observability and
-WhatsApp reply before closing the phase. Do not store patient audio or raw
-transcripts in technical closure evidence.
-
-Inbound orchestration, TTS and batch reactivation remain outside P6-F.14.
-No historical-contact retry is authorized by this phase.
+Keep Respirarte production stable and continue the previously agreed
+commercial Demo / RRSS recording and market validation direction.
+Use Git, the current documentation and SDD as the technical source of truth.
+Reopen completed work only for a demonstrated regression.
+Record production claims against deployment and operator evidence.
+This documentation synchronization does not authorize new campaigns,
+historical-contact retries or production configuration changes.
 
 ---
 
@@ -993,9 +1011,16 @@ Target size:
 A practical operational brief, not a 160,000-character archive.
 ```
 
+## Historical Checkpoints
+
+The following records preserve earlier phase evidence. Their configuration,
+test counts and pending items describe those checkpoints, not the current
+repository baseline. Use the current sections above and the relevant SDD
+for present operational decisions.
+
 <!-- BEGIN P6-F.9.98-P6-F.10 CONTEXT -->
 
-## Current baseline — P6-F.9.98 to P6-F.10
+## Historical baseline — P6-F.9.98 to P6-F.10
 
 ### Repository and production
 

@@ -2,7 +2,10 @@
 
 ## 1. Status
 
-**IMPLEMENTED LOCALLY / PRODUCTION EXECUTION PENDING**
+**IMPLEMENTATION MERGED VIA PR #3 (`31b9d46`)**
+
+Batch execution, persisted metrics and explicit campaign closure must be
+recorded from operator evidence, independently of the implementation merge.
 
 P6-F.13 does not reopen P6-F.11 or P6-F.12.
 

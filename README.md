@@ -24,13 +24,25 @@ Deployment: Easypanel on Hetzner
 Production domain: https://elvira.genflowautomation.com
 ```
 
-Latest confirmed deployed application baseline:
+Latest confirmed repository application baseline:
 
 ```txt
-Deployed application code: 0a2a4066dec09403f5e2f6d0f47eb715833cefda
-Full suite on deployed code: 926 passed in 19.00s
-Production validation: GREEN
+Validated application code: 02dc212f92c77fbd708e95d1b2964c81eb4778e9
+Full suite: 971 passed, 3 skipped
 ```
+
+This is the application baseline validated in PR #6. It does not establish
+the current Easypanel deployment SHA or effective production settings.
+The `/health` version alone does not identify a deployed commit.
+
+Merged repository milestones:
+
+* P6-F.13: controlled reactivation batches with preflight and explicit authorization.
+* P6-F.14: STT migration with `gpt-transcribe` as the configuration default.
+* P6-F.16: persistent human decisions, idempotency, concurrency controls,
+  reconciliation and the bound Apps Script menu.
+* PR #6: migration of the exact legacy 24-column appointment sheet to the
+  37-column contract, with support for the intermediate 26-column contract.
 
 Current validated production capabilities:
 
@@ -73,7 +85,7 @@ GOOGLE_SHEETS_ENABLED=true
 WHATSAPP_API_URL=https://graph.facebook.com/v25.0
 ```
 
-Current production block:
+Earlier validated production milestones:
 
 ```txt
 P6-F.9.97 — KB-grounded services: CLOSED / production hardening GREEN
@@ -557,9 +569,16 @@ A proposed alternative remains represented operationally as:
 pendiente_confirmacion
 ```
 
-The internal human-review endpoint is protected by an admin token.
+The bound Apps Script menu `Elvira · Citas` submits explicit decisions to
+`POST /internal/human-review/actions`. It requires `INTERNAL_ADMIN_TOKEN`
+in the backend and the matching `ELVIRA_INTERNAL_ADMIN_TOKEN` script property.
 
-It is not required for the current manual Google Sheets review workflow.
+The doctor uses `fecha_decision` and `franja_decision` as inputs; confirmed
+fields remain backend projections. Editing a row alone does not process a
+decision. The menu does not send WhatsApp; patient contact remains manual.
+
+Installation, action-specific fields, retries and recovery are documented in
+[the P6-F.16 runbook](docs/P6-F.16_APPOINTMENT_OPERATIONAL_CLOSURE_RUNBOOK.md).
 
 ---
 
@@ -618,6 +637,15 @@ Required for OpenAI:
 OPENAI_API_KEY=your_openai_api_key_here
 OPENAI_MODEL=gpt-4o-mini
 ```
+
+Voice STT configuration:
+
+```env
+VOICE_STT_MODEL=gpt-transcribe
+VOICE_STT_LANGUAGE=es
+```
+
+Explicit environment settings override the default in `app/config.py`.
 
 Required for LangSmith:
 
@@ -813,14 +841,17 @@ pytest -q
 Latest confirmed full-suite baseline:
 
 ```txt
-926 passed in 19.00s
-Deployed application code: 0a2a4066dec09403f5e2f6d0f47eb715833cefda
+971 passed, 3 skipped
+Validated application code: 02dc212f92c77fbd708e95d1b2964c81eb4778e9
 ```
 
 This baseline includes the P6-F.11 closure, P6-F.12 controlled manual
 reactivation and inbound-response correlation, PRE-DEMO H1-H5 hardening,
 voice interaction, proactive WhatsApp contact, callback observability and
-the September 2026 spirometry-grounding hardening.
+the September 2026 spirometry-grounding hardening. It also includes controlled
+batch reactivation (P6-F.13), the STT migration (P6-F.14), and operational
+appointment closure with legacy sheet migration (P6-F.16 / PR #6).
+The P6-F.16 checkpoint additionally records 3 JavaScript tests GREEN.
 
 Before future non-trivial releases, run the relevant targeted tests and full suite when appropriate.
 
@@ -991,8 +1022,12 @@ Controlled proactive contact: validated
 Manual prior-contact reactivation trigger: validated
 Inbound reactivation-response correlation: validated
 Reactivation service_inquiry classification: validated
-Latest confirmed full suite: 926 passed in 19.00s
-Deployed application code: 0a2a4066dec09403f5e2f6d0f47eb715833cefda
+Latest confirmed full suite: 971 passed, 3 skipped
+Validated application code: 02dc212f92c77fbd708e95d1b2964c81eb4778e9
+Deployment SHA: verify against current Easypanel deployment evidence
+P6-F.13: merged controlled batch reactivation
+P6-F.14: merged STT migration; default gpt-transcribe
+P6-F.16: merged operational appointment closure and legacy sheet migration
 P6-F.9.97: CLOSED / production hardening GREEN
 P6-F.11: CLOSED
 P6-F.12: CLOSED

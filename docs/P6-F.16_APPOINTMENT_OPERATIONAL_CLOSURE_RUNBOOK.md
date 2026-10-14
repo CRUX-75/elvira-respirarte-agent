@@ -2,10 +2,14 @@
 
 ## Estado
 
-Preparación técnica. Sin activación ni reconciliación productiva comprobadas.
+Procedimiento del circuito implementado en main mediante PR #5 y PR #6
+(código de aplicación 02dc212). La implementación está fusionada y validada;
+la ejecución productiva se acredita con los resultados registrados por el operador.
+Las instrucciones de preparación siguientes corresponden a una instalación
+inicial o recuperación y no indican tareas pendientes por sí mismas.
 PostgreSQL es la fuente de verdad. Esta fase no envía WhatsApp.
 
-## Preparación del operador
+## Preparación inicial del operador
 
 1. Completar validaciones, revisión, commit y proceso habitual de publicación.
 2. Obtener respaldo de PostgreSQL y copia de la pestaña Solicitudes_Cita.

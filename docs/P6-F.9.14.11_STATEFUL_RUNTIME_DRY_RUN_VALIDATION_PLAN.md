@@ -6,6 +6,9 @@ PLANNED
 
 ## Objective
 
+In the payload examples, replace `<TEST_PHONE_E164>` with an authorized
+test phone in E.164 format.
+
 Validate AppointmentRequest runtime wiring through:
 
 ```text
@@ -46,7 +49,7 @@ Scenario 1 — General Message
 Input:
 
 {
-  "telefono": "573001112233",
+  "telefono": "<TEST_PHONE_E164>",
   "nombre": "Paciente Test",
   "mensaje": "Hola buenos días"
 }
@@ -63,7 +66,7 @@ Scenario 2 — Initial Appointment Intent
 Input:
 
 {
-  "telefono": "573001112233",
+  "telefono": "<TEST_PHONE_E164>",
   "nombre": "Paciente Test",
   "mensaje": "Quiero pedir una cita"
 }
