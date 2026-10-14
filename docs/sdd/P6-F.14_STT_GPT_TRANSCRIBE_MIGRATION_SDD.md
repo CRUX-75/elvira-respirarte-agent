@@ -2,10 +2,13 @@
 
 ## 1. Status
 
-**IMPLEMENTED LOCALLY / PRODUCTION VALIDATION PENDING**
+**IMPLEMENTATION MERGED VIA PR #4 (`868275b`)**
+
+The repository default is `gpt-transcribe`. Effective production configuration
+and controlled voice-validation evidence are tracked separately from code merge.
 
 Validation date: 2026-10-02.
-Working branch: `feature/p6-f14-stt-gpt-transcribe`.
+Implementation branch (historical): `feature/p6-f14-stt-gpt-transcribe`.
 
 ## 2. Objective and scope
 
@@ -75,7 +78,9 @@ GREEN:
 - complete suite: **947 passed in 22.21s**.
 
 Code and documentation diff reviewed; `git diff --check` passed.
-Commit, push and PR are pending.
+Implementation merged through PR #4. The 947-test result above is the
+phase checkpoint; the current full-suite baseline is 971 passed, 3 skipped,
+recorded for application code `02dc212` in README.md and AI_CONTEXT.md.
 Mocked tests do not establish live provider or production compatibility.
 
 ## 6. Deployment and controlled validation
@@ -104,4 +109,5 @@ before its scheduled removal on 2027-02-26.
 
 Close P6-F.14 only after reviewed code, clean diff checks, deployment,
 effective-model confirmation and controlled voice validation are recorded.
-Production validation remains pending.
+Production closure requires recorded effective-model and controlled-voice
+evidence; merge status and mocked tests alone do not establish it.

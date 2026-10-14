@@ -1,11 +1,13 @@
 # P6-F.16 — Cierre operativo de solicitudes de cita
 
 ## Estado
-Backend y Apps Script implementados en la rama de trabajo. Sin cambios productivos.
-Validación local: 187 tests Python y 3 tests JavaScript GREEN.
-Pendientes: concurrencia real en PostgreSQL, regresión final y cierre.
-Base verificada: main, 868275b.
-Rama: feat/p6-f16-cierre-operativo-citas.
+Backend y Apps Script fusionados en main mediante PR #5 y PR #6.
+Código de aplicación verificado: 02dc212.
+Validación: 64 tests P6-F.16 GREEN; 971 passed, 3 skipped en regresión completa.
+Apps Script: 3 tests GREEN. Concurrencia real PostgreSQL: 3 escenarios GREEN.
+Rama de implementación original: feat/p6-f16-cierre-operativo-citas.
+Los avances siguientes son checkpoints históricos. El despliegue y los
+resultados operativos se documentan con su propia evidencia productiva.
 
 ## Problema
 Checkpoint operativo aportado por el operador:
@@ -364,7 +366,9 @@ Resultados todavía pendientes.
 
 ## Cierre técnico y hallazgo productivo — 2026-10-08
 
-Las secciones de avance anteriores son checkpoints históricos. Estado vigente:
+Checkpoint de preparación anterior al despliegue del hotfix, conservado
+como evidencia histórica. Las secciones de avance anteriores también son
+checkpoints históricos:
 
 - Bloques 1–5 implementados y fusionados mediante PR #5.
 - Concurrencia real validada en PostgreSQL: 3 escenarios GREEN.
@@ -379,5 +383,5 @@ Las secciones de avance anteriores son checkpoints históricos. Estado vigente:
 - El hotfix admite exclusivamente los contratos conocidos de 24, 26 y
   37 columnas. El paso 24 → 37 remapea encabezados y filas en una sola
   operación de Sheets y conserva por nombre los campos humanos.
-- La reconciliación productiva y la instalación real del menú permanecen
-  pendientes hasta desplegar y validar el hotfix.
+- En ese checkpoint, la reconciliación productiva y la instalación real
+  del menú aún no se habían ejecutado; dependían del despliegue del hotfix.
